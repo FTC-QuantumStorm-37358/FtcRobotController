@@ -36,7 +36,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
     private boolean previousB = false;
 
     // For shooter speed
-    private float shooterSpeed = Constants.SHOOTER_POWER;
+    private double shooterSpeed = Constants.SHOOTER_POWER;
 
     @Override
     public void runOpMode() {
