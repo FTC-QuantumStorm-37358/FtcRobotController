@@ -215,7 +215,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             // A = shooter speed down
             if (currentGamepad2A && !previousGamepad2A) {
-                shooterSpeed = shooterSpeed - 0.1;
+                shooterSpeed = shooterSpeed - Constants.SHOOTER_POWER_INCREMENT;
                 if (shooterSpeed < -1.0) {
                     shooterSpeed = -1.0;
                 }
@@ -223,7 +223,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             // B = shooter speed up
             if (currentGamepad2B && !previousGamepad2B) {
-                shooterSpeed = shooterSpeed + 0.1;
+                shooterSpeed = shooterSpeed + Constants.SHOOTER_POWER_INCREMENT;
                 if (shooterSpeed > 1.0) {
                     shooterSpeed = 1.0;
                 }

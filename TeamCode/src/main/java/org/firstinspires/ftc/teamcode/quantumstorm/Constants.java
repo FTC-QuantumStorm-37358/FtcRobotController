@@ -28,6 +28,7 @@ public class Constants {
 
     public final static double INTAKE_POWER = 1.0;
     public final static double SHOOTER_POWER = 0.60;
+    public final static double SHOOTER_POWER_INCREMENT = 0.05;
     public final static double SHOOTER_SERVO_POWER = 1.0;
 
     // Power used by MecanumDriveTest when spinning one wheel at a time
