@@ -38,6 +38,10 @@ public class QuantumStormTeleOp extends LinearOpMode {
     // For shooter speed
     private double shooterSpeed = Constants.SHOOTER_POWER;
 
+    // For shooter speed buttons
+    private boolean previousGamepad2A = false;
+    private boolean previousGamepad2B = false;
+
     @Override
     public void runOpMode() {
 
@@ -205,8 +209,12 @@ public class QuantumStormTeleOp extends LinearOpMode {
                 shooterRunning = false;
             }
 
+            boolean currentGamepad2A = gamepad2.a;
+            boolean currentGamepad2B = gamepad2.b;
+
+
             // A = shooter speed down
-            if (gamepad2.a) {
+            if (currentGamepad2A && !previousGamepad2A) {
                 shooterSpeed = shooterSpeed - 0.1;
                 if (shooterSpeed < -1.0) {
                     shooterSpeed = -1.0;
@@ -214,12 +222,16 @@ public class QuantumStormTeleOp extends LinearOpMode {
             }
 
             // B = shooter speed up
-            if (gamepad2.b) {
+            if (currentGamepad2B && !previousGamepad2B) {
                 shooterSpeed = shooterSpeed + 0.1;
                 if (shooterSpeed > 1.0) {
                     shooterSpeed = 1.0;
                 }
             }
+
+
+            previousGamepad2A = currentGamepad2A;
+            previousGamepad2B = currentGamepad2B;
 
 
 
