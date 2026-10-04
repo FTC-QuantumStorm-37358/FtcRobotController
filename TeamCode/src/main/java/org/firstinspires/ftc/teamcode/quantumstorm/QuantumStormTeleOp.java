@@ -35,6 +35,13 @@ public class QuantumStormTeleOp extends LinearOpMode {
     private boolean previousA = false;
     private boolean previousB = false;
 
+    // For shooter speed
+    private double shooterSpeed = Constants.SHOOTER_POWER;
+
+    // For shooter speed buttons
+    private boolean previousGamepad2A = false;
+    private boolean previousGamepad2B = false;
+
     @Override
     public void runOpMode() {
 
@@ -106,6 +113,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
         telemetry.addLine("");
 
         telemetry.addLine("GAMEPAD 2 - SHOOTER");
+        telemetry.addLine("A = Shooter Speed Down");
+        telemetry.addLine("B = Shooter Speed Up");
         telemetry.addLine("Y = Shooter ON");
         telemetry.addLine("X = Shooter OFF");
         telemetry.addLine("D-Pad UP = Shooter Forward");
@@ -200,10 +209,35 @@ public class QuantumStormTeleOp extends LinearOpMode {
                 shooterRunning = false;
             }
 
+            boolean currentGamepad2A = gamepad2.a;
+            boolean currentGamepad2B = gamepad2.b;
+
+
+            // A = shooter speed down
+            if (currentGamepad2A && !previousGamepad2A) {
+                shooterSpeed = shooterSpeed - Constants.SHOOTER_POWER_INCREMENT;
+                if (shooterSpeed < -1.0) {
+                    shooterSpeed = -1.0;
+                }
+            }
+
+            // B = shooter speed up
+            if (currentGamepad2B && !previousGamepad2B) {
+                shooterSpeed = shooterSpeed + Constants.SHOOTER_POWER_INCREMENT;
+                if (shooterSpeed > 1.0) {
+                    shooterSpeed = 1.0;
+                }
+            }
+
+
+            previousGamepad2A = currentGamepad2A;
+            previousGamepad2B = currentGamepad2B;
+
+
 
             if (shooterRunning) {
 
-                shooter.setPower(Constants.SHOOTER_POWER);
+                shooter.setPower(shooterSpeed);
 
             } else {
 
@@ -274,7 +308,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
                 telemetry.addData(
                         "Shooter",
                         "RUNNING @ %.0f%%",
-                        Constants.SHOOTER_POWER * 100);
+                        shooterSpeed * 100);
 
             } else {
 
