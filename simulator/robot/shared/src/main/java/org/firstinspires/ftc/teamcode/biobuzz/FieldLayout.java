@@ -12,7 +12,12 @@ public final class FieldLayout {
     public final Pose[] garden={fromBrowser(-58,60.8,Math.PI),fromBrowser(58,-60.8,0)};
     // Side Flowers are closer to the Garden/shot route than the opposite rear Flower.
     public final Pose[] flower={fromBrowser(-57.45,24,Math.PI/2),fromBrowser(57.45,-24,-Math.PI/2)};
-    public final Pose[] loadingPark={new Pose(-62,36,0),new Pose(62,-36,Math.PI)};
+    // Inset enough to fit the chassis at any heading while overlapping the Loading Zone.
+    public final Pose[] loadingPark={new Pose(-59,36,0),new Pose(59,-36,Math.PI)};
+    public Pose parkingTarget(Pose current,int alliance) {
+        Pose location=loadingPark[alliance];
+        return new Pose(location.x,location.y,current.heading);
+    }
     public double drivePower=1.0,turnPower=1.0;
     // BIOBUZZ TU03 p76: Red rear 30..33 / audience 34..37;
     // Blue audience 38..41 / rear 42..45. Near follows the simulator's initial Cell.

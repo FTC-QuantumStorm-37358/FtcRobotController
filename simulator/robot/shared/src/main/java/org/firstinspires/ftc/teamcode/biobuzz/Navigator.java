@@ -14,27 +14,6 @@ public final class Navigator {
     public void reset() { stage=0;route=null;turnPose=null; }
     /** Read-only telemetry; callers cannot change the navigation route. */
     public List<Pose> route() { return route==null?new ArrayList<Pose>():new ArrayList<Pose>(route); }
-    /** Conservative travel budget for the current simulator's 25 in/s, 1.65 rad/s
-     * response. Include an inset before turning at walls, route distance, turn
-     * time and proportional-controller settling. Does not command movement. */
-    public double parkingSeconds(Pose start,Pose goal) {
-        Pose turn=turnPoint(start,goal.heading);
-        if(turn==null)return Double.POSITIVE_INFINITY;
-        double departure=pathLength(start,turn,start.heading);
-        double travel=pathLength(turn,goal,goal.heading);
-        if(!Double.isFinite(departure)||!Double.isFinite(travel)||!field.canRotate(turn,goal.heading))
-            return Double.POSITIVE_INFINITY;
-        double rotation=Math.abs(Pose.angle(goal.heading-start.heading))/Math.max(.1,1.65*field.turnPower);
-        return (departure+travel)/Math.max(1,25*field.drivePower)+rotation+3.0;
-    }
-    private double pathLength(Pose start,Pose goal,double heading) {
-        if(start.distance(goal)<.01)return 0;
-        List<Pose> points=plan(start,goal,heading);
-        if(points==null)return Double.POSITIVE_INFINITY;
-        double distance=0;Pose last=start;
-        for(Pose p:points){distance+=last.distance(p);last=p;}
-        return distance;
-    }
     /** Find a reachable clearance point before turning beside any obstacle,
      * not only beside a perimeter wall. Keep the current heading on departure. */
     private Pose turnPoint(Pose start,double heading) {

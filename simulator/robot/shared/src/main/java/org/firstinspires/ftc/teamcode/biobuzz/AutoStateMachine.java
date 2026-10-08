@@ -4,8 +4,9 @@ import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.*;
 
 /** QuantumStorm's autonomous sequence, independent of FTC SDK, browser, or wall-clock timers. */
 public final class AutoStateMachine {
-    public static final double PARK_DEADLINE_SECONDS=26.0;
-    public enum State { INIT, MOVING, SHOOTING, INTAKE, ERROR, PARK, STOPPED }
+    public static final double PARK_START_SECONDS=26.0;
+    public static final double AUTO_END_SECONDS=30.0;
+    public enum State { INIT, MOVING, SHOOTING, INTAKE, ERROR, WAITING, PARK, STOPPED }
     private enum ShootStep { CHECK_BALLS, AIM, FIRE }
     private enum Source { GARDEN, FLOWER }
     private final RobotIO io;
@@ -22,7 +23,6 @@ public final class AutoStateMachine {
     private int alliance,retries;
     private double startAt,stateAt,lastNow,power;
     private double shooterAt,moveDeadline;
-    private double nextParkBudgetCheck;
     private Outputs last=new Outputs();
     public AutoStateMachine(RobotIO io,FieldLayout field) { this.io=io;this.field=field;this.navigator=new Navigator(field); }
     public void start(int alliance,double power) {
@@ -30,7 +30,7 @@ public final class AutoStateMachine {
         this.alliance=alliance;this.power=power;startAt=lastNow=io.nowSeconds();running=true;retries=0;
         hiveVision=new HiveVision(field,alliance);
         gardenDone=flowerDone=flipped=false;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
-        shooterAt=Double.NaN;nextParkBudgetCheck=0;
+        shooterAt=Double.NaN;
     }
     public void stop() { running=false;state=State.STOPPED;last=new Outputs();io.apply(last); }
     public boolean isRunning() { return running; }
@@ -41,7 +41,7 @@ public final class AutoStateMachine {
     public double elapsed() { return Math.max(0,io.nowSeconds()-startAt); }
     public String status() {
         return state+(state==State.MOVING?" → "+destinationName:state==State.SHOOTING?" · "+shootStep:state==State.INTAKE?" · "+source:"")
-            +String.format(java.util.Locale.ROOT," · %.1f / 26 s parking deadline",elapsed())+(error.isEmpty()?"":" · "+error);
+            +String.format(java.util.Locale.ROOT," · %.1f / 30 s · park starts at 26 s",elapsed())+(error.isEmpty()?"":" · "+error);
     }
     private void enter(State state) { this.state=state;stateAt=io.nowSeconds();navigator.reset();if(state==State.SHOOTING)shootStep=ShootStep.CHECK_BALLS; }
     private void moveThen(Pose target,String name,State after) {
@@ -55,7 +55,7 @@ public final class AutoStateMachine {
     private void pickup() {
         if(!gardenDone){source=Source.GARDEN;moveThen(field.garden[alliance],"Garden",State.INTAKE);}
         else if(!flowerDone){source=Source.FLOWER;moveThen(field.flower[alliance],"Flower",State.INTAKE);}
-        else{destination=field.loadingPark[alliance];enter(State.PARK);}
+        else enter(State.WAITING);
     }
     private void finishPickup() {
         if(source==Source.GARDEN)gardenDone=true;if(source==Source.FLOWER)flowerDone=true;
@@ -74,7 +74,7 @@ public final class AutoStateMachine {
         if(!running){last=out;io.apply(out);return;}
         Sensors sensors=io.readSensors();now=io.nowSeconds();
         if(!Double.isFinite(now)||now<lastNow){fail("Clock moved backward",false);running=false;last=out;io.apply(out);return;}lastNow=now;
-        if(elapsed()>=PARK_DEADLINE_SECONDS){running=false;state=State.PARK;error="26-second parking deadline; all actuators stopped";last=out;io.apply(out);return;}
+        if(elapsed()>=AUTO_END_SECONDS){running=false;error="30-second autonomous limit; all actuators stopped";last=out;io.apply(out);return;}
         if(!sensors.odometryValid||!sensors.pose.finite()||now-sensors.sampledAt<0||now-sensors.sampledAt>.25){
             fail("Odometry unavailable or stale",false);running=false;last=out;io.apply(out);return;
         }
@@ -83,12 +83,10 @@ public final class AutoStateMachine {
         }
         hiveVision.update(sensors.vision,now);
         currentPose=sensors.pose;
-        // Recheck route-dependent parking reserve twice per second. The extra
-        // half second covers movement between checks; never wait until 26 to depart.
-        if(state!=State.PARK&&elapsed()>=nextParkBudgetCheck){
-            nextParkBudgetCheck=elapsed()+.5;
-            double required=navigator.parkingSeconds(sensors.pose,field.loadingPark[alliance])+.5;
-            if(elapsed()+required>=PARK_DEADLINE_SECONDS){destination=field.loadingPark[alliance];enter(State.PARK);}
+        // The final four seconds belong exclusively to parking, regardless of
+        // which scoring or pickup state was active before the transition.
+        if(state!=State.PARK&&elapsed()>=PARK_START_SECONDS){
+            destination=field.parkingTarget(sensors.pose,alliance);enter(State.PARK);
         }
         double age=now-stateAt;
         State before=state;
@@ -136,7 +134,8 @@ public final class AutoStateMachine {
                     break;
                 case ERROR:
                     if(recoverable&&retries++<3&&destination!=null)enter(State.MOVING);
-                    else{destination=field.loadingPark[alliance];enter(State.PARK);}break;
+                    else enter(State.WAITING);break;
+                case WAITING:break; // Completed/aborted scoring waits for the 26-second parking trigger.
                 case PARK:
                     Outputs park=navigator.move(sensors.pose,destination);
                     if(park==null)running=false;else out=park;break;

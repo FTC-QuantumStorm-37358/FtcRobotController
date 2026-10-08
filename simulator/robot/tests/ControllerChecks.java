@@ -29,13 +29,23 @@ public final class ControllerChecks {
             io=new IO();auto=make(io);auto.start(0,.4);if(bad==1)io.pipeline=1;else io.id=38;
             for(int i=0;i<120;i++){io.time+=.02;auto.tick();check(io.out.feederPower==0,"Wrong pipeline or alliance must never authorize a shot");}
             io.time=26;auto.tick();check(auto.getState()==AutoStateMachine.State.PARK,"26-second guard must enter park");check(io.out.feederPower==0&&io.out.shooterPower==0,"Park stops shooter");
-            check(!auto.isRunning(),"26-second deadline stops run");stopped(io,"Parking deadline");
-            io.time=30;auto.tick();check(!auto.isRunning(),"Cannot resume after parking deadline");stopped(io,"Match end");
+            check(auto.isRunning(),"Parking movement must remain enabled at 26 seconds");
+            io.time=30;auto.tick();check(!auto.isRunning(),"30-second deadline stops run");stopped(io,"Match end");
         }
         io=new IO();auto=make(io);auto.start(0,.4);io.time=.1;auto.tick();io.time=-1;auto.tick();check(!auto.isRunning(),"Backward clock must stop");stopped(io,"Clock fault");
         Outputs mix=new Outputs();mix.forward=.8;mix.strafeRight=.8;mix.turnClockwise=.8;double[] wheels=mix.wheelPowers();check(Math.abs(wheels[0]-1)<1e-9,"Combined mecanum command must normalize all wheels together");for(double w:wheels)check(Math.abs(w)<=1,"Wheel power bounds");
         FieldLayout f=new FieldLayout();Navigator nav=new Navigator(f);check(nav.plan(new Pose(-45,40,Math.PI/2),new Pose(45,-40,Math.PI/2),Math.PI/2).size()>1,"Route must avoid frame supports");
         check(nav.plan(f.hive[0],new Pose(100,100,0),0)==null,"Outside-field route must be rejected");
+        for(int alliance=0;alliance<2;alliance++){
+            io=new IO();io.pose=f.hive[alliance];auto=new AutoStateMachine(io,f);auto.start(alliance,.4);
+            io.time=25.98;auto.tick();check(auto.getState()!=AutoStateMachine.State.PARK,"Do not park early");
+            io.time=26;auto.tick();check(auto.getState()==AutoStateMachine.State.PARK&&auto.isRunning(),"26 seconds starts parking, not shutdown");
+            check(Math.hypot(io.out.forward,io.out.strafeRight)>0,"Parking must command driving at 26 seconds");
+            check(io.out.shooterPower==0&&io.out.feederPower==0&&io.out.intakePower==0,"Parking cancels scoring immediately");
+            check(auto.destination().heading==io.pose.heading,"Parking preserves current heading");
+            for(int angle=0;angle<360;angle+=5)check(f.allowed(f.parkingTarget(new Pose(0,0,Math.toRadians(angle)),alliance)),"Parking target must fit at every heading");
+            io.time=30;auto.tick();check(!auto.isRunning(),"Stalled parking must stop at 30 seconds");stopped(io,"Stalled parking deadline");
+        }
         for(int alliance=0;alliance<2;alliance++){
             io=new IO();io.id=f.nearTags[alliance][0];io.pose=f.hive[alliance];
             auto=new AutoStateMachine(io,f);auto.start(alliance,.4);
