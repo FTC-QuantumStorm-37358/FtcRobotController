@@ -54,6 +54,10 @@ public class Constants {
     // Pipeline numbers as set up in the Limelight web UI
     public final static int LIMELIGHT_APRILTAG_PIPELINE = 0;
     public final static int LIMELIGHT_BALL_PIPELINE = 1;
+    // Enable only after verifying Limelight's robot-space camera pose at tilt-up.
+    public final static boolean LIMELIGHT_HIVE_HEIGHT_CALIBRATED = false;
+    public final static int LIMELIGHT_TAG_HEIGHT_AXIS = 2; // calibrated vertical coordinate, Z-up by default
+    public final static double LIMELIGHT_ROBOT_ORIGIN_HEIGHT_IN = 0;
 
     // =========================================================
     // PINPOINT ODOMETRY

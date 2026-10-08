@@ -51,7 +51,10 @@ public final class SimulatorMain implements RobotIO {
     private Sensors decodeSensors(Map<String,Object> m){
         Map<String,Object> p=Json.object(m.get("pose")),v=Json.object(m.get("vision"));List<Target> targets=new ArrayList<Target>();
         Object raw=v.get("targets");if(!(raw instanceof List)||((List<?>)raw).size()>64)throw new IllegalArgumentException("Invalid targets");
-        for(Object item:(List<?>)raw){Map<String,Object> t=Json.object(item);double tx=Json.number(t,"tx"),ty=Json.number(t,"ty");if(Math.abs(tx)>180||Math.abs(ty)>180)throw new IllegalArgumentException("Invalid vision angles");targets.add(new Target(Json.integer(t,"id"),tx,ty));}
+        for(Object item:(List<?>)raw){Map<String,Object> t=Json.object(item);double tx=Json.number(t,"tx"),ty=Json.number(t,"ty");if(Math.abs(tx)>180||Math.abs(ty)>180)throw new IllegalArgumentException("Invalid vision angles");
+            double height=t.containsKey("heightInches")?Json.number(t,"heightInches"):Double.NaN;
+            if(Double.isFinite(height)&&(height<0||height>100))throw new IllegalArgumentException("Invalid tag height");
+            targets.add(new Target(Json.integer(t,"id"),tx,ty,height));}
         Pose pose=new Pose(Json.number(p,"x"),Json.number(p,"y"),Json.number(p,"heading"));
         if(Math.abs(pose.x)>1000||Math.abs(pose.y)>1000)throw new IllegalArgumentException("Invalid pose");
         return new Sensors(pose,Json.number(m,"sampledAt"),Json.bool(m,"odometryValid"),Json.bool(m,"cameraConnected"),Json.integer(m,"ballCount"),

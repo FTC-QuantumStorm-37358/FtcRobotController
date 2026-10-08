@@ -18,7 +18,12 @@ public interface RobotIO {
         public final int id;
         /** Limelight convention: tx is degrees, right/clockwise positive. */
         public final double tx, ty;
-        public Target(int id,double tx,double ty) { this.id=id; this.tx=tx; this.ty=ty; }
+        /** Measured tag height above the tiles, inches; NaN without calibrated 3D pose. */
+        public final double heightInches;
+        public Target(int id,double tx,double ty) { this(id,tx,ty,Double.NaN); }
+        public Target(int id,double tx,double ty,double heightInches) {
+            this.id=id; this.tx=tx; this.ty=ty; this.heightInches=heightInches;
+        }
     }
     final class Vision {
         public final boolean valid;

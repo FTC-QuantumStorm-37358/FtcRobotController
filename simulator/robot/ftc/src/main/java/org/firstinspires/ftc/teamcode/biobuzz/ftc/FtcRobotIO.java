@@ -21,6 +21,7 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
     private final FtcHardwareConfig.BallCounter counter;
     private final long epoch=System.nanoTime();
     private int pipeline=-1;
+    private double frameTimestamp=Double.NaN,frameCapturedAt,pipelineChangedAt;
     public FtcRobotIO(HardwareMap map,FtcHardwareConfig config,int alliance) {
         config.validate();this.config=config;counter=config.createBallCounter(map);
         fl=map.get(DcMotor.class,config.frontLeft);fr=map.get(DcMotor.class,config.frontRight);
@@ -50,22 +51,28 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         boolean valid=pinpoint.getDeviceStatus().name().equals("READY");
         LLResult result=limelight.getLatestResult();Vision vision=Vision.empty(pipeline,now);
         int actual=pipeline==0?config.tagPipeline:config.ballPipeline;
-        if(result!=null&&result.isValid()&&result.getPipelineIndex()==actual){
+        if(result!=null&&result.isValid()&&result.getPipelineIndex()==actual&&now-pipelineChangedAt>=.20){
             List<Target> targets=new ArrayList<Target>();
             if(pipeline==0){List<LLResultTypes.FiducialResult> tags=result.getFiducialResults();if(tags!=null)for(LLResultTypes.FiducialResult t:tags)
-                targets.add(new Target(t.getFiducialId(),t.getTargetXDegrees(),t.getTargetYDegrees()));}
+                targets.add(new Target(t.getFiducialId(),t.getTargetXDegrees(),t.getTargetYDegrees(),tagHeight(t)));}
             else targets.add(new Target(-1,result.getTx(),result.getTy()));
             double age=Math.max(0,result.getStaleness()+result.getCaptureLatency()+result.getTargetingLatency())/1000;
-            vision=new Vision(!targets.isEmpty(),pipeline,now-age,targets.toArray(new Target[0]));
+            if(result.getTimestamp()!=frameTimestamp){frameTimestamp=result.getTimestamp();frameCapturedAt=now-age;}
+            vision=new Vision(!targets.isEmpty()&&age<=.25,pipeline,frameCapturedAt,targets.toArray(new Target[0]));
         }
         return new Sensors(pose,now,valid,limelight.isConnected(),counter.count(),vision);
+    }
+    private double tagHeight(LLResultTypes.FiducialResult tag) {
+        if(!config.hiveHeightCalibrated||tag.getTargetPoseRobotSpace()==null)return Double.NaN;
+        Position p=tag.getTargetPoseRobotSpace().getPosition().toUnit(DistanceUnit.INCH);
+        return (config.tagHeightAxis==0?p.x:config.tagHeightAxis==1?p.y:p.z)+config.robotOriginHeightInches;
     }
     public void apply(Outputs o) {
         double[] w=o.wheelPowers();
         fl.setPower(w[0]);fr.setPower(w[1]);bl.setPower(w[2]);br.setPower(w[3]);
         intake.setPower(o.intakePower);leftIntake.setPower(o.intakePower);rightIntake.setPower(o.intakePower);
         shooter.setPower(o.shooterPower);feeder.setPower(o.feederPower);
-        if(pipeline!=o.pipeline){pipeline=o.pipeline;cameraTilt.setPosition(pipeline==0?config.tiltUp:config.tiltDown);limelight.pipelineSwitch(pipeline==0?config.tagPipeline:config.ballPipeline);}
+        if(pipeline!=o.pipeline){pipeline=o.pipeline;pipelineChangedAt=nowSeconds();frameTimestamp=Double.NaN;cameraTilt.setPosition(pipeline==0?config.tiltUp:config.tiltDown);limelight.pipelineSwitch(pipeline==0?config.tagPipeline:config.ballPipeline);}
     }
     public void close() { try{apply(new Outputs());}finally{limelight.stop();} }
 }

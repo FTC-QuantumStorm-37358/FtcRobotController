@@ -43,6 +43,40 @@ Then set `calibrated=true`. Hardware initialization and Pinpoint calibration hap
 
 ## Sensor behavior and limits
 
+### Alliance filtering and Hive-tip detection
+
+`HiveVision` is used by the shared controller and QuantumStorm camera wrapper.
+Only the selected alliance's Cell clusters can authorize aiming or feeding:
+Red rear 30-33 / audience 34-37; Blue audience 38-41 / rear 42-45
+(BIOBUZZ TU03, page 76). "Normal" follows the simulator's initial upward Cell;
+it is not an assumption about the physical match setup.
+
+An ID identifies a Cell, not its tipped state. Detection uses measured tag-plane
+height above the tiles. Nominal simulator bands are 52.02 inches up and 36.57
+inches down, with 1.5-inch tolerance. At least two tags from a cluster and three
+distinct fresh frames spanning 100 ms must agree. Height drift over 0.20 inches
+during confirmation, conflicting Cell observations, missing 3D pose, stale frames,
+or the wrong pipeline produce an unknown state. Feeding pauses when state/aim is
+unknown, and a confirmed change moves to the opposite shooting pose in either
+direction. A partial remaining load can continue after that reposition.
+
+The simulator supplies tag heights from visible tag geometry, preserving its
+camera delay and field of view. No JavaScript autonomous decision was added.
+The FTC adapter reads each fiducial's target pose in robot space. Configure the
+Limelight camera pose/extrinsics for the actual tilt-up position; verify the
+vertical axis and robot-origin height against the floor. Measure the up/down
+bands and noise tolerance in `FieldLayout`. Then set
+`FtcHardwareConfig.hiveHeightCalibrated=true`; keep `calibrated=false` until all
+other hardware checks are complete. QuantumStorm uses the equivalent
+`Constants.LIMELIGHT_HIVE_HEIGHT_CALIBRATED`, `LIMELIGHT_TAG_HEIGHT_AXIS`, and
+`LIMELIGHT_ROBOT_ORIGIN_HEIGHT_IN` settings. These calibration flags default false
+so an unconfigured 3D pose cannot authorize firing. No custom Python pipeline is
+required. Both hardware wrappers wait 200 ms after a tilt/pipeline change before
+accepting a pose.
+
+`HiveVisionChecks` covers both alliances, repeated/replayed frames, missing pose,
+motion and contradictory measurements, and normal-to-flipped-to-normal changes.
+
 The browser synthesizes Pinpoint pose and measured inventory. Its virtual Limelight has a robot-mounted origin, up/down camera pitch, finite field of view/range, tag-facing checks, conservative support/flower occlusion, 30 FPS, 60 ms delay and a pipeline-switch delay. Optional seeded angle noise and dropped detections are available in `SimSensors` constructor options. The UI camera checkbox tests missing detections.
 
 The robot adapter reads actual Pinpoint and Limelight data, checks result validity/pipeline, returns individual tag IDs/angles, and accounts for result staleness and capture/processing latency. Java rejects stale pose/vision, ignores the other alliance's tags and never shoots using perfect simulator coordinates as an aiming shortcut.

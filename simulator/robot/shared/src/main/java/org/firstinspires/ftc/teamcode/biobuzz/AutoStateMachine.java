@@ -10,6 +10,7 @@ public final class AutoStateMachine {
     private final RobotIO io;
     private final FieldLayout field;
     private final Navigator navigator;
+    private HiveVision hiveVision;
     private State state=State.STOPPED, afterMove;
     private ShootStep shootStep;
     private Source source;
@@ -23,6 +24,7 @@ public final class AutoStateMachine {
     public void start(int alliance,double power) {
         if(alliance<0||alliance>1||!Double.isFinite(power)||power<0||power>1)throw new IllegalArgumentException("Invalid alliance or shooter power");
         this.alliance=alliance;this.power=power;startAt=lastNow=io.nowSeconds();running=true;retries=0;
+        hiveVision=new HiveVision(field,alliance);
         gardenDone=flowerDone=flipped=false;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
     }
     public void stop() { running=false;state=State.STOPPED;last=new Outputs();io.apply(last); }
@@ -47,18 +49,8 @@ public final class AutoStateMachine {
     private void finishPickup() { if(source==Source.GARDEN)gardenDone=true;if(source==Source.FLOWER)flowerDone=true;moveThen(hive(),"Hive",State.SHOOTING); }
     private void fail(String reason,boolean recoverable) { error=reason;this.recoverable=recoverable;enter(State.ERROR); }
     private Target tag(Vision vision,double now) {
-        if(!vision.fresh(now,0))return null;
-        Target near=cluster(vision,field.nearTags[alliance]),far=cluster(vision,field.farTags[alliance]);
-        // A cluster center avoids switching aim between its left/right individual tags.
-        // An incidental far-face cluster does not imply a flip while the intended near cluster is visible.
-        return flipped?far:near!=null?near:far;
+        return hiveVision.aim(now,flipped);
     }
-    private Target cluster(Vision vision,int[] ids) {
-        int n=0,id=-1;double tx=0,ty=0;
-        for(Target t:vision.targets)if(contains(ids,t.id)){n++;id=t.id;tx+=t.tx;ty+=t.ty;}
-        return n==0?null:new Target(id,tx/n,ty/n);
-    }
-    private static boolean contains(int[] ids,int id) { for(int i:ids)if(i==id)return true;return false; }
     public void tick() {
         Outputs out=new Outputs();double now=io.nowSeconds();
         if(!running){last=out;io.apply(out);return;}
@@ -71,6 +63,7 @@ public final class AutoStateMachine {
         if(sensors.ballCount<0||sensors.ballCount>4||!sensors.cameraConnected){
             fail(sensors.ballCount<0||sensors.ballCount>4?"Ball-count sensor unavailable":"Camera disconnected",false);running=false;last=out;io.apply(out);return;
         }
+        hiveVision.update(sensors.vision,now);
         if(elapsed()>=26&&state!=State.PARK){destination=field.park(sensors.pose);enter(State.PARK);}
         double age=now-stateAt;
         State before=state;
@@ -83,20 +76,25 @@ public final class AutoStateMachine {
                     if(state==State.MOVING&&age>5)fail("Destination timeout",true);
                     break;
                 case SHOOTING:
+                    int observed=hiveVision.state(now);
+                    if(observed>=0&&(observed==1)!=flipped){
+                        flipped=observed==1;moveThen(hive(),flipped?"Hive far face":"Hive normal face",State.SHOOTING);break;
+                    }
                     if(shootStep==ShootStep.CHECK_BALLS){
-                        if(sensors.ballCount<4){pickup();break;}shootStep=ShootStep.AIM;stateAt=now;age=0;
+                        if(sensors.ballCount==0){pickup();break;}shootStep=ShootStep.AIM;stateAt=now;age=0;
                     }
                     out.shooterPower=power;
                     if(shootStep==ShootStep.AIM){
                         Target t=tag(sensors.vision,now);
-                        if(t!=null&&!flipped&&contains(field.farTags[alliance],t.id)){flipped=true;moveThen(hive(),"Hive far face",State.SHOOTING);break;}
                         if(t!=null&&Math.abs(t.tx)<2&&age>=1){shootStep=ShootStep.FIRE;stateAt=now;age=0;}
                         else if(age>3){fail(t==null?"AprilTag not found":"AprilTag alignment timeout",true);break;}
                         else if(t!=null)out.turnClockwise=FieldLayout.clip(t.tx*.02,.6);
                     }
                     if(shootStep==ShootStep.FIRE){
                         if(sensors.ballCount==0){pickup();break;}
-                        if(age>3){fail("Balls stuck in indexer",true);break;}out.feederPower=1;
+                        Target fireTarget=tag(sensors.vision,now);
+                        if(age>3){fail(fireTarget==null?"Hive state or AprilTag lost while feeding":"Balls stuck in indexer",true);break;}
+                        if(fireTarget!=null&&Math.abs(fireTarget.tx)<2)out.feederPower=1;
                     }
                     break;
                 case INTAKE:

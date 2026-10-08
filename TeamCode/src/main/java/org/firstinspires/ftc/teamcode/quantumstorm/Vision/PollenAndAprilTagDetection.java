@@ -9,11 +9,11 @@ import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+import org.firstinspires.ftc.vision.apriltag.AprilTagSingleDetection;
 import org.firstinspires.ftc.vision.opencv.ColorBlobLocatorProcessor;
 import org.firstinspires.ftc.vision.opencv.ColorRange;
 import org.opencv.core.RotatedRect;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -37,7 +37,7 @@ public class PollenAndAprilTagDetection extends LinearOpMode {
         VisionPortal visionPortal = new VisionPortal.Builder()
                 .setCamera(hardwareMap.get(WebcamName.class, WEBCAM_NAME))
                 .setCameraResolution(new Size(320, 240))
-                .addProcessors(Arrays.asList(yellowLocator, blueLocator, redLocator, aprilTagProcessor))
+                .addProcessors(yellowLocator, blueLocator, redLocator, aprilTagProcessor)
                 .build();
 
         telemetry.addLine("Detecting yellow pollen, blue/red objects, and AprilTags.");
@@ -54,14 +54,16 @@ public class PollenAndAprilTagDetection extends LinearOpMode {
             List<AprilTagDetection> detections = aprilTagProcessor.getDetections();
             telemetry.addData("AprilTags", detections.size());
             for (AprilTagDetection detection : detections) {
-                if (detection.metadata != null && detection.ftcPose != null) {
-                    telemetry.addData("Tag " + detection.id,
+                if (!(detection instanceof AprilTagSingleDetection)) continue;
+                AprilTagSingleDetection tag=(AprilTagSingleDetection)detection;
+                if (tag.metadata != null && tag.ftcPose != null) {
+                    telemetry.addData("Tag " + tag.id,
                             "%s | range %.1f in | bearing %.1f deg",
-                            detection.metadata.name,
-                            detection.ftcPose.range,
-                            detection.ftcPose.bearing);
+                            tag.metadata.name,
+                            tag.ftcPose.range,
+                            tag.ftcPose.bearing);
                 } else {
-                    telemetry.addData("Tag " + detection.id, "visible (pose unavailable)");
+                    telemetry.addData("Tag " + tag.id, "visible (pose unavailable)");
                 }
             }
 

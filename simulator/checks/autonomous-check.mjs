@@ -14,7 +14,8 @@ const {GamePhysics,robotAllowed}=await import('../dist/game-physics.js');
 const {fencePose,simulate,makeTarget}=await import('../dist/ballistics.js');
 const {fireNextBall}=await import('../dist/next-shot.js');
 function setup(){const f=buildField(),r=buildRobot(),s=new T.Scene();s.add(f,r);return new GamePhysics(f,s,r);}
-await compileJava([path.resolve('robot/tests/ControllerChecks.java')]);
+await compileJava([path.resolve('robot/tests/ControllerChecks.java'),path.resolve('robot/tests/HiveVisionChecks.java')]);
+const hiveUnit=spawnSync(java,['-cp',classes,'org.firstinspires.ftc.teamcode.biobuzz.HiveVisionChecks'],{encoding:'utf8'});assert.equal(hiveUnit.status,0,hiveUnit.stdout+hiveUnit.stderr);console.log(hiveUnit.stdout.trim());
 const unit=spawnSync(java,['-cp',classes,'org.firstinspires.ftc.teamcode.biobuzz.ControllerChecks'],{encoding:'utf8'});assert.equal(unit.status,0,unit.stdout+unit.stderr);console.log(unit.stdout.trim());
 async function runner(){
  const child=launchJava(),lines=createInterface({input:child.stdout}),queue=[],waiters=[];let ready;
@@ -46,7 +47,7 @@ const r=await runner();try{
  const error=await r.send({type:'step',runId:'missing-tag',seq,time,sensors:camera.read(time,0,r.ready)});assert.equal(error.type,'error');assert.match(error.message,/out-of-order/);
 }finally{r.close();}
 // Sensor timestamps and pipelines must remain physically delayed; headings have explicit signs/units.
-const game=setup(),camera=new SimSensors(game),map={nearTags:[[0,1,2,3],[38,39,40,41]],farTags:[[4,5,6,7],[42,43,44,45]]};
+const game=setup(),camera=new SimSensors(game),map={nearTags:[[30,31,32,33],[38,39,40,41]],farTags:[[34,35,36,37],[42,43,44,45]]};
 assert.equal(camera.read(0,0,map).vision.valid,false);assert(camera.read(.08,0,map).vision.targets.some(t=>t.id>=0));assert.equal(camera.read(.1,1,map).vision.valid,false);
 for(const theta of [-Math.PI,0,.7,Math.PI]){const p={x:12,z:-45,theta},q=toBrowserPose(toJavaPose(p));assert(Math.abs(q.x-p.x)+Math.abs(q.z-p.z)<1e-8);assert(Math.abs(Math.atan2(Math.sin(q.theta-theta),Math.cos(q.theta-theta)))<1e-8);}
 const driver=new JavaAutonomousClient(game);driver.running=true;driver.pending=true;const before={...game.pose},elapsed=game.elapsed;driver.update(.2);assert.deepEqual(game.pose,before);assert.equal(game.elapsed,elapsed);driver.stop();assert.equal(driver.running,false);assert.deepEqual(driver.update(.1),{advanced:false,moved:false});

@@ -16,6 +16,11 @@ public class FtcHardwareConfig {
     public double podXOffsetMm=0,podYOffsetMm=0,tiltUp=.3,tiltDown=.7;
     public boolean reverseXPod=false,reverseYPod=false;
     public int tagPipeline=0,ballPipeline=1;
+    /** Confirm Limelight camera pose/extrinsics at tiltUp before using 3D heights. */
+    public boolean hiveHeightCalibrated=false;
+    /** Robot-space vertical axis: 2 for Z-up. Set only after verifying the pose convention. */
+    public int tagHeightAxis=2;
+    public double robotOriginHeightInches=0;
     public double shooterPower=.395;
     /** Configure four occupied-slot signals, or override createBallCounter with your actual sensing mechanism. */
     public String[] ballSlotNames={};
@@ -29,6 +34,8 @@ public class FtcHardwareConfig {
     }
     public void validate() {
         if(!calibrated)throw new IllegalStateException("Configure measured field poses, tag-to-face IDs, pod offsets/directions, camera tilt and ball counter in FtcHardwareConfig, then mark calibrated=true.");
+        if(!hiveHeightCalibrated||tagHeightAxis<0||tagHeightAxis>2||!Double.isFinite(robotOriginHeightInches))
+            throw new IllegalStateException("Calibrate robot-space tag heights at tiltUp, including camera pose, vertical axis and origin height.");
         if(shooterPower<0||shooterPower>1||!Double.isFinite(shooterPower))throw new IllegalArgumentException("Shooter power");
         for(Pose[] poses:new Pose[][]{start,field.hive,field.farHive,field.garden,field.flower})for(Pose p:poses)
             if(p==null||!p.finite()||!field.allowed(p))throw new IllegalArgumentException("Invalid field calibration pose");

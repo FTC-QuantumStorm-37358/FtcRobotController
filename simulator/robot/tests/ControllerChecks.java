@@ -4,11 +4,11 @@ import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.*;
 /** Sensor faults and FTC-style clock behavior, independent of a browser or SDK stubs. */
 public final class ControllerChecks {
     private static final class IO implements RobotIO {
-        double time,readDuration=0,stale=0;int count=4,pipeline=0,id=0;boolean connected=true,odom=true,visible=true;
+        double time,readDuration=0,stale=0,height=52.02;int count=4,pipeline=0,id=30;boolean connected=true,odom=true,visible=true;
         Pose pose;Outputs out=new Outputs();
         public double nowSeconds(){return time;}
         public Sensors readSensors(){time+=readDuration;return new Sensors(pose,time-stale,odom,connected,count,
-            new Vision(visible,pipeline,time,new Target[]{new Target(id,0,0)}));}
+            new Vision(visible,pipeline,time,new Target[]{new Target(id,0,0,height),new Target(id+1,0,0,height)}));}
         public void apply(Outputs o){out=o.copy();}
     }
     private static void check(boolean condition,String message){if(!condition)throw new AssertionError(message);}
@@ -35,6 +35,25 @@ public final class ControllerChecks {
         Outputs mix=new Outputs();mix.forward=.8;mix.strafeRight=.8;mix.turnClockwise=.8;double[] wheels=mix.wheelPowers();check(Math.abs(wheels[0]-1)<1e-9,"Combined mecanum command must normalize all wheels together");for(double w:wheels)check(Math.abs(w)<=1,"Wheel power bounds");
         FieldLayout f=new FieldLayout();Navigator nav=new Navigator(f);check(nav.plan(new Pose(-45,40,Math.PI/2),new Pose(45,-40,Math.PI/2),Math.PI/2).size()>1,"Route must avoid frame supports");
         check(nav.plan(f.hive[0],new Pose(100,100,0),0)==null,"Outside-field route must be rejected");
+        for(int alliance=0;alliance<2;alliance++){
+            io=new IO();io.id=f.nearTags[alliance][0];io.pose=f.hive[alliance];
+            auto=new AutoStateMachine(io,f);auto.start(alliance,.4);
+            for(int i=0;i<70;i++){io.time+=.02;auto.tick();}
+            check(io.out.feederPower==1,"Initial confirmed own Cell feeds");
+            io.count=2;io.height=f.upperTagHeight-.5;io.time+=.04;auto.tick();
+            check(io.out.feederPower==0,"Height motion pauses feeding immediately");
+            io.id=f.farTags[alliance][0];io.height=f.upperTagHeight;
+            for(int i=0;i<4;i++){io.time+=.04;auto.tick();}
+            check(auto.getState()==AutoStateMachine.State.MOVING&&auto.destination()==f.farHive[alliance],"Confirmed tip repositions to far Cell");
+            check(io.out.feederPower==0,"Reposition stops feeder");
+            io.pose=f.farHive[alliance];
+            for(int i=0;i<70;i++){io.time+=.02;auto.tick();}
+            check(io.out.feederPower==1,"Partial measured load resumes at confirmed far Cell");
+            io.id=f.nearTags[alliance][0];
+            for(int i=0;i<4;i++){io.time+=.04;auto.tick();}
+            check(auto.getState()==AutoStateMachine.State.MOVING&&auto.destination()==f.hive[alliance],"Second tip returns to normal Cell");
+            check(io.out.feederPower==0,"Second reposition stops feeder");
+        }
         System.out.println("Shared Java clock, sensor freshness, pipeline/alliance gates, jam, duration and collision routing passed.");
     }
 }

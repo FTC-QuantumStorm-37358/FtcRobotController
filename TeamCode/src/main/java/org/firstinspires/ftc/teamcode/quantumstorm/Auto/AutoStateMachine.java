@@ -79,6 +79,8 @@ public class AutoStateMachine {
     // SHOOTING
     private ShootStep shootStep = ShootStep.CHECK_BALLS;
     private boolean hiveFlipped = false;
+    private double fedSeconds,lastFeedCheck;
+    private boolean feeding;
 
     // INTAKE
     private PickupSource pickupSource = PickupSource.GARDEN;
@@ -104,6 +106,7 @@ public class AutoStateMachine {
         intake = new Intake(opMode.hardwareMap);
         indexer = new SoftwareIndexer();   // TODO: sensor-based Indexer
         camera = new LimelightCamera(opMode.hardwareMap);
+        camera.selectHive(position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2,false);
 
         opMode.telemetry.addData("Autonomous", position.label);
         opMode.telemetry.addData("Camera", camera.isConnected() ? "OK" : "NOT FOUND");
@@ -168,7 +171,7 @@ public class AutoStateMachine {
     private void runShooting() {
         switch (shootStep) {
             case CHECK_BALLS:
-                if (indexer.getBallCount() < Constants.AUTO_BALLS_TO_SHOOT) {
+                if (indexer.getBallCount() <= 0) {
                     goToPickup();
                     return;
                 }
@@ -179,9 +182,11 @@ public class AutoStateMachine {
 
             case AIM:
                 // Hive tipped: its active Cell is now on the far face, shoot from there
-                if (!hiveFlipped && camera.isHiveFlipped()) {
-                    hiveFlipped = true;
-                    moveThen(shootingPose(), "Hive 1 far face", State.SHOOTING);
+                Boolean observed=camera.getHiveState();
+                if (observed!=null && observed!=hiveFlipped) {
+                    hiveFlipped=observed;
+                    camera.selectHive(position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2,hiveFlipped);
+                    moveThen(shootingPose(), hiveFlipped?"Hive 1 far face":"Hive 1 normal face", State.SHOOTING);
                     return;
                 }
                 if (isReadyToShoot()) {
@@ -201,7 +206,19 @@ public class AutoStateMachine {
                 break;
 
             case FIRE:
-                if (indexer.getBallCount() > 0 && stateTimer.seconds() >= Constants.AUTO_FEED_TIME_SEC) {
+                double fireAge=stateTimer.seconds();
+                if(feeding)fedSeconds+=Math.max(0,fireAge-lastFeedCheck);
+                lastFeedCheck=fireAge;
+                Boolean fireState=camera.getHiveState();
+                if(fireState!=null&&fireState!=hiveFlipped){
+                    shooter.stopFeed();feeding=false;hiveFlipped=fireState;
+                    camera.selectHive(position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2,hiveFlipped);
+                    moveThen(shootingPose(),hiveFlipped?"Hive 1 far face":"Hive 1 normal face",State.SHOOTING);return;
+                }
+                boolean safe=camera.isAprilTagVisible()&&Math.abs(camera.getAprilTagAngle())<Constants.AUTO_AIM_TOLERANCE_DEG;
+                if(safe){shooter.feed();feeding=true;}else{shooter.stopFeed();feeding=false;}
+                if(!safe&&fireAge>Constants.AUTO_APRILTAG_TIMEOUT_SEC){fail("Hive state/AprilTag lost while feeding",true);return;}
+                if (indexer.getBallCount() > 0 && fedSeconds >= Constants.AUTO_FEED_TIME_SEC) {
                     // Fed long enough: should be empty. A sensor-based indexer will disagree if jammed.
                     indexer.setBallCount(0);
                     if (indexer.getBallCount() > 0) {
@@ -382,6 +399,7 @@ public class AutoStateMachine {
     private void setShootStep(ShootStep step) {
         shootStep = step;
         stateTimer.reset();
+        if(step==ShootStep.FIRE){fedSeconds=lastFeedCheck=0;feeding=true;}
     }
 
     private void stopEverything() {

@@ -33,13 +33,13 @@ export class SimSensors {
   if(this.enabled&&this.random()>=this.dropout){
    if(this.pipeline===0){for(const hive of this.game.hives)for(let face=0;face<hive.cells.length;face++){
     const cell=hive.cells[face],normal=new T.Vector3(0,-1,0).transformDirection(cell.matrixWorld),ids=(face===0?tagMap.nearTags:tagMap.farTags)[hive.index];
-    for(let i=0;i<ids.length;i++){const point=new T.Vector3(i%2?2:-2,-.15,i<2?-2:2).applyMatrix4(cell.matrixWorld);const result=this.measure(point,time,ids[i],normal);if(result)targets.push(result);}
+    for(let i=0;i<ids.length;i++){const point=new T.Vector3(i%2?2:-2,-.15,i<2?-2:2).applyMatrix4(cell.matrixWorld);const result=this.measure(point,time,ids[i],normal);if(result)targets.push({...result,heightInches:point.y});}
    }}else for(const ball of this.game.balls){
     if(ball.held||ball.storedInFlower||ball.body.position.y>ball.r+.025)continue;
     const point=new T.Vector3(ball.body.position.x/INCH,ball.body.position.y/INCH,ball.body.position.z/INCH),result=this.measure(point,time,-1);if(result)targets.push(result);
    }
   }
-  targets.sort((a,b)=>a.distance-b.distance);const packet={valid:targets.length>0,pipeline:this.pipeline,capturedAt:time,targets:targets.map(({id,tx,ty})=>({id,tx,ty}))};
+  targets.sort((a,b)=>a.distance-b.distance);const packet={valid:targets.length>0,pipeline:this.pipeline,capturedAt:time,targets:targets.map(({id,tx,ty,heightInches})=>({id,tx,ty,...(heightInches===undefined?{}:{heightInches})}))};
   this.pending.push({releaseAt:time+this.latency,packet});this.frame++;
  }
  read(time,pipeline,tagMap){

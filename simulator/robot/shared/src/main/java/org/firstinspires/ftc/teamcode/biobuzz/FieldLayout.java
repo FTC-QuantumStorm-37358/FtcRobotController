@@ -11,8 +11,12 @@ public final class FieldLayout {
     public final Pose[] farHive={fromBrowser(-12.75,63.945,2*Math.PI),fromBrowser(12.75,-63.945,Math.PI)};
     public final Pose[] garden={fromBrowser(58,-60.8,0),fromBrowser(-58,60.8,Math.PI)};
     public final Pose[] flower={fromBrowser(-24,-57.45,0),fromBrowser(24,57.45,Math.PI)};
-    // Provisional simulator IDs. Confirm actual cell-face mapping before using on hardware.
-    public final int[][] nearTags={{0,1,2,3},{38,39,40,41}}, farTags={{4,5,6,7},{42,43,44,45}};
+    // BIOBUZZ TU03 p76: Red rear 30..33 / audience 34..37;
+    // Blue audience 38..41 / rear 42..45. Near follows the simulator's initial Cell.
+    public final int[][] nearTags={{30,31,32,33},{38,39,40,41}}, farTags={{34,35,36,37},{42,43,44,45}};
+    // Nominal tag-plane heights at the two stable Hive positions. Measure on hardware.
+    public double upperTagHeight=52.02,lowerTagHeight=36.57,tagHeightTolerance=1.5;
+    public double tagHeightMotionTolerance=.20; // inches of drift allowed during confirmation
     public final List<double[]> obstacles=new ArrayList<double[]>();
     public FieldLayout() {
         for(double x:new double[]{-24.73,24.73})for(double y:new double[]{-15.5,15.5})obstacles.add(new double[]{x,y,1,4.9});
