@@ -8,12 +8,15 @@ import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.Pose;
 /** Shared geometry and waypoints. Defaults match this simulator, not measured robot calibration. */
 public final class FieldLayout {
     public final Pose[] hive={fromBrowser(-12.75,-63.945,Math.PI),fromBrowser(12.75,63.945,2*Math.PI)};
-    public final Pose[] farHive={fromBrowser(-12.75,63.945,2*Math.PI),fromBrowser(12.75,-63.945,Math.PI)};
+    // Oblique return shot keeps the Garden/Flower loop on the alliance wall side.
+    // Heading points at the raised Cell's AprilTag center; same .395 / 66.5-degree arc.
+    public final Pose[] farHive={fromBrowser(-53,40,-.9843162068450441),fromBrowser(53,-40,Math.PI-.9843162068450441)};
     public final Pose[] garden={fromBrowser(-58,60.8,Math.PI),fromBrowser(58,-60.8,0)};
     // Side Flowers are closer to the Garden/shot route than the opposite rear Flower.
-    public final Pose[] flower={fromBrowser(-57.45,24,Math.PI/2),fromBrowser(57.45,-24,-Math.PI/2)};
+    // Corner approach triggers release without putting the chassis across the outlet.
+    public final Pose[] flower={fromBrowser(-58,35.5,0),fromBrowser(58,-35.5,Math.PI)};
     // Inset enough to fit the chassis at any heading while overlapping the Loading Zone.
-    public final Pose[] loadingPark={new Pose(-59,36,0),new Pose(59,-36,Math.PI)};
+    public final Pose[] loadingPark={new Pose(-59,30,0),new Pose(59,-30,Math.PI)};
     public Pose parkingTarget(Pose current,int alliance) {
         Pose location=loadingPark[alliance];
         return new Pose(location.x,location.y,current.heading);

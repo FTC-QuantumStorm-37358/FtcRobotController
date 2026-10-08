@@ -35,7 +35,7 @@ public final class Navigator {
         if(stage==2){
             if(!field.canRotate(p,target.heading))throw new IllegalStateException("Turn blocked");
             double a=Pose.angle(target.heading-p.heading);
-            if(Math.abs(a)>Math.toRadians(1.5)){Outputs o=new Outputs();o.turnClockwise=-FieldLayout.clip(Math.toDegrees(a)*.03,field.turnPower);return o;}
+            if(Math.abs(a)>Math.toRadians(1.5)){Outputs o=new Outputs();o.turnClockwise=-FieldLayout.clip(Math.toDegrees(a)*.08,field.turnPower);return o;}
             stage=3;route=null;
         }
         if(p.distance(target)<.65&&Math.abs(Pose.angle(target.heading-p.heading))<Math.toRadians(2))return null;
@@ -45,9 +45,9 @@ public final class Navigator {
         if(route==null){route=plan(p,target,heading);if(route==null)throw new IllegalStateException("No collision-free route");}
         while(route.size()>1&&(p.distance(route.get(0))<.6||field.clear(p,route.get(1),heading)))route.remove(0);
         Pose q=route.get(0);double dx=q.x-p.x,dy=q.y-p.y,c=Math.cos(p.heading),s=Math.sin(p.heading);
-        Outputs o=new Outputs();o.forward=(dx*c+dy*s)*.12;o.strafeRight=(dx*s-dy*c)*.12;
+        Outputs o=new Outputs();o.forward=(dx*c+dy*s)*.35;o.strafeRight=(dx*s-dy*c)*.35;
         double mag=Math.hypot(o.forward,o.strafeRight);if(mag>field.drivePower){o.forward*=field.drivePower/mag;o.strafeRight*=field.drivePower/mag;}
-        o.turnClockwise=-FieldLayout.clip(Math.toDegrees(Pose.angle(heading-p.heading))*.03,field.turnPower);return o;
+        o.turnClockwise=-FieldLayout.clip(Math.toDegrees(Pose.angle(heading-p.heading))*.08,field.turnPower);return o;
     }
     private static final class Node {
         final Pose p;final int x,y;double cost=Double.POSITIVE_INFINITY;Node parent;

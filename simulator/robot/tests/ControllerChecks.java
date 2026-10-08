@@ -14,6 +14,25 @@ public final class ControllerChecks {
     private static void check(boolean condition,String message){if(!condition)throw new AssertionError(message);}
     private static void stopped(IO io,String name){check(io.out.forward==0&&io.out.strafeRight==0&&io.out.turnClockwise==0&&io.out.feederPower==0&&io.out.shooterPower==0&&io.out.intakePower==0,name+" must stop all actuators");}
     private static AutoStateMachine make(IO io){FieldLayout f=new FieldLayout();io.pose=f.hive[0];return new AutoStateMachine(io,f);}
+    private static void step(IO io,AutoStateMachine auto){io.time+=.02;auto.tick();}
+    /** Script measured counts/poses for decision tests; physical pickup is tested separately in Cannon. */
+    private static AutoStateMachine prepareFinalWait(IO io){
+        FieldLayout f=new FieldLayout();AutoStateMachine auto=make(io);auto.start(0,.395);
+        for(int i=0;i<70;i++)step(io,auto);
+        io.count=0;step(io,auto);io.pose=f.garden[0];step(io,auto);
+        io.count=4;step(io,auto);io.id=f.farTags[0][0];io.pose=f.farHive[0];
+        for(int i=0;i<70;i++)step(io,auto);
+        io.count=0;step(io,auto);io.pose=f.flower[0];step(io,auto);
+        io.count=4;step(io,auto);io.pose=f.farHive[0];
+        for(int i=0;i<70;i++)step(io,auto);
+        io.time=23;io.count=0;auto.tick();
+        check(auto.getState()==AutoStateMachine.State.WAIT_TILT,"Final batch must await a measured tilt");
+        for(int i=0;i<8;i++)step(io,auto);
+        check(auto.getState()==AutoStateMachine.State.WAIT_TILT,"No tilt may be inferred from an empty queue or a timer");
+        io.id=f.nearTags[0][0];for(int i=0;i<10;i++)step(io,auto);
+        check(auto.getState()==AutoStateMachine.State.WAITING,"Confirmed Flower tilt enters stationary waiting");
+        return auto;
+    }
     public static void main(String[] args){
         IO io=new IO();io.readDuration=.001;AutoStateMachine auto=make(io);auto.start(0,.4);
         for(int i=0;i<70;i++){io.time+=.02;auto.tick();}
@@ -65,6 +84,11 @@ public final class ControllerChecks {
             check(auto.getState()==AutoStateMachine.State.MOVING&&auto.destination()==f.hive[alliance],"Second tip returns to normal Cell");
             check(io.out.feederPower==0,"Second reposition stops feeder");
         }
-        System.out.println("Shared Java clock, sensor freshness, pipeline/alliance gates, jam, duration and collision routing passed.");
+        io=new IO();auto=prepareFinalWait(io);
+        for(int i=0;i<50;i++){step(io,auto);check(auto.getState()==AutoStateMachine.State.WAITING,"Do not restart pickup after final tilt");stopped(io,"Waiting after Flower tilt");}
+        io.time=25.98;auto.tick();stopped(io,"Wait until parking start");
+        io.time=26;auto.tick();check(auto.getState()==AutoStateMachine.State.PARK,"Completed routine begins parking at 26");check(io.out.intakePower==0,"Parking leaves intake off");
+        io.time=30;auto.tick();stopped(io,"Completed routine deadline");
+        System.out.println("Shared Java clock, sensor freshness, pipeline/alliance gates, jam, duration, collision routing and final-tilt waiting passed.");
     }
 }

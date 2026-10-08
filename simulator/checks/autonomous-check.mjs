@@ -35,7 +35,7 @@ for(const alliance of [0,1]){
   }
   console.log({alliance,time,shots,inventory:game.inventory.length,states:[...states],status:response.status});
   assert.equal(response.type,'command');assert.equal(response.running,false);assert.equal(response.state,'PARK');assert(shots>=4);assert(states.has('INTAKE'));assert(time<30);
-  const park=alliance===0?{x:-59,z:-36}:{x:59,z:36};
+  const park=alliance===0?{x:-59,z:-30}:{x:59,z:30};
   assert(Math.hypot(game.pose.x-park.x,game.pose.z-park.z)<.7,'Must actually reach parking, not merely enter PARK');
   for(const key of ['forward','strafeRight','turnClockwise','shooterPower','feederPower','intakePower'])assert.equal(response.outputs[key],0,'Parked actuators must stop');
  }finally{r.close();}
