@@ -27,3 +27,7 @@ android {
 dependencies {
     implementation project(':FtcRobotController')
 }
+
+// BIOBUZZ: compile the same Java controller for the FTC robot and local simulator.
+ext.biobuzzRoot = rootProject.file('simulator').absolutePath
+apply from: rootProject.file('simulator/robot/ftc/shared-sources.gradle')

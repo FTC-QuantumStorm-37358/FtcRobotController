@@ -1,0 +1,9 @@
+// Apply from TeamCode/build.gradle. Point -PbiobuzzRoot to this simulator checkout.
+if (!project.hasProperty('biobuzzRoot')) {
+    throw new GradleException('Set -PbiobuzzRoot=/absolute/path/to/ftc-biobuzz-simulator')
+}
+def biobuzz = file(project.property('biobuzzRoot'))
+android.sourceSets.main.java.srcDirs += [
+    new File(biobuzz, 'robot/shared/src/main/java'),
+    new File(biobuzz, 'robot/ftc/src/main/java')
+]

@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import * as T from '../dist/vendor/three.module.js';
+const ctx=new Proxy({},{get:()=>()=>{},set:()=>true});globalThis.document={createElement:()=>({getContext:()=>ctx})};
+const {buildField,buildRobot}=await import('../dist/model.js');
+const {GamePhysics,desiredTilt,robotAllowed}=await import('../dist/game-physics.js');
+const {simulate,makeTarget,SHOT_POSE}=await import('../dist/ballistics.js');
+function setup(){const field=buildField(),robot=buildRobot(),scene=new T.Scene();scene.add(field,robot);return new GamePhysics(field,scene,robot);}
+const game=setup();assert.equal(game.balls.length,56);assert.equal(game.inventory.length,4);assert(robotAllowed(game.pose));assert(game.drive(1,0,0,.1));game.pose={...SHOT_POSE};game.syncRobot();
+const settings={power:.4,angle:71.5,height:6,transfer:.5,compression:.15,pose:game.pose,diameter:2.8};
+const shot=simulate(settings,makeTarget(game.raisedCell()));assert(shot.origin.y>6&&shot.origin.y<10);assert.equal(shot.status,'entry');assert(game.shoot(shot));assert.equal(game.inventory.length,3);assert(!game.shoot(shot));
+let maxLoad=0;for(let i=0;i<240;i++){game.step(1/120);maxLoad=Math.max(maxLoad,...game.hives[0].counts.map(c=>c.pollen));}assert(maxLoad>=1,'Physical shot must enter and remain inside the hive');
+game.pose={x:40,z:0,theta:0};game.syncRobot();const item=game.balls.find(b=>!b.held&&!b.storedInFlower&&b.type==='pollen'&&b.resident===null);item.body.position.set(game.pose.x*.0254,item.r,(game.pose.z-10.2)*.0254);item.body.velocity.setZero();game.drive(1,0,0,1/120);game.pickup();assert.equal(game.inventory.length,4);const extra=game.balls.find(b=>!b.held&&b.resident===null);extra.body.position.set(game.pose.x*.0254,extra.r,game.pose.z*.0254);assert(!game.collect(extra));assert.equal(game.inventory.length,4);
+const eight=Array.from({length:8},()=>({type:'pollen'})),five=Array.from({length:5},()=>({type:'red'}));assert.equal(desiredTilt(eight,[],Math.PI/6),-Math.PI/6);assert.equal(desiredTilt(five,[],Math.PI/6),-Math.PI/6);assert.equal(desiredTilt(eight.slice(1),[],Math.PI/6),Math.PI/6);assert.equal(desiredTilt(eight,eight,Math.PI/6),Math.PI/6);
+const tiltGame=setup(),cell=tiltGame.raisedCell();tiltGame.field.updateMatrixWorld(true);for(let i=0;i<8;i++){const p=new T.Vector3(-6+(i%4)*4,2.1,-3+Math.floor(i/4)*4).applyMatrix4(cell.matrixWorld);tiltGame.createBall('pollen',p.toArray());}let seenTilt=false;for(let i=0;i<360;i++){tiltGame.step(1/120);if(tiltGame.hives[0].tilts)seenTilt=true;}assert(seenTilt,'Eight retained physical pollen must tip the hive');assert(tiltGame.hives[0].angle<0);
+for(const item of tiltGame.balls){assert(Number.isFinite(item.body.position.x)&&Number.isFinite(item.body.position.y)&&Number.isFinite(item.body.position.z));assert(item.body.position.y>-.02,'Ball tunneled through floor');}
+const nectarGame=setup(),nc=nectarGame.raisedCell();nectarGame.field.updateMatrixWorld(true);for(let i=0;i<5;i++){const p=new T.Vector3(-6+(i%3)*6,2.5,-3+Math.floor(i/3)*4.5).applyMatrix4(nc.matrixWorld);nectarGame.createBall('red',p.toArray());}for(let i=0;i<360;i++)nectarGame.step(1/120);assert(nectarGame.hives[0].tilts>=1,'Five retained nectar must tip the hive');
+console.log(JSON.stringify({physicalShotRetained:maxLoad,capacity:game.inventory.length,pollenTilts:tiltGame.hives[0].tilts,nectarTilts:nectarGame.hives[0].tilts,baseReleaseHeight:shot.origin.y,finiteBodies:true}));

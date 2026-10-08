@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readGamepad,GamepadActions,deadzone} from '../dist/gamepad-input.js';
+import {launcher,guidePoint,REAR_EDGE,REAR_BALL_GAP,WHEEL,HOOD_START,HOOD_SWEEP} from '../dist/ballistics.js';
+for(const size of [2.8,3.6]){const l=launcher(20.5,6,.15,{x:0,z:0,theta:0},size);assert(Math.abs(REAR_EDGE-(l.center.z+WHEEL/2)-REAR_BALL_GAP)<1e-10);assert(l.origin.z>l.center.z);assert(l.origin.z+size/2<REAR_EDGE);assert.equal(Math.round(HOOD_SWEEP*180/Math.PI),124);assert(Math.abs(l.guideExit-l.hoodStart-l.hoodSweep)<1e-10);
+ // Previous section at 69.5 degrees, rotated exactly 90 clockwise in screen space.
+ for(let i=0;i<=10;i++){const theta=(69.5-170+170*i/10)*Math.PI/180,r=l.hoodRadius,oldX=-r*Math.sin(theta),oldY=r*Math.cos(theta),newPoint=guidePoint(theta,r);assert(Math.abs(newPoint.u+oldY)<1e-10);assert(Math.abs(-newPoint.y-oldX)<1e-10);}
+ const tangentU=Math.sin(l.guideExit),tangentY=Math.cos(l.guideExit);assert(tangentU>0&&tangentY>0);assert(Math.abs(Math.atan2(tangentY,tangentU)*180/Math.PI-20.5)<1e-10);
+}
+const pad={id:'Logitech F310',mapping:'standard',connected:true,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
+assert.equal(readGamepad(pad).forward,0);assert.equal(deadzone(.1),0);pad.axes=[1,-1,.7,0];let state=readGamepad(pad);assert.equal(state.forward,1);assert.equal(state.strafe,1);assert(state.turn<0);
+pad.axes=[0,0,0,0];pad.buttons[12].pressed=true;pad.buttons[14].pressed=true;state=readGamepad(pad);assert.equal(state.forward,1);assert.equal(state.strafe,-1);assert.equal(state.turn,0);pad.buttons.forEach(b=>b.pressed=false);
+const actions=new GamepadActions();pad.buttons[0].pressed=true;assert(actions.sample(readGamepad(pad),0).shoot);assert(!actions.sample(readGamepad(pad),100).shoot);pad.buttons[0].pressed=false;actions.sample(readGamepad(pad),200);pad.buttons[0].pressed=true;assert(actions.sample(readGamepad(pad),300).shoot);
+pad.buttons.forEach(b=>b.pressed=false);pad.buttons[2].pressed=true;assert.equal(actions.sample(readGamepad(pad),400).speedStep,-.01);assert.equal(actions.sample(readGamepad(pad),500).speedStep,0);assert.equal(actions.sample(readGamepad(pad),800).speedStep,-.01);pad.buttons[2].pressed=false;pad.buttons[3].pressed=true;assert.equal(actions.sample(readGamepad(pad),850).speedStep,.01);pad.buttons[2].pressed=true;assert.equal(actions.sample(readGamepad(pad),900).speedStep,0);
+pad.connected=false;assert.equal(readGamepad(pad).connected,false);assert.equal(readGamepad(pad).forward,0);actions.reset();assert.equal(actions.sample(readGamepad(null),1000).speedStep,0);
+const raw={...pad,connected:true,mapping:'',buttons:Array.from({length:12},()=>({pressed:false})),axes:[0,0,0,0,0,0,0,0,0,3.28]};raw.buttons[1].pressed=true;assert(readGamepad(raw).shoot);raw.buttons[1].pressed=false;raw.buttons[0].pressed=true;assert(readGamepad(raw).slower);raw.buttons[0].pressed=false;raw.buttons[3].pressed=true;assert(readGamepad(raw).faster);assert.equal(readGamepad({...raw,id:'Unrecognized raw pad'}).profile,'unsupported');
+console.log('3.6-inch rear wheel gap; internal release; exact clockwise 90-degree rotation, rear release and tangent-consistent forward flight; standard/raw F310 controls, dead zone, A edge trigger, X/Y repeat/opposition and disconnect passed.');

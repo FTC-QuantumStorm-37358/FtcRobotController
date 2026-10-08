@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {RuleSignals,ruleAnnouncement} from '../dist/rule-signals.js';
+import {Penalties} from '../dist/penalties.js';
+const r=new Penalties(),shown=[];let cleared=0;
+const signals=new RuleSignals({show:t=>shown.push(t),clear:()=>cleared++});
+r.assess('G408');signals.consume(r.events);signals.consume(r.events);assert.equal(shown.length,1);assert.match(shown[0],/Verbal warning.*G408.*opponent nectar/);
+r.assess('G410',0,{count:2});signals.consume(r.events);assert.match(shown.at(-1),/Major foul.*Blue receives 40 penalty points/);
+r.assess('G426');signals.consume(r.events);assert.match(shown.at(-1),/Minor foul.*Blue receives 5/);
+r.assess('G408',1);signals.consume(r.events);assert.match(shown.at(-1),/Yellow card/);r.assess('G409',1);signals.consume(r.events);assert.match(shown.at(-1),/Red card.*Disqualified.*zero/);
+assert.match(ruleAnnouncement({...r.events[0],disabled:true}),/Robot disabled.*Stop all powered actions/);
+r.reset();signals.consume(r.events);assert.equal(cleared,2);r.assess('G412');signals.consume(r.events);assert.match(shown.at(-1),/Robot disabled/);
+console.log('Visible warning/foul/card/disable messages, single popup per assessment and reset clearing passed.');
