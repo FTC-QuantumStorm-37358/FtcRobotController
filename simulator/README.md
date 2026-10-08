@@ -29,7 +29,7 @@ Compatible browser-standard gamepads use the HTML Gamepad API: left stick or D-p
 
 ## Autonomous and rules
 
-Start autonomous runs the shared Java controller through the local server. Stop autonomous, Escape, manual driving, leaving the page or a disconnected bridge stops it. Synthetic Limelight enabled can test detection loss. Cyan lines show the route reported by Java. Travel/retries can consume the 30-second run; completing every pickup and parking is not guaranteed.
+Start autonomous runs the shared Java controller through the local server. Stop autonomous, Escape, manual driving, leaving the page or a disconnected bridge stops it. Synthetic Limelight enabled can test detection loss. Cyan lines show the route reported by Java. The requested sequence is shoot → Garden → shoot → Flower → shoot → park. Parking has a 26-second deadline: Java reserves route-dependent travel time and can interrupt scoring or skip a pickup to reach the Loading Zone. At 26 seconds all actuators stop, even if a fault prevents arrival. Restart the local server after changing Java code.
 
 Start timed match resets the field and begins Java AUTO, followed by the 8-second transition and 120-second TELEOP. The score panel shows the red practice estimate. Minor/major fouls award 5/20 points to blue. Measurable violations are monitored; intent, human behavior and opponent interactions use Referee assessment. Warnings appear silently in the corner for five seconds and stay in penalty history. There is no audio. See [rule coverage and limitations](docs/penalty-review.md).
 

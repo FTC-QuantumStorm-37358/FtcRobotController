@@ -29,7 +29,8 @@ public final class ControllerChecks {
             io=new IO();auto=make(io);auto.start(0,.4);if(bad==1)io.pipeline=1;else io.id=38;
             for(int i=0;i<120;i++){io.time+=.02;auto.tick();check(io.out.feederPower==0,"Wrong pipeline or alliance must never authorize a shot");}
             io.time=26;auto.tick();check(auto.getState()==AutoStateMachine.State.PARK,"26-second guard must enter park");check(io.out.feederPower==0&&io.out.shooterPower==0,"Park stops shooter");
-            io.time=30;auto.tick();check(!auto.isRunning(),"30-second duration stops run");stopped(io,"Match end");
+            check(!auto.isRunning(),"26-second deadline stops run");stopped(io,"Parking deadline");
+            io.time=30;auto.tick();check(!auto.isRunning(),"Cannot resume after parking deadline");stopped(io,"Match end");
         }
         io=new IO();auto=make(io);auto.start(0,.4);io.time=.1;auto.tick();io.time=-1;auto.tick();check(!auto.isRunning(),"Backward clock must stop");stopped(io,"Clock fault");
         Outputs mix=new Outputs();mix.forward=.8;mix.strafeRight=.8;mix.turnClockwise=.8;double[] wheels=mix.wheelPowers();check(Math.abs(wheels[0]-1)<1e-9,"Combined mecanum command must normalize all wheels together");for(double w:wheels)check(Math.abs(w)<=1,"Wheel power bounds");

@@ -28,13 +28,16 @@ for(const alliance of [0,1]){
  const r=await runner();try{
   const game=setup();game.pose=fencePose(alliance);game.syncRobot();const camera=new SimSensors(game);let time=0,seq=0,shots=0;const states=new Set();const actuators=new SimActuators(game,power=>{const fired=fireNextBall(game,{power,angle:66.5,height:6,compression:.15},makeTarget(game.raisedCell(alliance)),{pollen:.5,nectar:.5},simulate);if(fired)shots++;return fired;});
   let response=await r.send({type:'start',runId:'physical'+alliance,seq,time,alliance,shooterPower:.395,sensors:camera.read(time,0,r.ready)});
-  while(response.running&&time<30.1){
+  while(response.running&&time<26.1){
    assert.equal(response.type,'command');states.add(response.state);const o=response.outputs;actuators.apply(o,.02,time);assert(robotAllowed(game.pose));assert(game.inventory.length<=4);
    time=Number((time+.02).toFixed(8));seq++;
    response=await r.send({type:'step',runId:'physical'+alliance,seq,time,sensors:camera.read(time,o.pipeline,r.ready)});
   }
   console.log({alliance,time,shots,inventory:game.inventory.length,states:[...states],status:response.status});
-  assert.equal(response.type,'command');assert.equal(response.running,false);assert.equal(response.state,'PARK');assert.equal(shots,4);assert(states.has('INTAKE'));assert.equal(game.inventory.length,4,'Garden refill must be physical');
+  assert.equal(response.type,'command');assert.equal(response.running,false);assert.equal(response.state,'PARK');assert(shots>=4);assert(states.has('INTAKE'));assert(time<=26.02);
+  const park=alliance===0?{x:-62,z:-36}:{x:62,z:36};
+  assert(Math.hypot(game.pose.x-park.x,game.pose.z-park.z)<.7,'Must actually reach parking, not merely enter PARK');
+  for(const key of ['forward','strafeRight','turnClockwise','shooterPower','feederPower','intakePower'])assert.equal(response.outputs[key],0,'Parked actuators must stop');
  }finally{r.close();}
 }
 // No tag means no feed, even when robot pose is perfect and the queue is full.

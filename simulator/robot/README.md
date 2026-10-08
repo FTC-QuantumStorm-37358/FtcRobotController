@@ -92,6 +92,6 @@ npm run java:build
 npm run check
 ```
 
-Checks run the real JVM against cannon-es for both alliances, live firing/refill, tag loss, delayed pipelines, protocol/reconnect/manual stop, and the existing game regressions. The full 30-second run may end after one shooting/refill cycle because travel time and retries consume the remaining time; the tests do not claim it completes every pickup source.
+Checks run the real JVM against cannon-es for both alliances, live firing/refill, tag loss, delayed pipelines, protocol/reconnect/manual stop, and the existing game regressions. Parking takes priority over the shoot → Garden → shoot → Flower → shoot sequence. A route-based reserve starts parking early enough to target arrival by 26 seconds, with an unconditional actuator stop at 26 seconds. The physical checks verify actual arrival at the Loading Zone for both default alliance starts; faults, blocked routes or a different starting pose can still prevent arrival. These tests do not claim that every pickup cycle fits before the deadline.
 
 The shared and FTC adapter sources were additionally compiled against the team's FTC SDK 12.0.0 Hardware and RobotCore artifacts. This is a compile check, not a Control Hub hardware test.

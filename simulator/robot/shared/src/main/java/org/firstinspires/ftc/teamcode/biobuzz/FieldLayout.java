@@ -9,8 +9,11 @@ import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.Pose;
 public final class FieldLayout {
     public final Pose[] hive={fromBrowser(-12.75,-63.945,Math.PI),fromBrowser(12.75,63.945,2*Math.PI)};
     public final Pose[] farHive={fromBrowser(-12.75,63.945,2*Math.PI),fromBrowser(12.75,-63.945,Math.PI)};
-    public final Pose[] garden={fromBrowser(58,-60.8,0),fromBrowser(-58,60.8,Math.PI)};
-    public final Pose[] flower={fromBrowser(-24,-57.45,0),fromBrowser(24,57.45,Math.PI)};
+    public final Pose[] garden={fromBrowser(-58,60.8,Math.PI),fromBrowser(58,-60.8,0)};
+    // Side Flowers are closer to the Garden/shot route than the opposite rear Flower.
+    public final Pose[] flower={fromBrowser(-57.45,24,Math.PI/2),fromBrowser(57.45,-24,-Math.PI/2)};
+    public final Pose[] loadingPark={new Pose(-62,36,0),new Pose(62,-36,Math.PI)};
+    public double drivePower=1.0,turnPower=1.0;
     // BIOBUZZ TU03 p76: Red rear 30..33 / audience 34..37;
     // Blue audience 38..41 / rear 42..45. Near follows the simulator's initial Cell.
     public final int[][] nearTags={{30,31,32,33},{38,39,40,41}}, farTags={{34,35,36,37},{42,43,44,45}};

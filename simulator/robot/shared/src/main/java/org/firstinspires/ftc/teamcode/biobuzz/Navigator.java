@@ -9,19 +9,54 @@ public final class Navigator {
     private final FieldLayout field;
     private int stage;
     private List<Pose> route;
+    private Pose turnPose;
     public Navigator(FieldLayout field) { this.field=field; }
-    public void reset() { stage=0;route=null; }
+    public void reset() { stage=0;route=null;turnPose=null; }
     /** Read-only telemetry; callers cannot change the navigation route. */
     public List<Pose> route() { return route==null?new ArrayList<Pose>():new ArrayList<Pose>(route); }
+    /** Conservative travel budget for the current simulator's 25 in/s, 1.65 rad/s
+     * response. Include an inset before turning at walls, route distance, turn
+     * time and proportional-controller settling. Does not command movement. */
+    public double parkingSeconds(Pose start,Pose goal) {
+        Pose turn=turnPoint(start,goal.heading);
+        if(turn==null)return Double.POSITIVE_INFINITY;
+        double departure=pathLength(start,turn,start.heading);
+        double travel=pathLength(turn,goal,goal.heading);
+        if(!Double.isFinite(departure)||!Double.isFinite(travel)||!field.canRotate(turn,goal.heading))
+            return Double.POSITIVE_INFINITY;
+        double rotation=Math.abs(Pose.angle(goal.heading-start.heading))/Math.max(.1,1.65*field.turnPower);
+        return (departure+travel)/Math.max(1,25*field.drivePower)+rotation+3.0;
+    }
+    private double pathLength(Pose start,Pose goal,double heading) {
+        if(start.distance(goal)<.01)return 0;
+        List<Pose> points=plan(start,goal,heading);
+        if(points==null)return Double.POSITIVE_INFINITY;
+        double distance=0;Pose last=start;
+        for(Pose p:points){distance+=last.distance(p);last=p;}
+        return distance;
+    }
+    /** Find a reachable clearance point before turning beside any obstacle,
+     * not only beside a perimeter wall. Keep the current heading on departure. */
+    private Pose turnPoint(Pose start,double heading) {
+        if(field.canRotate(start,heading))return start;
+        List<Pose> candidates=new ArrayList<Pose>();
+        for(int x=-56;x<=56;x+=4)for(int y=-56;y<=56;y+=4){
+            Pose p=new Pose(x,y,start.heading);
+            if(field.allowed(p)&&field.canRotate(p,heading))candidates.add(p);
+        }
+        candidates.sort(Comparator.comparingDouble(p->p.distance(start)));
+        for(Pose p:candidates)if(plan(start,p,start.heading)!=null)return p;
+        return null;
+    }
     /** null means arrival. Blocked paths throw and are handled by the state machine. */
     public Outputs move(Pose p,Pose target) {
-        if(stage==0)stage=field.canRotate(p,target.heading)?2:1;
-        if(stage==1){Pose inset=new Pose(FieldLayout.clip(p.x,51),FieldLayout.clip(p.y,51),p.heading);
-            if(p.distance(inset)<.6){stage=2;route=null;}else return follow(p,inset,p.heading);}
+        if(stage==0){turnPose=turnPoint(p,target.heading);if(turnPose==null)throw new IllegalStateException("No reachable turn clearance");stage=p.distance(turnPose)<.01?2:1;}
+        if(stage==1){
+            if(p.distance(turnPose)<.6){stage=2;route=null;}else return follow(p,turnPose,turnPose.heading);}
         if(stage==2){
             if(!field.canRotate(p,target.heading))throw new IllegalStateException("Turn blocked");
             double a=Pose.angle(target.heading-p.heading);
-            if(Math.abs(a)>Math.toRadians(1.5)){Outputs o=new Outputs();o.turnClockwise=-FieldLayout.clip(Math.toDegrees(a)*.02,.6);return o;}
+            if(Math.abs(a)>Math.toRadians(1.5)){Outputs o=new Outputs();o.turnClockwise=-FieldLayout.clip(Math.toDegrees(a)*.03,field.turnPower);return o;}
             stage=3;route=null;
         }
         if(p.distance(target)<.65&&Math.abs(Pose.angle(target.heading-p.heading))<Math.toRadians(2))return null;
@@ -31,9 +66,9 @@ public final class Navigator {
         if(route==null){route=plan(p,target,heading);if(route==null)throw new IllegalStateException("No collision-free route");}
         while(route.size()>1&&(p.distance(route.get(0))<.6||field.clear(p,route.get(1),heading)))route.remove(0);
         Pose q=route.get(0);double dx=q.x-p.x,dy=q.y-p.y,c=Math.cos(p.heading),s=Math.sin(p.heading);
-        Outputs o=new Outputs();o.forward=(dx*c+dy*s)*.05;o.strafeRight=(dx*s-dy*c)*.05;
-        double mag=Math.hypot(o.forward,o.strafeRight);if(mag>.6){o.forward*=.6/mag;o.strafeRight*=.6/mag;}
-        o.turnClockwise=-FieldLayout.clip(Math.toDegrees(Pose.angle(heading-p.heading))*.02,.6);return o;
+        Outputs o=new Outputs();o.forward=(dx*c+dy*s)*.12;o.strafeRight=(dx*s-dy*c)*.12;
+        double mag=Math.hypot(o.forward,o.strafeRight);if(mag>field.drivePower){o.forward*=field.drivePower/mag;o.strafeRight*=field.drivePower/mag;}
+        o.turnClockwise=-FieldLayout.clip(Math.toDegrees(Pose.angle(heading-p.heading))*.03,field.turnPower);return o;
     }
     private static final class Node {
         final Pose p;final int x,y;double cost=Double.POSITIVE_INFINITY;Node parent;
