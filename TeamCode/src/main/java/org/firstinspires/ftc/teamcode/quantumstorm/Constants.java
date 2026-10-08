@@ -81,52 +81,77 @@ public class Constants {
 
     // =========================================================
     // FIELD LOCATIONS
-    // FTC field coordinates: origin at the field center, inches,
-    // field spans -72..+72 on both axes; heading in degrees, CCW positive.
-    // Check the season's game manual for which way +X and +Y point.
-    // TODO: measure each one with "Test: Pinpoint Pose" (push the robot
-    //    to the spot and copy the X / Y / heading telemetry here).
-    //    How the field locations work
-    //
-    //    FTC uses a standard field coordinate system:
-    //      - The origin (0, 0) is the center of the field, and distances are in inches. The field runs from −72 to +72 in each direction.
-    //      - Heading is in degrees, counter-clockwise positive.
-    //      - Which way +X and +Y point is set in each season's game manual, so check that before measuring.
-    //
-    //    The easiest way to get each location is to measure it with the robot rather than calculate it. I added a test OpMode for this:
-    //      1. Place the robot at the starting spot (e.g. RED_1_START_POSE) and press INIT. Keep it still while the Pinpoint calibrates.
-    //      2. Drive or push it to the Garden and read X / Y / Heading from the Driver Hub.
-    //      3. Copy those numbers into Constants.RED_GARDEN_POSE etc. Repeat for each location and each alliance.
+    // Team field frame: origin at center; inches; walls at +/-72.
+    // Viewed from the audience: +X is right (Blue), +Y is away (rear).
+    // Heading is CCW: 0 = +X, 90 = +Y, 180 = -X, -90 = -Y.
+    // This is our chosen frame, not a coordinate convention mandated by FIRST.
+    // Source: simulator/dist/model.js (rendered field), not the simulator's
+    // provisional Java Garden waypoint, which is on the wrong alliance half.
+    // Browser conversion: field X = browser x, field Y = -browser z.
+    // Landmark coordinates match the simulator; verify the physical field.
+    // *_POSE values are ROBOT CENTER destinations, not field-element centers.
+    // Approach/start poses assume an 18 x 18 in robot with front intake/shooter.
+    // Shooting distance and pickup offsets are provisional and must be tuned.
+    // These destinations do not define obstacle-avoiding routes.
+    // Seed Pinpoint with the matching start pose and verify pod offsets/signs.
     // =========================================================
 
-    // Starting spots: one per alliance + starting position (Team One / Team Two)
-    public final static Pose2D RED_1_START_POSE  = fieldPose(0, 0, 0);
-    public final static Pose2D RED_2_START_POSE  = fieldPose(0, 0, 0);
-    public final static Pose2D BLUE_1_START_POSE = fieldPose(0, 0, 0);
-    public final static Pose2D BLUE_2_START_POSE = fieldPose(0, 0, 0);
+    // Field landmarks (heading unused). Flowers are shared, not alliance-owned.
+    public final static Pose2D REAR_FLOWER_CENTER     = fieldPose(-24, 69, 0);
+    public final static Pose2D LEFT_FLOWER_CENTER     = fieldPose(-69, -24, 0);
+    public final static Pose2D AUDIENCE_FLOWER_CENTER = fieldPose(24, -69, 0);
+    public final static Pose2D RIGHT_FLOWER_CENTER    = fieldPose(69, 24, 0);
+    public final static Pose2D RED_GARDEN_CENTER  = fieldPose(-60.5, -70.8, 0);
+    public final static Pose2D BLUE_GARDEN_CENTER = fieldPose(60.5, 70.8, 0);
+    // Loading Zones: approximately 11 in deep by 23 in wide.
+    // Red: X [-72,-61], Y [24.5,47.5]; Blue is rotated 180 degrees.
+    public final static Pose2D RED_LOADING_ZONE_CENTER  = fieldPose(-66.5, 36, 0);
+    public final static Pose2D BLUE_LOADING_ZONE_CENTER = fieldPose(66.5, -36, 0);
+    // One Hive per alliance, each with two Cells; pivots are 25.5 in apart.
+    // Pivot position is unchanged by tipping. Robot shooting side changes.
+    public final static Pose2D RED_HIVE_PIVOT  = fieldPose(-12.75, 0, 0);
+    public final static Pose2D BLUE_HIVE_PIVOT = fieldPose(12.75, 0, 0);
+    // Projected centers of the upward-facing Cell floors in the rendered model:
+    // local z = +/-15.45, local height .4, tilt +/-30 deg, pivot height 43.95.
+    public final static double SIM_HIVE_CELL_OFFSET_IN = 15.45*Math.cos(Math.PI/6)-0.4*Math.sin(Math.PI/6);
+    public final static Pose2D RED_HIVE_NORMAL_CELL_CENTER = fieldPose(-12.75, SIM_HIVE_CELL_OFFSET_IN, 0);
+    public final static Pose2D RED_HIVE_FLIPPED_CELL_CENTER = fieldPose(-12.75, -SIM_HIVE_CELL_OFFSET_IN, 0);
+    public final static Pose2D BLUE_HIVE_NORMAL_CELL_CENTER = fieldPose(12.75, -SIM_HIVE_CELL_OFFSET_IN, 0);
+    public final static Pose2D BLUE_HIVE_FLIPPED_CELL_CENTER = fieldPose(12.75, SIM_HIVE_CELL_OFFSET_IN, 0);
 
-    // Hive 1 for each start = the same-color hive closest to that start,
-    // at the spot/heading the robot shoots from. (4 hives on the field: 2 red, 2 blue.)
-    public final static Pose2D RED_1_HIVE1_POSE  = fieldPose(0, 0, 0);
-    public final static Pose2D RED_2_HIVE1_POSE  = fieldPose(0, 0, 0);
-    public final static Pose2D BLUE_1_HIVE1_POSE = fieldPose(0, 0, 0);
-    public final static Pose2D BLUE_2_HIVE1_POSE = fieldPose(0, 0, 0);
+    // Proposed starting spots; not prescribed by Red/Blue 1/2 assignment.
+    // Rear of an 18 in robot touches its alliance wall, outside Loading Zone.
+    public final static Pose2D RED_1_START_POSE  = fieldPose(-63, -12, 0);
+    public final static Pose2D RED_2_START_POSE  = fieldPose(-63, -60, 0);
+    public final static Pose2D BLUE_1_START_POSE = fieldPose(63, 12, 180);
+    public final static Pose2D BLUE_2_START_POSE = fieldPose(63, 60, 180);
 
-    // Where to shoot from once Hive 1 has tipped and its active Cell is on the far face
-    public final static Pose2D RED_1_HIVE1_FLIPPED_POSE  = fieldPose(0, 0, 0);
-    public final static Pose2D RED_2_HIVE1_FLIPPED_POSE  = fieldPose(0, 0, 0);
-    public final static Pose2D BLUE_1_HIVE1_FLIPPED_POSE = fieldPose(0, 0, 0);
-    public final static Pose2D BLUE_2_HIVE1_FLIPPED_POSE = fieldPose(0, 0, 0);
+    // Normal = rendered simulator's initial up Cell: Red +Y, Blue -Y.
+    // This differs from the manual's initial up-Cell orientation; use the
+    // appropriate measured state/poses on a competition field.
+    // Robot poses are 60 in from the pivot, leaving room for an 18 in chassis.
+    // Do not copy the simulator's 63.945 in pose: its chassis is asymmetric.
+    public final static Pose2D RED_1_HIVE1_POSE  = fieldPose(-12.75, 60, -90);
+    public final static Pose2D RED_2_HIVE1_POSE  = RED_1_HIVE1_POSE;
+    public final static Pose2D BLUE_1_HIVE1_POSE = fieldPose(12.75, -60, 90);
+    public final static Pose2D BLUE_2_HIVE1_POSE = BLUE_1_HIVE1_POSE;
 
-    // Red alliance field elements
-    public final static Pose2D RED_GARDEN_POSE = fieldPose(0, 0, 0);
-    public final static Pose2D RED_FLOWER_POSE = fieldPose(0, 0, 0);
-    public final static Pose2D RED_PARK_POSE   = fieldPose(0, 0, 0);   // touching the perimeter
+    // After a tip, approach the newly upward-facing Cell from the other side.
+    public final static Pose2D RED_1_HIVE1_FLIPPED_POSE  = fieldPose(-12.75, -60, 90);
+    public final static Pose2D RED_2_HIVE1_FLIPPED_POSE  = RED_1_HIVE1_FLIPPED_POSE;
+    public final static Pose2D BLUE_1_HIVE1_FLIPPED_POSE = fieldPose(12.75, 60, -90);
+    public final static Pose2D BLUE_2_HIVE1_FLIPPED_POSE = BLUE_1_HIVE1_FLIPPED_POSE;
 
-    // Blue alliance field elements
-    public final static Pose2D BLUE_GARDEN_POSE = fieldPose(0, 0, 0);
-    public final static Pose2D BLUE_FLOWER_POSE = fieldPose(0, 0, 0);
-    public final static Pose2D BLUE_PARK_POSE   = fieldPose(0, 0, 0);  // touching the perimeter
+    // Garden: face front intake toward the audience/rear wall respectively.
+    public final static Pose2D RED_GARDEN_POSE  = fieldPose(-60.5, -60.8, -90);
+    public final static Pose2D BLUE_GARDEN_POSE = fieldPose(60.5, 60.8, 90);
+    // Select one of the two Flowers on our AUTO half; approach its bottom.
+    public final static Pose2D RED_FLOWER_POSE  = fieldPose(-24, 57.45, 90);
+    public final static Pose2D BLUE_FLOWER_POSE = fieldPose(24, -57.45, -90);
+    // Park with part of the footprint in our Loading Zone and a 1 in wall gap.
+    // Wall contact is unnecessary for PARK and would forfeit end-of-AUTO LEAVE.
+    public final static Pose2D RED_PARK_POSE  = fieldPose(-62, 36, 0);
+    public final static Pose2D BLUE_PARK_POSE = fieldPose(62, -36, 180);
 
     // =========================================================
     // AUTONOMOUS ROUTINE
