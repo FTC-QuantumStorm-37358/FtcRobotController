@@ -17,13 +17,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Limelight 3A on a tilt servo. One pipeline runs at a time:
+ * Limelight 3A with an optional tilt servo. One pipeline runs at a time:
  *  - tiltUp():   AprilTag pipeline, used before shooting at the Hive
  *  - tiltDown(): ball pipeline, used to find balls on the floor
  *
- * If the camera or servo is missing from the Robot Configuration, this does not
- * crash INIT: isConnected() returns false and every query reports "nothing seen",
- * so the autonomous self-check can send the robot to ERROR -> PARK instead.
+ * A missing servo leaves the camera at its fixed mounting angle; pipeline
+ * switching still works. A missing/disconnected Limelight fails the autonomous
+ * camera self-check. Calibrate vision for the actual mounting angle.
  */
 public class LimelightCamera {
 
@@ -48,8 +48,10 @@ public class LimelightCamera {
     }
 
     public boolean isConnected() {
-        return limelight != null && tiltServo != null && limelight.isConnected();
+        return limelight != null && limelight.isConnected();
     }
+
+    public boolean hasTiltServo() { return tiltServo != null; }
 
     public void tiltUp() {
         setTiltAndPipeline(Constants.LIMELIGHT_TILT_UP, Constants.LIMELIGHT_APRILTAG_PIPELINE);

@@ -12,7 +12,9 @@ public class FtcHardwareConfig {
     public final Pose[] start={field.hive[0],field.hive[1]};
     public String frontLeft="left_front_drive",frontRight="right_front_drive",backLeft="left_back_drive",backRight="right_back_drive";
     public String intake="intake",shooter="shooter",leftIntakeServo="left_intake_servo",rightIntakeServo="right_intake_servo",feeder="shooter_servo";
-    public String pinpoint="odometry_1",limelight="limelight",cameraTilt="limelight_tilt_servo";
+    public String pinpoint="odometry_1",limelight="limelight";
+    /** Optional positional tilt servo; missing, null or empty means fixed camera mounting. */
+    public String cameraTilt="limelight_tilt_servo";
     public double podXOffsetMm=0,podYOffsetMm=0,tiltUp=.3,tiltDown=.7;
     public boolean reverseXPod=false,reverseYPod=false;
     public int tagPipeline=0,ballPipeline=1;

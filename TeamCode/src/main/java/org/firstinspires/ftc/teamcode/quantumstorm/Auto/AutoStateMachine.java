@@ -110,6 +110,7 @@ public class AutoStateMachine {
 
         opMode.telemetry.addData("Autonomous", position.label);
         opMode.telemetry.addData("Camera", camera.isConnected() ? "OK" : "NOT FOUND");
+        opMode.telemetry.addData("Camera tilt servo", camera.hasTiltServo() ? "Configured" : "Not configured (optional)");
         opMode.telemetry.addLine("Place robot at the " + position.label + " start, then press PLAY");
         opMode.telemetry.update();
     }
@@ -152,7 +153,7 @@ public class AutoStateMachine {
 
         // Self-check: a failed check goes straight to ERROR
         if (!camera.isConnected()) {
-            fail("Limelight or tilt servo not found", false);
+            fail("Limelight not found or disconnected", false);
             return;
         }
 

@@ -28,7 +28,8 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         bl=map.get(DcMotor.class,config.backLeft);br=map.get(DcMotor.class,config.backRight);
         intake=map.get(DcMotor.class,config.intake);shooter=map.get(DcMotor.class,config.shooter);
         leftIntake=map.get(CRServo.class,config.leftIntakeServo);rightIntake=map.get(CRServo.class,config.rightIntakeServo);feeder=map.get(CRServo.class,config.feeder);
-        pinpoint=map.get(GoBildaPinpointDriver.class,config.pinpoint);limelight=map.get(Limelight3A.class,config.limelight);cameraTilt=map.get(Servo.class,config.cameraTilt);
+        pinpoint=map.get(GoBildaPinpointDriver.class,config.pinpoint);limelight=map.get(Limelight3A.class,config.limelight);
+        cameraTilt=config.cameraTilt==null||config.cameraTilt.trim().isEmpty()?null:map.tryGet(Servo.class,config.cameraTilt);
         fl.setDirection(DcMotor.Direction.REVERSE);bl.setDirection(DcMotor.Direction.REVERSE);
         fr.setDirection(DcMotor.Direction.FORWARD);br.setDirection(DcMotor.Direction.FORWARD);
         intake.setDirection(DcMotor.Direction.FORWARD);shooter.setDirection(DcMotor.Direction.FORWARD);
@@ -72,7 +73,11 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         fl.setPower(w[0]);fr.setPower(w[1]);bl.setPower(w[2]);br.setPower(w[3]);
         intake.setPower(o.intakePower);leftIntake.setPower(o.intakePower);rightIntake.setPower(o.intakePower);
         shooter.setPower(o.shooterPower);feeder.setPower(o.feederPower);
-        if(pipeline!=o.pipeline){pipeline=o.pipeline;pipelineChangedAt=nowSeconds();frameTimestamp=Double.NaN;cameraTilt.setPosition(pipeline==0?config.tiltUp:config.tiltDown);limelight.pipelineSwitch(pipeline==0?config.tagPipeline:config.ballPipeline);}
+        if(pipeline!=o.pipeline){
+            pipeline=o.pipeline;pipelineChangedAt=nowSeconds();frameTimestamp=Double.NaN;
+            if(cameraTilt!=null)cameraTilt.setPosition(pipeline==0?config.tiltUp:config.tiltDown);
+            limelight.pipelineSwitch(pipeline==0?config.tagPipeline:config.ballPipeline);
+        }
     }
     public void close() { try{apply(new Outputs());}finally{limelight.stop();} }
 }
