@@ -28,6 +28,8 @@ public final class AutoStateMachine {
     private int alliance,retries;
     private double startAt,stateAt,lastNow,power;
     private double shooterAt,moveDeadline;
+    private Pose progressPose;
+    private double progressAt;
     private Outputs last=new Outputs();
     public AutoStateMachine(RobotIO io,FieldLayout field) { this(io,field,true); }
     public AutoStateMachine(RobotIO io,FieldLayout field,boolean useVision) {
@@ -57,6 +59,7 @@ public final class AutoStateMachine {
     private void moveThen(Pose target,String name,State after) {
         destination=target;destinationName=name;afterMove=after;enter(State.MOVING);
         Pose current=currentPose;
+        progressPose=current;progressAt=io.nowSeconds();
         java.util.List<Pose> route=navigator.plan(current,target,target.heading);
         double distance=route==null?current.distance(target)*1.6:0;Pose last=current;if(route!=null)for(Pose p:route){distance+=last.distance(p);last=p;}
         moveDeadline=Math.max(3,distance/Math.max(1,25*field.drivePower)+5);
@@ -109,9 +112,25 @@ public final class AutoStateMachine {
             switch(state) {
                 case INIT:moveThen(hive(),"Hive",State.SHOOTING);break;
                 case MOVING:
+                    // Pickup needs a usable approach, not sub-inch shooting
+                    // accuracy. Stop before intaking; never loosen shot alignment.
+                    if(!useVision&&afterMove==State.INTAKE&&source==Source.GARDEN&&sensors.pose.distance(destination)<=3
+                            &&Math.abs(Pose.angle(destination.heading-sensors.pose.heading))<=Math.toRadians(8)){
+                        enter(State.INTAKE);break;
+                    }
                     Outputs drive=navigator.move(sensors.pose,destination);
                     if(drive==null)enter(afterMove);else out=drive;
-                    if(state==State.MOVING&&age>moveDeadline)fail("Destination timeout",false);
+                    if(state==State.MOVING){
+                        if(!useVision){
+                            // Real wheel speeds need not match the simulator's
+                            // 25 in/s. Keep navigating while odometry shows progress,
+                            // but stop a genuinely stalled robot after three seconds.
+                            if(sensors.pose.distance(progressPose)>.25||Math.abs(Pose.angle(sensors.pose.heading-progressPose.heading))>Math.toRadians(3)){
+                                progressPose=sensors.pose;progressAt=now;
+                            }
+                            if(now-progressAt>3)fail("Movement stalled toward "+destinationName,false);
+                        }else if(age>moveDeadline)fail("Destination timeout: "+destinationName,false);
+                    }
                     break;
                 case SHOOTING:
                     if(!useVision){
@@ -155,6 +174,12 @@ public final class AutoStateMachine {
                     // Garden intake already runs on approach; reserve the longer
                     // dwell for the Flower's release and sweep.
                     if(!useVision&&sensors.ballCount<0&&age>=(source==Source.GARDEN?Math.min(1,timedPickupSeconds):timedPickupSeconds)){finishPickup();break;}
+                    if(!useVision&&age>=timedPickupSeconds){
+                        // Preserve the measured count, including zero. A partial
+                        // pickup does not cancel the remaining Garden/Flower route.
+                        error="Pickup attempt ended with "+sensors.ballCount+" measured balls; continuing routine";
+                        finishPickup();break;
+                    }
                     if(age>4){fail("Pickup did not fill four slots",false);break;}
                     out.pipeline=1;out.intakePower=1;
                     // Touch at a corner, then strafe clear of the outlet. Allow
@@ -165,7 +190,12 @@ public final class AutoStateMachine {
                     else if(source==Source.FLOWER&&age<1.24)out.strafeRight=.2;
                     else if(source==Source.FLOWER&&age<2.24)out.forward=0;
                     else if(source==Source.FLOWER)out.forward=.65;
-                    else if(!useVision){/* Garden intake at its fixed approach pose; no camera search. */}
+                    else if(!useVision){
+                        // Finish the short, collision-checked Garden approach
+                        // while intaking, then leave on the bounded pickup timer.
+                        Outputs approach=navigator.move(sensors.pose,destination);
+                        if(approach!=null){out.forward=approach.forward;out.strafeRight=approach.strafeRight;out.turnClockwise=approach.turnClockwise;}
+                    }
                     else if(sensors.vision.fresh(now,1)&&sensors.vision.targets.length>0){
                         Target t=sensors.vision.targets[0];out.forward=Math.abs(t.tx)<20?.3:0;out.turnClockwise=FieldLayout.clip(t.tx*.02,.3);
                     }else out.turnClockwise=.2;

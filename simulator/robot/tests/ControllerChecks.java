@@ -101,6 +101,34 @@ public final class ControllerChecks {
             io.time=30;auto.tick();check(!auto.isRunning(),"Camera-free hard deadline");stopped(io,"Camera-free deadline");
             auto.start(alliance,.4);io.odom=false;auto.tick();check(!auto.isRunning(),"Camera-free still requires valid odometry");stopped(io,"Camera-free odometry fault");
         }
-        System.out.println("Shared Java vision and camera-free clock, sensor, stop, parking and routine checks passed.");
+        // Missing tags plus partial pickup must not strand the route at Garden.
+        for(int alliance=0;alliance<2;alliance++){
+            io=new IO();io.connected=false;io.visible=false;io.count=-1;io.pose=f.hive[alliance];
+            auto=new AutoStateMachine(io,f,false);auto.start(alliance,.4);
+            for(int i=0;i<170;i++)step(io,auto);
+            check(auto.getState()==AutoStateMachine.State.MOVING&&auto.destination()==f.garden[alliance],"Preloads lead to Garden without tags");
+            Pose garden=f.garden[alliance];io.pose=new Pose(garden.x,garden.y+(alliance==0?2:-2),garden.heading);step(io,auto);
+            check(auto.getState()==AutoStateMachine.State.INTAKE,"Garden approach accepts a two-inch arrival error");
+            io.count=2;io.time+=3.1;auto.tick();
+            check(auto.getState()==AutoStateMachine.State.MOVING&&auto.destination()==f.farHive[alliance],"Partial Garden pickup continues to Hive");
+            check(io.count==2,"Partial Garden count is not fabricated");
+            io.pose=f.farHive[alliance];for(int i=0;i<70;i++)step(io,auto);
+            check(io.out.feederPower==1,"Partial Garden batch shoots without tags");
+            io.count=0;step(io,auto);check(auto.destination()==f.flower[alliance],"Garden shot leads to Flower");
+            io.pose=f.flower[alliance];step(io,auto);io.count=1;io.time+=3.1;auto.tick();
+            check(auto.destination()==f.farHive[alliance],"Partial Flower pickup returns to Hive");
+            io.pose=f.farHive[alliance];for(int i=0;i<70;i++)step(io,auto);
+            check(io.out.feederPower==1,"Flower batch shoots without tags");
+            io.count=0;step(io,auto);check(auto.getState()==AutoStateMachine.State.WAITING,"Only completed three-batch route waits for park");
+            io.time=26;auto.tick();check(auto.getState()==AutoStateMachine.State.PARK,"Partial batches preserve park trigger");
+        }
+        // Slower measured progress must not trip a simulator-speed deadline.
+        io=new IO();io.connected=false;io.visible=false;io.count=-1;io.pose=f.hive[0];auto=new AutoStateMachine(io,f,false);auto.start(0,.4);
+        for(int i=0;i<170;i++)step(io,auto);
+        for(int i=0;i<140;i++){io.pose=new Pose(io.pose.x-.1,io.pose.y,io.pose.heading);io.time+=.1;auto.tick();}
+        check(auto.getState()==AutoStateMachine.State.MOVING,"Slow but progressing Garden approach continues");
+        io.time+=3.1;auto.tick();check(auto.status().contains("Movement stalled toward Garden"),"A genuinely stalled approach still faults");stopped(io,"Garden motion stall");
+        auto.stop();stopped(io,"Manual stop after slow approach");
+        System.out.println("Shared Java vision/camera-free, partial pickups, slow motion, stall, stop and parking checks passed.");
     }
 }

@@ -56,6 +56,7 @@ public final class AutoStateMachine {
         opMode.telemetry.addData("Required simulator start","X %.3f, Y %.3f in, heading %.1f deg",start.x,start.y,Math.toDegrees(start.heading));
         opMode.telemetry.addLine("Team One/Two use the SAME simulator start; not the old side-wall starts.");
         opMode.telemetry.addLine("Camera-free: Limelight and camera tilt servo are not used.");
+        opMode.telemetry.addLine("Routine: shoot -> Garden -> shoot -> Flower -> shoot -> park at 26 s.");
         opMode.telemetry.addLine("Inventory unknown: timed pickup/feed attempts; Hive tilt unverified.");
         opMode.telemetry.addLine("Calibrate start, odometry, waypoints and shooter before testing.");
         opMode.telemetry.update();
@@ -75,6 +76,7 @@ public final class AutoStateMachine {
                 routine.tick();
                 opMode.telemetry.addData("Autonomous",position.label);
                 opMode.telemetry.addData("Routine",routine.status());
+                opMode.telemetry.addData("AprilTags","Not required (camera-free routine)");
                 opMode.telemetry.addData("Balls","Unknown (timed attempts)");
                 odometry.addTelemetry(opMode.telemetry);opMode.telemetry.update();
                 opMode.idle();
