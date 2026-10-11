@@ -12,8 +12,12 @@ public class BlueTeamOneAutonomous extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.BLUE_1);
-        waitForStart();
-        auto.run();
+        try {
+            AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.BLUE_1);
+            waitForStart();
+            if (!isStopRequested()) auto.run();
+        } catch (java.util.concurrent.CancellationException ignored) {
+            // STOP during INIT is a normal exit.
+        }
     }
 }

@@ -8,6 +8,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.biobuzz.FieldLayout;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.*;
+import org.firstinspires.ftc.teamcode.biobuzz.ftc.SafeShutdown;
 import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Intake;
@@ -32,17 +33,26 @@ public final class AutoStateMachine {
         this.opMode=opMode;this.position=position;
         int alliance=position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2?0:1;
         FieldLayout field=new FieldLayout();Pose start=field.hive[alliance];
+        initStage("Initializing drive motors");
         drive=new MecanumDrive(opMode.hardwareMap);
+        initStage("Initializing odometry_1: verify Pinpoint wiring/configuration");
         odometry=new PinpointOdometry(opMode.hardwareMap,new Pose2D(DistanceUnit.INCH,start.x,start.y,AngleUnit.RADIANS,start.heading));
+        initStage("Initializing shooter and intake");
         shooter=new Shooter(opMode.hardwareMap);intake=new Intake(opMode.hardwareMap);
         RobotIO io=new RobotIO(){
+            private boolean stopped;
+            public boolean stopRequested(){return opMode.isStopRequested()||Thread.currentThread().isInterrupted();}
             public double nowSeconds(){return clock.seconds();}
             public Sensors readSensors(){
                 odometry.update();double now=clock.seconds();
                 Pose pose=new Pose(odometry.getX(),odometry.getY(),odometry.getPose().getHeading(AngleUnit.RADIANS));
-                return new Sensors(pose,now,odometry.getStatus().name().equals("READY"),false,-1,Vision.empty(0,now));
+                return new Sensors(pose,now,odometry.isValid(),false,-1,Vision.empty(0,now));
             }
             public void apply(Outputs o){
+                if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.shooterPower==0&&o.feederPower==0&&o.intakePower==0){
+                    if(!stopped){stopped=true;SafeShutdown.run(drive::stop,shooter::stop,intake::stop);}return;
+                }
+                stopped=false;
                 double[] wheels=o.wheelPowers();drive.setPowers(wheels[0],wheels[1],wheels[2],wheels[3]);
                 if(o.shooterPower>0)shooter.spinUp();else shooter.stop();
                 if(o.feederPower>0)shooter.feed();else shooter.stopFeed();
@@ -62,13 +72,22 @@ public final class AutoStateMachine {
         opMode.telemetry.update();
     }
 
+    private void initStage(String message){
+        if(opMode.isStopRequested()||Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException("INIT cancelled");
+        opMode.telemetry.addData("Startup",message);opMode.telemetry.update();
+        com.qualcomm.robotcore.util.RobotLog.ii("BioBuzzInit",message);
+    }
+
     public void run(){
         int alliance=position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2?0:1;
-        clock.reset();routine.start(alliance,Constants.SHOOTER_POWER);
+        if(opMode.isStopRequested())return;
+        clock.reset();
         try {
+            routine.start(alliance,Constants.SHOOTER_POWER);
             // Bounded, stationary wait; included in the match's 26/30-second clock.
             while(opMode.opModeIsActive()&&clock.seconds()<2){
                 odometry.update();
+                opMode.telemetry.addData("Startup","Waiting for Pinpoint: %s",odometry.getStatus());opMode.telemetry.update();
                 if(odometry.getStatus().name().equals("READY")||odometry.getStatus().name().startsWith("FAULT"))break;
                 opMode.idle();
             }
@@ -81,6 +100,11 @@ public final class AutoStateMachine {
                 odometry.addTelemetry(opMode.telemetry);opMode.telemetry.update();
                 opMode.idle();
             }
-        }finally{routine.stop();drive.stop();shooter.stop();intake.stop();}
+        }catch(java.util.concurrent.CancellationException e){
+            // STOP is a normal exit, not an autonomous fault.
+        }catch(RuntimeException e){
+            com.qualcomm.robotcore.util.RobotLog.ee("BioBuzzAuto",e,"Autonomous hardware/controller fault");
+            opMode.telemetry.addData("Autonomous stopped",e.getMessage());opMode.telemetry.update();
+        }finally{routine.stop();}
     }
 }

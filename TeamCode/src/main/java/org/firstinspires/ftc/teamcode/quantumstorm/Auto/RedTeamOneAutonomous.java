@@ -13,8 +13,12 @@ public class RedTeamOneAutonomous extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.RED_1);
-        waitForStart();
-        auto.run();
+        try {
+            AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.RED_1);
+            waitForStart();
+            if (!isStopRequested()) auto.run();
+        } catch (java.util.concurrent.CancellationException ignored) {
+            // STOP during INIT is a normal exit.
+        }
     }
 }

@@ -2,6 +2,8 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 
 /** The only boundary between autonomous decisions and hardware/simulation. */
 public interface RobotIO {
+    /** FTC overrides this with isStopRequested; desktop interruption also cancels work. */
+    default boolean stopRequested() { return Thread.currentThread().isInterrupted(); }
     double nowSeconds();
     Sensors readSensors();
     void apply(Outputs outputs);
@@ -13,6 +15,12 @@ public interface RobotIO {
         public double distance(Pose other) { return Math.hypot(x-other.x,y-other.y); }
         public static double angle(double a) { return Math.atan2(Math.sin(a),Math.cos(a)); }
         public boolean finite() { return Double.isFinite(x)&&Double.isFinite(y)&&Double.isFinite(heading); }
+        /** Reject corrupt readings before any SDK angle normalization or route search. */
+        public static Pose validatedOdometry(double x,double y,double rawHeading) {
+            if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(rawHeading)
+                    ||Math.abs(x)>144||Math.abs(y)>144||Math.abs(rawHeading)>1e6)return null;
+            return new Pose(x,y,angle(rawHeading));
+        }
     }
     final class Target {
         public final int id;

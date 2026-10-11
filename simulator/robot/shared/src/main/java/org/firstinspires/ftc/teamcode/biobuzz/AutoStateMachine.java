@@ -33,7 +33,7 @@ public final class AutoStateMachine {
     private Outputs last=new Outputs();
     public AutoStateMachine(RobotIO io,FieldLayout field) { this(io,field,true); }
     public AutoStateMachine(RobotIO io,FieldLayout field,boolean useVision) {
-        this.io=io;this.field=field;this.useVision=useVision;this.navigator=new Navigator(field);
+        this.io=io;this.field=field;this.useVision=useVision;this.navigator=new Navigator(field,io::stopRequested);
     }
     public void start(int alliance,double power) {
         if(alliance<0||alliance>1||!Double.isFinite(power)||power<0||power>1)throw new IllegalArgumentException("Invalid alliance or shooter power");
@@ -42,7 +42,7 @@ public final class AutoStateMachine {
         gardenDone=flowerDone=flipped=flowerTiltConfirmed=false;finalShotHiveState=-1;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
         shooterAt=Double.NaN;
     }
-    public void stop() { running=false;state=State.STOPPED;last=new Outputs();io.apply(last); }
+    public void stop() { boolean alreadyStopped=!running&&state==State.STOPPED;running=false;state=State.STOPPED;last=new Outputs();if(!alreadyStopped)io.apply(last); }
     public boolean isRunning() { return running; }
     public State getState() { return state; }
     public Outputs getOutputs() { return last.copy(); }
@@ -60,6 +60,7 @@ public final class AutoStateMachine {
         destination=target;destinationName=name;afterMove=after;enter(State.MOVING);
         Pose current=currentPose;
         progressPose=current;progressAt=io.nowSeconds();
+        if(!useVision)return; // No simulator-speed estimate or redundant route search on hardware.
         java.util.List<Pose> route=navigator.plan(current,target,target.heading);
         double distance=route==null?current.distance(target)*1.6:0;Pose last=current;if(route!=null)for(Pose p:route){distance+=last.distance(p);last=p;}
         moveDeadline=Math.max(3,distance/Math.max(1,25*field.drivePower)+5);
@@ -88,9 +89,11 @@ public final class AutoStateMachine {
         return hiveVision.aim(now,flipped);
     }
     public void tick() {
+        if(io.stopRequested()){stop();return;}
         Outputs out=new Outputs();double now=io.nowSeconds();
         if(!running){last=out;io.apply(out);return;}
         Sensors sensors=io.readSensors();now=io.nowSeconds();
+        if(io.stopRequested()){stop();return;}
         if(!Double.isFinite(now)||now<lastNow){fail("Clock moved backward",false);running=false;last=out;io.apply(out);return;}lastNow=now;
         if(elapsed()>=AUTO_END_SECONDS){running=false;error="30-second autonomous limit; all actuators stopped";last=out;io.apply(out);return;}
         if(!sensors.odometryValid||!sensors.pose.finite()||now-sensors.sampledAt<0||now-sensors.sampledAt>.25){
@@ -215,6 +218,8 @@ public final class AutoStateMachine {
                     if(park==null)running=false;else out=park;break;
                 default:break;
             }
+        }catch(java.util.concurrent.CancellationException e){
+            stop();return;
         }catch(IllegalStateException e){
             if(state==State.PARK)running=false;
             else fail(e.getMessage(),true);
@@ -224,6 +229,7 @@ public final class AutoStateMachine {
         // Start intake while approaching a pickup spot, before the chassis pushes the balls away.
         if(running&&state==State.MOVING&&afterMove==State.INTAKE&&sensors.ballCount<4&&sensors.pose.distance(destination)<24){out.intakePower=1;out.pipeline=1;}
         if(running&&state==State.MOVING&&afterMove==State.SHOOTING){out.shooterPower=power;if(Double.isNaN(shooterAt))shooterAt=now;}
+        if(io.stopRequested()){stop();return;}
         last=out;io.apply(out);
     }
 }

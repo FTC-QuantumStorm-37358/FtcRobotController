@@ -5,11 +5,12 @@ import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.*;
 public final class ControllerChecks {
     private static final class IO implements RobotIO {
         double time,readDuration=0,stale=0,height=52.02;int count=4,pipeline=0,id=30;boolean connected=true,odom=true,visible=true;
-        Pose pose;Outputs out=new Outputs();
+        Pose pose;Outputs out=new Outputs();boolean requestStop;int reads,applies;
+        public boolean stopRequested(){return requestStop||Thread.currentThread().isInterrupted();}
         public double nowSeconds(){return time;}
-        public Sensors readSensors(){time+=readDuration;return new Sensors(pose,time-stale,odom,connected,count,
+        public Sensors readSensors(){reads++;time+=readDuration;return new Sensors(pose,time-stale,odom,connected,count,
             new Vision(visible,pipeline,time,new Target[]{new Target(id,0,0,height),new Target(id+1,0,0,height)}));}
-        public void apply(Outputs o){out=o.copy();}
+        public void apply(Outputs o){applies++;out=o.copy();}
     }
     private static void check(boolean condition,String message){if(!condition)throw new AssertionError(message);}
     private static void stopped(IO io,String name){check(io.out.forward==0&&io.out.strafeRight==0&&io.out.turnClockwise==0&&io.out.feederPower==0&&io.out.shooterPower==0&&io.out.intakePower==0,name+" must stop all actuators");}
@@ -129,6 +130,24 @@ public final class ControllerChecks {
         check(auto.getState()==AutoStateMachine.State.MOVING,"Slow but progressing Garden approach continues");
         io.time+=3.1;auto.tick();check(auto.status().contains("Movement stalled toward Garden"),"A genuinely stalled approach still faults");stopped(io,"Garden motion stall");
         auto.stop();stopped(io,"Manual stop after slow approach");
-        System.out.println("Shared Java vision/camera-free, partial pickups, slow motion, stall, stop and parking checks passed.");
+        io=new IO();auto=make(io);auto.start(0,.4);io.requestStop=true;int reads=io.reads;
+        auto.tick();check(!auto.isRunning()&&io.reads==reads,"STOP must exit before another hardware read");stopped(io,"Requested STOP");
+        int applies=io.applies;auto.stop();auto.stop();check(io.applies==applies,"Repeated stop must not repeat hardware writes");
+        io=new IO();auto=make(io);auto.start(0,.4);Thread.currentThread().interrupt();
+        try{auto.tick();check(!auto.isRunning(),"SDK thread interruption must stop controller");stopped(io,"Interrupted controller");}
+        finally{Thread.interrupted();}
+        final int[] polls={0};Navigator cancelNav=new Navigator(f,()->++polls[0]>40);
+        try{cancelNav.plan(new Pose(-45,40,Math.PI/2),new Pose(45,-40,Math.PI/2),Math.PI/2);throw new AssertionError("Route search must check STOP inside its work");}
+        catch(java.util.concurrent.CancellationException expected){check(polls[0]<50,"Navigation cancellation must be prompt");}
+        check(!f.allowed(new Pose(Double.NaN,0,0)),"NaN geometry cannot be navigable");
+        check(!f.clear(new Pose(1e30,0,0),f.hive[0],0),"Corrupt coordinates must not create an enormous sampling loop");
+        check(nav.plan(new Pose(1e30,0,0),f.hive[0],0)==null,"Corrupt route start is rejected");
+        for(double corrupt:new double[]{Double.NaN,Double.POSITIVE_INFINITY,1e30}){
+            check(Pose.validatedOdometry(0,0,corrupt)==null,"Corrupt raw heading is rejected before normalization");
+            check(Pose.validatedOdometry(corrupt,0,0)==null,"Corrupt raw X is rejected");
+        }
+        Pose wrapped=Pose.validatedOdometry(1,2,10000*Math.PI);
+        check(wrapped!=null&&Math.abs(wrapped.heading)<=Math.PI,"Large valid heading wraps in constant time");
+        System.out.println("Shared Java routine, STOP/interruption, cancellable routing, corrupt odometry and idempotent shutdown checks passed.");
     }
 }

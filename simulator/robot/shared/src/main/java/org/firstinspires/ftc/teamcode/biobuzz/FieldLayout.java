@@ -35,6 +35,7 @@ public final class FieldLayout {
     }
     public static Pose fromBrowser(double x,double z,double theta) { return new Pose(x,-z,Pose.angle(theta+Math.PI/2)); }
     public boolean allowed(Pose p) {
+        if(!p.finite()||Math.abs(p.x)>72.001||Math.abs(p.y)>72.001)return false;
         double t=p.heading-Math.PI/2,c=Math.cos(t),s=Math.sin(t);
         for(double x:new double[]{-8.75,8.75})for(double z:new double[]{-9.05,8.055})
             if(Math.abs(p.x+c*x+s*z)>72.001||Math.abs(-p.y-s*x+c*z)>72.001)return false;
@@ -47,8 +48,9 @@ public final class FieldLayout {
         return true;
     }
     public boolean clear(Pose a,Pose b,double heading) {
+        if(!Double.isFinite(heading)||!allowed(new Pose(a.x,a.y,heading))||!allowed(new Pose(b.x,b.y,heading)))return false;
         int n=Math.max(1,(int)Math.ceil(a.distance(b)));
-        for(int i=0;i<=n;i++){double t=(double)i/n;if(!allowed(new Pose(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,heading)))return false;}
+        for(int i=0;i<=n;i++){if(Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException("Collision check cancelled");double t=(double)i/n;if(!allowed(new Pose(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,heading)))return false;}
         return true;
     }
     public boolean canRotate(Pose p,double heading) {

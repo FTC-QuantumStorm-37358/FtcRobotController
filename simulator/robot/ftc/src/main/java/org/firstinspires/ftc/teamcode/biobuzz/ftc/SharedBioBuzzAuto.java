@@ -10,7 +10,7 @@ public abstract class SharedBioBuzzAuto extends LinearOpMode {
     protected FtcHardwareConfig hardwareConfig() { return new FtcHardwareConfig(); }
     @Override public void runOpMode() {
         int alliance=alliance();FtcHardwareConfig config=hardwareConfig();
-        try(FtcRobotIO io=new FtcRobotIO(hardwareMap,config,alliance)){
+        try(FtcRobotIO io=new FtcRobotIO(hardwareMap,config,alliance,this::isStopRequested)){
             AutoStateMachine auto=new AutoStateMachine(io,config.field,config.useVision);
             try{
                 while(!isStarted()&&!isStopRequested()){
@@ -24,6 +24,6 @@ public abstract class SharedBioBuzzAuto extends LinearOpMode {
                 auto.start(alliance,config.shooterPower);
                 while(opModeIsActive()&&auto.isRunning()){auto.tick();telemetry.addData("Autonomous",auto.status());telemetry.update();idle();}
             }finally{auto.stop();}
-        }
+        }catch(java.util.concurrent.CancellationException e){/* STOP is a normal exit. */}
     }
 }

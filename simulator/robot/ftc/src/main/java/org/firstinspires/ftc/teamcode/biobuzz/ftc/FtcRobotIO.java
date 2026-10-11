@@ -22,13 +22,21 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
     private final long epoch=System.nanoTime();
     private int pipeline=-1;
     private double frameTimestamp=Double.NaN,frameCapturedAt,pipelineChangedAt;
+    private final java.util.function.BooleanSupplier stopRequested;
+    private Pose lastPose;
+    private boolean actuatorsStopped,closed;
     public FtcRobotIO(HardwareMap map,FtcHardwareConfig config,int alliance) {
+        this(map,config,alliance,()->Thread.currentThread().isInterrupted());
+    }
+    public FtcRobotIO(HardwareMap map,FtcHardwareConfig config,int alliance,java.util.function.BooleanSupplier stopRequested) {
+        this.stopRequested=stopRequested;checkStop();lastPose=config.start[alliance];
         config.validate();this.config=config;counter=config.createBallCounter(map);
         fl=map.get(DcMotor.class,config.frontLeft);fr=map.get(DcMotor.class,config.frontRight);
         bl=map.get(DcMotor.class,config.backLeft);br=map.get(DcMotor.class,config.backRight);
         intake=map.get(DcMotor.class,config.intake);shooter=map.get(DcMotor.class,config.shooter);
         leftIntake=map.get(CRServo.class,config.leftIntakeServo);rightIntake=map.get(CRServo.class,config.rightIntakeServo);feeder=map.get(CRServo.class,config.feeder);
         pinpoint=map.get(GoBildaPinpointDriver.class,config.pinpoint);
+        checkStop();
         limelight=config.useVision?map.get(Limelight3A.class,config.limelight):null;
         cameraTilt=!config.useVision||config.cameraTilt==null||config.cameraTilt.trim().isEmpty()?null:map.tryGet(Servo.class,config.cameraTilt);
         fl.setDirection(DcMotor.Direction.REVERSE);bl.setDirection(DcMotor.Direction.REVERSE);
@@ -39,18 +47,23 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         leftIntake.setDirection(CRServo.Direction.REVERSE);rightIntake.setDirection(CRServo.Direction.FORWARD);feeder.setDirection(CRServo.Direction.REVERSE);
         apply(new Outputs());
+        checkStop();
         pinpoint.setOffsets(config.podXOffsetMm,config.podYOffsetMm,DistanceUnit.MM);
         pinpoint.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
         pinpoint.setEncoderDirections(config.reverseXPod?GoBildaPinpointDriver.EncoderDirection.REVERSED:GoBildaPinpointDriver.EncoderDirection.FORWARD,
             config.reverseYPod?GoBildaPinpointDriver.EncoderDirection.REVERSED:GoBildaPinpointDriver.EncoderDirection.FORWARD);
         pinpoint.recalibrateIMU();Pose p=config.start[alliance];pinpoint.setPosition(new Pose2D(DistanceUnit.INCH,p.x,p.y,AngleUnit.RADIANS,p.heading));
+        checkStop();
         if(limelight!=null)limelight.start();
     }
     public double nowSeconds() { return (System.nanoTime()-epoch)/1e9; }
+    public boolean stopRequested(){return stopRequested.getAsBoolean()||Thread.currentThread().isInterrupted();}
+    private void checkStop(){if(stopRequested())throw new java.util.concurrent.CancellationException("FTC operation cancelled by STOP");}
     public Sensors readSensors() {
-        pinpoint.update();Pose2D p=pinpoint.getPosition();double now=nowSeconds();
-        Pose pose=new Pose(p.getX(DistanceUnit.INCH),p.getY(DistanceUnit.INCH),p.getHeading(AngleUnit.RADIANS));
-        boolean valid=pinpoint.getDeviceStatus().name().equals("READY");
+        checkStop();pinpoint.update();checkStop();Pose2D p=SafePinpointPose.read(pinpoint);double now=nowSeconds();
+        boolean valid=p!=null;
+        if(valid)lastPose=new Pose(p.getX(DistanceUnit.INCH),p.getY(DistanceUnit.INCH),p.getHeading(AngleUnit.RADIANS));
+        Pose pose=lastPose; // Not marked valid when calibration/read failed.
         LLResult result=limelight==null?null:limelight.getLatestResult();Vision vision=Vision.empty(pipeline,now);
         int actual=pipeline==0?config.tagPipeline:config.ballPipeline;
         if(result!=null&&result.isValid()&&result.getPipelineIndex()==actual&&now-pipelineChangedAt>=.20){
@@ -70,6 +83,8 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         return (config.tagHeightAxis==0?p.x:config.tagHeightAxis==1?p.y:p.z)+config.robotOriginHeightInches;
     }
     public void apply(Outputs o) {
+        if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.intakePower==0&&o.shooterPower==0&&o.feederPower==0){stopActuators();return;}
+        actuatorsStopped=false;
         double[] w=o.wheelPowers();
         fl.setPower(w[0]);fr.setPower(w[1]);bl.setPower(w[2]);br.setPower(w[3]);
         intake.setPower(o.intakePower);leftIntake.setPower(o.intakePower);rightIntake.setPower(o.intakePower);
@@ -80,5 +95,10 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
             if(limelight!=null)limelight.pipelineSwitch(pipeline==0?config.tagPipeline:config.ballPipeline);
         }
     }
-    public void close() { try{apply(new Outputs());}finally{if(limelight!=null)limelight.stop();} }
+    private void stopActuators(){
+        if(actuatorsStopped)return;actuatorsStopped=true;
+        SafeShutdown.run(()->fl.setPower(0),()->fr.setPower(0),()->bl.setPower(0),()->br.setPower(0),
+            ()->intake.setPower(0),()->shooter.setPower(0),()->leftIntake.setPower(0),()->rightIntake.setPower(0),()->feeder.setPower(0));
+    }
+    public void close() { if(closed)return;closed=true;stopActuators();if(limelight!=null)SafeShutdown.run(limelight::stop); }
 }
