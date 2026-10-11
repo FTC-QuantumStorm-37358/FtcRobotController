@@ -89,6 +89,18 @@ public final class ControllerChecks {
         io.time=25.98;auto.tick();stopped(io,"Wait until parking start");
         io.time=26;auto.tick();check(auto.getState()==AutoStateMachine.State.PARK,"Completed routine begins parking at 26");check(io.out.intakePower==0,"Parking leaves intake off");
         io.time=30;auto.tick();stopped(io,"Completed routine deadline");
-        System.out.println("Shared Java clock, sensor freshness, pipeline/alliance gates, jam, duration, collision routing and final-tilt waiting passed.");
+        // Camera-free mode accepts absent vision and unknown inventory without inventing counts.
+        for(int alliance=0;alliance<2;alliance++){
+            io=new IO();io.connected=false;io.visible=false;io.count=-1;io.pose=f.hive[alliance];
+            auto=new AutoStateMachine(io,f,false);auto.start(alliance,.4);
+            for(int i=0;i<70;i++)step(io,auto);
+            check(auto.isRunning()&&io.out.feederPower==1,"Camera-free fixed-pose shot needs no Limelight");
+            check(io.count==-1,"Timed attempts must not manufacture inventory");
+            io.time=26;auto.tick();check(auto.getState()==AutoStateMachine.State.PARK,"Camera-free park starts at 26 seconds");
+            check(io.out.feederPower==0&&io.out.intakePower==0,"Camera-free parking cancels mechanisms");
+            io.time=30;auto.tick();check(!auto.isRunning(),"Camera-free hard deadline");stopped(io,"Camera-free deadline");
+            auto.start(alliance,.4);io.odom=false;auto.tick();check(!auto.isRunning(),"Camera-free still requires valid odometry");stopped(io,"Camera-free odometry fault");
+        }
+        System.out.println("Shared Java vision and camera-free clock, sensor, stop, parking and routine checks passed.");
     }
 }

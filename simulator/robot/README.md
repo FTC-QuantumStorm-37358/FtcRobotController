@@ -26,11 +26,19 @@ Java uses simulation time in the browser and a monotonic clock on the robot. The
 
 This folder is bundled inside the FTC repository at `simulator/`. `TeamCode/build.gradle` directly includes `robot/shared/src/main/java` and `robot/ftc/src/main/java` using `shared-sources.gradle`. No separate checkout, machine-specific source link, or Java copy is needed.
 
-Android Studio and the desktop runner compile the same shared sources. Build/deploy the FTC project normally. On the Driver Station select **BIOBUZZ Shared Java Red** or **BIOBUZZ Shared Java Blue**. Existing QuantumStorm OpModes remain separate. The source-link helper is only for users who intentionally maintain a separate simulator checkout.
+Android Studio and the desktop runner compile the same shared sources. Build/deploy the FTC project normally. **Red/Blue Team One/Two Auto** now wrap the shared controller in camera-free mode with the existing QuantumStorm hardware and simulator alliance start. **BIOBUZZ Shared Java Red/Blue** use the configurable FTC adapter; its calibration gate remains in place.
+
+## Camera-free routine
+
+Real-robot autonomy defaults to: fixed-pose preload shot → Garden → scripted far-side shot → Flower → scripted far-side shot → stationary wait → park starting at 26 seconds. All outputs stop at 30 seconds even if parking is incomplete. Navigation, waypoints, starts and obstacles come from the simulator's shared `FieldLayout`. Team One/Two now share their alliance's simulator start: Red X=-12.75, Y=63.945 inches, heading=-90 degrees; Blue X=12.75, Y=-63.945, heading=90 degrees. INIT telemetry displays it. These are NOT the old side-wall starts. Place the robot there and calibrate odometry, actual footprint/clearance, trajectories and shooter power before testing. The simulated chassis is asymmetric; larger chassis require measured inset poses. Existing hardware shooter power is preserved, not newly calibrated.
+
+Without vision, the first batch is assumed to change the Hive to its far face. Aiming uses fixed poses, and the controller cannot confirm/react to missed shots, a different initial Hive orientation or another robot tipping it. No camera detections or inventory counts are fabricated. QuantumStorm reports inventory unknown (`-1`): feeding uses `AUTO_FEED_TIME_SEC`, Garden intake runs on approach and up to one second at arrival, and Flower release/sweep uses `AUTO_PICKUP_TIMEOUT_SEC`. These are timed attempts, not confirmed collections/shots. Configured ball sensors instead complete the same shared stages from measured counts with jam checks. Valid/fresh Pinpoint, collision routing, manual STOP and hard deadlines remain required.
+
+The browser remains vision-enabled by default. Desktop start messages may specify `cameraFree:true` to test absent-camera operation, including unknown inventory. Simulation success is not a guarantee of hardware aiming, timing or parking from every start.
 
 ## Configure actual hardware before running
 
-`ftc/.../FtcHardwareConfig.java` deliberately starts with `calibrated=false`. The original team repository has zero-valued field waypoints, unmeasured pod offsets and a `SoftwareIndexer` that assumes ball counts. These are not sufficient to run the shared controller on hardware.
+`ftc/.../FtcHardwareConfig.java` deliberately starts with `calibrated=false`. Simulator waypoints and unmeasured pod offsets are not verified hardware calibration. Unknown inventory is handled only as timed attempts, not evidence of a full/empty indexer.
 
 Configure:
 
@@ -38,8 +46,8 @@ Configure:
 - Actual tag IDs assigned to the near/far cell of each hive. `FieldLayout` defaults and the simulated cluster placement are provisional; verify against the field. Tag angles are degrees, right/clockwise positive. The controller centers the mean of visible tags in the intended cluster; if a single-tag aim requires an offset, add that calibration in the shared controller or Limelight point-of-interest pipeline and test both adapters.
 - Motor/servo directions, pod directions and measured offsets, camera up/down servo positions, pipelines and shooting power. Hardware names and directions begin with the QuantumStorm configuration. Drive motors use the same Java-normalized wheel powers in both adapters; the flywheel uses motor power, not guaranteed RPM feedback.
 
-The Limelight remains required, but its `limelight_tilt_servo` is optional in both hardware wrappers. If the servo is absent, camera movement is skipped while AprilTag/ball pipeline switching continues. In `FtcHardwareConfig`, a null or empty `cameraTilt` also explicitly disables tilt hardware. Calibrate camera extrinsics and pipelines for the fixed mounting angle; removing the servo does not guarantee that both the Hive and ground balls are visible. Other hardware checks and the calibrated-height shooting guard remain required.
-- A sensor-backed ball count: configure four occupied-slot digital input names or override `createBallCounter()` for your actual indexer sensors. Empty/full counts are never inferred from time. Add appropriate filtering to your hardware counter if its readings chatter.
+`FtcHardwareConfig.useVision=false` is the hardware default: neither Limelight nor tilt servo is looked up, and camera-height calibration is not required. Set `useVision=true` to restore camera-based aiming and tip detection; then Limelight and calibrated tag heights are required, with an optional tilt servo. A null or empty `cameraTilt` explicitly disables that servo.
+- A sensor-backed ball count: configure four occupied-slot digital input names or override `createBallCounter()` for your actual indexer sensors. Empty/full counts are never inferred from time. Camera-free mode with no configured slots reports unknown inventory and uses timed attempts; vision-enabled mode still requires measured counts.
 
 Then set `calibrated=true`. Hardware initialization and Pinpoint calibration happen in INIT while the robot is still. Motors and mechanisms stop in the OpMode's `finally` block. No WebSocket connection, browser or laptop is required when the controller runs on the robot.
 
@@ -81,7 +89,7 @@ motion and contradictory measurements, and normal-to-flipped-to-normal changes.
 
 The browser synthesizes Pinpoint pose and measured inventory. Its virtual Limelight has a robot-mounted origin, up/down camera pitch, finite field of view/range, tag-facing checks, conservative support/flower occlusion, 30 FPS, 60 ms delay and a pipeline-switch delay. Optional seeded angle noise and dropped detections are available in `SimSensors` constructor options. The UI camera checkbox tests missing detections.
 
-The robot adapter reads actual Pinpoint and Limelight data, checks result validity/pipeline, returns individual tag IDs/angles, and accounts for result staleness and capture/processing latency. Java rejects stale pose/vision, ignores the other alliance's tags and never shoots using perfect simulator coordinates as an aiming shortcut.
+In vision-enabled mode the robot adapter reads actual Pinpoint and Limelight data, checks validity/pipeline and individual tags, and accounts for latency. Java rejects stale pose/vision and ignores the other alliance's tags. Camera-free mode deliberately uses odometry and fixed shooting poses without vision confirmation.
 
 Synthetic results test control behavior. They do not execute Limelight image recognition, reproduce every occluder, estimate raw encoder dynamics, or guarantee real-world trajectory accuracy. Validate camera calibration, wheel speed and trajectories on your robot. Ground-ball tracking currently uses the first result of the configured ball pipeline.
 

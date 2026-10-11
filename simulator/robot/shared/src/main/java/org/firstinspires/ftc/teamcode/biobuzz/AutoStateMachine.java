@@ -12,6 +12,9 @@ public final class AutoStateMachine {
     private final RobotIO io;
     private final FieldLayout field;
     private final Navigator navigator;
+    private final boolean useVision;
+    /** Timed attempts when inventory is unavailable; never manufacture a ball count. */
+    public double timedFeedSeconds=2.0,timedPickupSeconds=3.0;
     private HiveVision hiveVision;
     private State state=State.STOPPED, afterMove;
     private ShootStep shootStep;
@@ -26,11 +29,14 @@ public final class AutoStateMachine {
     private double startAt,stateAt,lastNow,power;
     private double shooterAt,moveDeadline;
     private Outputs last=new Outputs();
-    public AutoStateMachine(RobotIO io,FieldLayout field) { this.io=io;this.field=field;this.navigator=new Navigator(field); }
+    public AutoStateMachine(RobotIO io,FieldLayout field) { this(io,field,true); }
+    public AutoStateMachine(RobotIO io,FieldLayout field,boolean useVision) {
+        this.io=io;this.field=field;this.useVision=useVision;this.navigator=new Navigator(field);
+    }
     public void start(int alliance,double power) {
         if(alliance<0||alliance>1||!Double.isFinite(power)||power<0||power>1)throw new IllegalArgumentException("Invalid alliance or shooter power");
         this.alliance=alliance;this.power=power;startAt=lastNow=io.nowSeconds();running=true;retries=0;
-        hiveVision=new HiveVision(field,alliance);
+        hiveVision=useVision?new HiveVision(field,alliance):null;
         gardenDone=flowerDone=flipped=flowerTiltConfirmed=false;finalShotHiveState=-1;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
         shooterAt=Double.NaN;
     }
@@ -44,6 +50,7 @@ public final class AutoStateMachine {
     public String status() {
         return state+(state==State.MOVING?" → "+destinationName:state==State.SHOOTING?" · "+shootStep:state==State.INTAKE?" · "+source:"")
             +String.format(java.util.Locale.ROOT," · %.1f / 30 s · park starts at 26 s",elapsed())
+            +(!useVision?" · Camera-free: fixed poses, Hive tilt unverified":"")
             +(flowerTiltConfirmed?" · Flower tilt confirmed":"")+(error.isEmpty()?"":" · "+error);
     }
     private void enter(State state) { this.state=state;stateAt=io.nowSeconds();navigator.reset();if(state==State.SHOOTING)shootStep=ShootStep.CHECK_BALLS; }
@@ -58,10 +65,15 @@ public final class AutoStateMachine {
     private void pickup() {
         if(!gardenDone){source=Source.GARDEN;moveThen(field.garden[alliance],"Garden",State.INTAKE);}
         else if(!flowerDone){source=Source.FLOWER;moveThen(field.flower[alliance],"Flower",State.INTAKE);}
-        else{finalShotHiveState=flipped?1:0;enter(State.WAIT_TILT);}
+        else{finalShotHiveState=flipped?1:0;enter(useVision?State.WAIT_TILT:State.WAITING);}
     }
     private void finishPickup() {
         if(source==Source.GARDEN)gardenDone=true;if(source==Source.FLOWER)flowerDone=true;
+        if(!useVision){
+            // Scripted far-side return, matching the default simulation sequence.
+            // This is an assumption, not a detected/confirmed Hive tip.
+            flipped=true;moveThen(field.farHive[alliance],"Hive scripted far face",State.SHOOTING);return;
+        }
         // Move to the closer observation side; vision, never proximity, decides
         // whether that Cell is up and authorizes feeding after arrival.
         Pose observation=currentPose.distance(field.hive[alliance])<=currentPose.distance(field.farHive[alliance])
@@ -81,10 +93,10 @@ public final class AutoStateMachine {
         if(!sensors.odometryValid||!sensors.pose.finite()||now-sensors.sampledAt<0||now-sensors.sampledAt>.25){
             fail("Odometry unavailable or stale",false);running=false;last=out;io.apply(out);return;
         }
-        if(sensors.ballCount<0||sensors.ballCount>4||!sensors.cameraConnected){
+        if(sensors.ballCount<-1||sensors.ballCount>4||(useVision&&(sensors.ballCount<0||!sensors.cameraConnected))){
             fail(sensors.ballCount<0||sensors.ballCount>4?"Ball-count sensor unavailable":"Camera disconnected",false);running=false;last=out;io.apply(out);return;
         }
-        hiveVision.update(sensors.vision,now);
+        if(useVision)hiveVision.update(sensors.vision,now);
         currentPose=sensors.pose;
         // The final four seconds belong exclusively to parking, regardless of
         // which scoring or pickup state was active before the transition.
@@ -102,6 +114,19 @@ public final class AutoStateMachine {
                     if(state==State.MOVING&&age>moveDeadline)fail("Destination timeout",false);
                     break;
                 case SHOOTING:
+                    if(!useVision){
+                        if(sensors.ballCount==0){shooterAt=Double.NaN;pickup();break;}
+                        out.shooterPower=power;
+                        if(Double.isNaN(shooterAt))shooterAt=now;
+                        if(shootStep==ShootStep.CHECK_BALLS){shootStep=ShootStep.AIM;stateAt=now;age=0;}
+                        if(shootStep==ShootStep.AIM&&now-shooterAt>=1){shootStep=ShootStep.FIRE;stateAt=now;age=0;}
+                        if(shootStep==ShootStep.FIRE){
+                            if(sensors.ballCount<0&&age>=timedFeedSeconds){shooterAt=Double.NaN;pickup();break;}
+                            if(sensors.ballCount>=0&&age>3){fail("Balls stuck in indexer",false);break;}
+                            out.feederPower=1;
+                        }
+                        break;
+                    }
                     int observed=hiveVision.state(now);
                     if(observed>=0){
                         flipped=observed==1;
@@ -127,6 +152,9 @@ public final class AutoStateMachine {
                     break;
                 case INTAKE:
                     if(sensors.ballCount>=4){finishPickup();break;}
+                    // Garden intake already runs on approach; reserve the longer
+                    // dwell for the Flower's release and sweep.
+                    if(!useVision&&sensors.ballCount<0&&age>=(source==Source.GARDEN?Math.min(1,timedPickupSeconds):timedPickupSeconds)){finishPickup();break;}
                     if(age>4){fail("Pickup did not fill four slots",false);break;}
                     out.pipeline=1;out.intakePower=1;
                     // Touch at a corner, then strafe clear of the outlet. Allow
@@ -137,6 +165,7 @@ public final class AutoStateMachine {
                     else if(source==Source.FLOWER&&age<1.24)out.strafeRight=.2;
                     else if(source==Source.FLOWER&&age<2.24)out.forward=0;
                     else if(source==Source.FLOWER)out.forward=.65;
+                    else if(!useVision){/* Garden intake at its fixed approach pose; no camera search. */}
                     else if(sensors.vision.fresh(now,1)&&sensors.vision.targets.length>0){
                         Target t=sensors.vision.targets[0];out.forward=Math.abs(t.tx)<20?.3:0;out.turnClockwise=FieldLayout.clip(t.tx*.02,.3);
                     }else out.turnClockwise=.2;

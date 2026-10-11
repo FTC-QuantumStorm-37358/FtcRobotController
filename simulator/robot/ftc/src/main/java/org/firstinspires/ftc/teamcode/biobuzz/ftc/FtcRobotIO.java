@@ -28,8 +28,9 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         bl=map.get(DcMotor.class,config.backLeft);br=map.get(DcMotor.class,config.backRight);
         intake=map.get(DcMotor.class,config.intake);shooter=map.get(DcMotor.class,config.shooter);
         leftIntake=map.get(CRServo.class,config.leftIntakeServo);rightIntake=map.get(CRServo.class,config.rightIntakeServo);feeder=map.get(CRServo.class,config.feeder);
-        pinpoint=map.get(GoBildaPinpointDriver.class,config.pinpoint);limelight=map.get(Limelight3A.class,config.limelight);
-        cameraTilt=config.cameraTilt==null||config.cameraTilt.trim().isEmpty()?null:map.tryGet(Servo.class,config.cameraTilt);
+        pinpoint=map.get(GoBildaPinpointDriver.class,config.pinpoint);
+        limelight=config.useVision?map.get(Limelight3A.class,config.limelight):null;
+        cameraTilt=!config.useVision||config.cameraTilt==null||config.cameraTilt.trim().isEmpty()?null:map.tryGet(Servo.class,config.cameraTilt);
         fl.setDirection(DcMotor.Direction.REVERSE);bl.setDirection(DcMotor.Direction.REVERSE);
         fr.setDirection(DcMotor.Direction.FORWARD);br.setDirection(DcMotor.Direction.FORWARD);
         intake.setDirection(DcMotor.Direction.FORWARD);shooter.setDirection(DcMotor.Direction.FORWARD);
@@ -43,14 +44,14 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         pinpoint.setEncoderDirections(config.reverseXPod?GoBildaPinpointDriver.EncoderDirection.REVERSED:GoBildaPinpointDriver.EncoderDirection.FORWARD,
             config.reverseYPod?GoBildaPinpointDriver.EncoderDirection.REVERSED:GoBildaPinpointDriver.EncoderDirection.FORWARD);
         pinpoint.recalibrateIMU();Pose p=config.start[alliance];pinpoint.setPosition(new Pose2D(DistanceUnit.INCH,p.x,p.y,AngleUnit.RADIANS,p.heading));
-        limelight.start();
+        if(limelight!=null)limelight.start();
     }
     public double nowSeconds() { return (System.nanoTime()-epoch)/1e9; }
     public Sensors readSensors() {
         pinpoint.update();Pose2D p=pinpoint.getPosition();double now=nowSeconds();
         Pose pose=new Pose(p.getX(DistanceUnit.INCH),p.getY(DistanceUnit.INCH),p.getHeading(AngleUnit.RADIANS));
         boolean valid=pinpoint.getDeviceStatus().name().equals("READY");
-        LLResult result=limelight.getLatestResult();Vision vision=Vision.empty(pipeline,now);
+        LLResult result=limelight==null?null:limelight.getLatestResult();Vision vision=Vision.empty(pipeline,now);
         int actual=pipeline==0?config.tagPipeline:config.ballPipeline;
         if(result!=null&&result.isValid()&&result.getPipelineIndex()==actual&&now-pipelineChangedAt>=.20){
             List<Target> targets=new ArrayList<Target>();
@@ -61,7 +62,7 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
             if(result.getTimestamp()!=frameTimestamp){frameTimestamp=result.getTimestamp();frameCapturedAt=now-age;}
             vision=new Vision(!targets.isEmpty()&&age<=.25,pipeline,frameCapturedAt,targets.toArray(new Target[0]));
         }
-        return new Sensors(pose,now,valid,limelight.isConnected(),counter.count(),vision);
+        return new Sensors(pose,now,valid,limelight!=null&&limelight.isConnected(),counter.count(),vision);
     }
     private double tagHeight(LLResultTypes.FiducialResult tag) {
         if(!config.hiveHeightCalibrated||tag.getTargetPoseRobotSpace()==null)return Double.NaN;
@@ -76,8 +77,8 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         if(pipeline!=o.pipeline){
             pipeline=o.pipeline;pipelineChangedAt=nowSeconds();frameTimestamp=Double.NaN;
             if(cameraTilt!=null)cameraTilt.setPosition(pipeline==0?config.tiltUp:config.tiltDown);
-            limelight.pipelineSwitch(pipeline==0?config.tagPipeline:config.ballPipeline);
+            if(limelight!=null)limelight.pipelineSwitch(pipeline==0?config.tagPipeline:config.ballPipeline);
         }
     }
-    public void close() { try{apply(new Outputs());}finally{limelight.stop();} }
+    public void close() { try{apply(new Outputs());}finally{if(limelight!=null)limelight.stop();} }
 }

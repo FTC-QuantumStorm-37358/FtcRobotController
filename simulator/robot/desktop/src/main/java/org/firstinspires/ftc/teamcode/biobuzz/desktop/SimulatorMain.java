@@ -12,7 +12,7 @@ public final class SimulatorMain implements RobotIO {
     private Sensors sensors;
     private Outputs outputs=new Outputs();
     private final FieldLayout field=new FieldLayout();
-    private final AutoStateMachine auto=new AutoStateMachine(this,field);
+    private AutoStateMachine auto=new AutoStateMachine(this,field);
     private String runId="";
     private int seq=-1;
     public double nowSeconds(){return time;}
@@ -35,6 +35,7 @@ public final class SimulatorMain implements RobotIO {
         if(type.equals("start")){
             if(id.length()<1||id.length()>80||next!=0||Json.number(m,"time")!=0)throw new IllegalArgumentException("Invalid start envelope");
             auto.stop();runId=id;seq=0;time=0;sensors=decodeSensors(Json.object(m.get("sensors")));
+            auto=new AutoStateMachine(this,field,!m.containsKey("cameraFree")||!Json.bool(m,"cameraFree"));
             auto.start(Json.integer(m,"alliance"),Json.number(m,"shooterPower"));auto.tick();
         }else{
             if(!id.equals(runId)||next!=seq+1)throw new IllegalArgumentException("Stale run or out-of-order sequence");
