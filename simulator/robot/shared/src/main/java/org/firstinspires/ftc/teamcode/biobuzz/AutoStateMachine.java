@@ -53,6 +53,7 @@ public final class AutoStateMachine {
         return state+(state==State.MOVING?" → "+destinationName:state==State.SHOOTING?" · "+shootStep:state==State.INTAKE?" · "+source:"")
             +String.format(java.util.Locale.ROOT," · %.1f / 30 s · park starts at 26 s",elapsed())
             +(!useVision?" · Camera-free: fixed poses, Hive tilt unverified":"")
+            +(navigator.isPlanning()?" · Planning route (STOP available)":"")
             +(flowerTiltConfirmed?" · Flower tilt confirmed":"")+(error.isEmpty()?"":" · "+error);
     }
     private void enter(State state) { this.state=state;stateAt=io.nowSeconds();navigator.reset();if(state==State.SHOOTING)shootStep=ShootStep.CHECK_BALLS; }
@@ -60,9 +61,8 @@ public final class AutoStateMachine {
         destination=target;destinationName=name;afterMove=after;enter(State.MOVING);
         Pose current=currentPose;
         progressPose=current;progressAt=io.nowSeconds();
-        if(!useVision)return; // No simulator-speed estimate or redundant route search on hardware.
-        java.util.List<Pose> route=navigator.plan(current,target,target.heading);
-        double distance=route==null?current.distance(target)*1.6:0;Pose last=current;if(route!=null)for(Pose p:route){distance+=last.distance(p);last=p;}
+        // Never run a synchronous search just to estimate a deadline.
+        double distance=current.distance(target)*1.6;
         moveDeadline=Math.max(3,distance/Math.max(1,25*field.drivePower)+5);
     }
     private Pose hive() { return flipped?field.farHive[alliance]:field.hive[alliance]; }
@@ -124,7 +124,9 @@ public final class AutoStateMachine {
                     Outputs drive=navigator.move(sensors.pose,destination);
                     if(drive==null)enter(afterMove);else out=drive;
                     if(state==State.MOVING){
-                        if(!useVision){
+                        if(navigator.isPlanning()){
+                            progressPose=sensors.pose;progressAt=now;stateAt=now;
+                        }else if(!useVision){
                             // Real wheel speeds need not match the simulator's
                             // 25 in/s. Keep navigating while odometry shows progress,
                             // but stop a genuinely stalled robot after three seconds.

@@ -1,97 +1,130 @@
 package org.firstinspires.ftc.teamcode.biobuzz;
 
 import java.util.*;
+import java.util.function.BooleanSupplier;
+import java.util.function.LongSupplier;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.Pose;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.Outputs;
 
-/** Same collision-aware navigator on the JVM and the robot. */
+/** Collision-aware navigation with resumable planning; no slow-device timeout. */
 public final class Navigator {
+    private static final int[][] NEIGHBORS={{4,0},{-4,0},{0,4},{0,-4},{4,4},{4,-4},{-4,4},{-4,-4}};
     private final FieldLayout field;
-    private final java.util.function.BooleanSupplier cancelled;
-    private int workDepth;
-    private long deadline;
+    private final BooleanSupplier cancelled;
+    private final LongSupplier clock;
     private int stage;
     private List<Pose> route;
     private Pose turnPose;
-    public Navigator(FieldLayout field) { this(field,()->Thread.currentThread().isInterrupted()); }
-    public Navigator(FieldLayout field,java.util.function.BooleanSupplier cancelled) { this.field=field;this.cancelled=cancelled; }
-    private void checkWork() {
-        if(cancelled.getAsBoolean()||Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException("Navigation cancelled by STOP");
-        if(workDepth>0&&System.nanoTime()>deadline)throw new IllegalStateException("Route planning exceeded 250 ms; check field pose/obstacles");
+    private TurnSearch turning;
+    private PathSearch path;
+    private boolean planning;
+    public Navigator(FieldLayout field){this(field,()->Thread.currentThread().isInterrupted());}
+    public Navigator(FieldLayout field,BooleanSupplier cancelled){this(field,cancelled,System::nanoTime);}
+    public Navigator(FieldLayout field,BooleanSupplier cancelled,LongSupplier clock){this.field=field;this.cancelled=cancelled;this.clock=clock;}
+    private void checkStop(){if(cancelled.getAsBoolean()||Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException("Navigation cancelled by STOP");}
+    private final class Slice {
+        final long end=clock.getAsLong()+20000000L;
+        int units;
+        boolean more(){checkStop();return ++units<=4096&&clock.getAsLong()<end;}
     }
-    private void beginWork(){if(workDepth++==0)deadline=System.nanoTime()+250000000L;}
-    private void endWork(){workDepth--;}
-    public void reset() { stage=0;route=null;turnPose=null; }
-    /** Read-only telemetry; callers cannot change the navigation route. */
-    public List<Pose> route() { return route==null?new ArrayList<Pose>():new ArrayList<Pose>(route); }
-    /** Find a reachable clearance point before turning beside any obstacle,
-     * not only beside a perimeter wall. Keep the current heading on departure. */
-    private Pose turnPoint(Pose start,double heading) {
-        if(field.canRotate(start,heading))return start;
-        List<Pose> candidates=new ArrayList<Pose>();
-        for(int x=-56;x<=56;x+=4)for(int y=-56;y<=56;y+=4){
-            checkWork();
-            Pose p=new Pose(x,y,start.heading);
-            if(field.allowed(p)&&field.canRotate(p,heading))candidates.add(p);
+    public void reset(){stage=0;route=null;turnPose=null;turning=null;path=null;planning=false;}
+    public boolean isPlanning(){return planning;}
+    public List<Pose> route(){return route==null?new ArrayList<Pose>():new ArrayList<Pose>(route);}
+    /** Pending searches return zero drive, not an exception or false arrival. */
+    public Outputs move(Pose p,Pose target){
+        checkStop();planning=false;Slice slice=new Slice();
+        if(stage==0){
+            if(turning==null)turning=new TurnSearch(p,target.heading);
+            while(!turning.done&&slice.more())turning.step();
+            if(!turning.done){planning=true;return new Outputs();}
+            if(turning.result==null)throw new IllegalStateException("No reachable turn clearance");
+            turnPose=turning.result;route=turning.approach;turning=null;stage=p.distance(turnPose)<.01?2:1;
         }
-        candidates.sort(Comparator.comparingDouble(p->p.distance(start)));
-        for(Pose p:candidates){checkWork();if(plan(start,p,start.heading)!=null)return p;}
-        return null;
-    }
-    /** null means arrival. Blocked paths throw and are handled by the state machine. */
-    public Outputs move(Pose p,Pose target) {
-        beginWork();try{checkWork();return moveInternal(p,target);}finally{endWork();}
-    }
-    private Outputs moveInternal(Pose p,Pose target) {
-        if(stage==0){turnPose=turnPoint(p,target.heading);if(turnPose==null)throw new IllegalStateException("No reachable turn clearance");stage=p.distance(turnPose)<.01?2:1;}
-        if(stage==1){
-            if(p.distance(turnPose)<.6){stage=2;route=null;}else return follow(p,turnPose,turnPose.heading);}
+        if(stage==1){if(p.distance(turnPose)<.6){stage=2;route=null;path=null;}else return follow(p,turnPose,turnPose.heading,slice);}
         if(stage==2){
-            if(!field.canRotate(p,target.heading))throw new IllegalStateException("Turn blocked");
+            checkStop();if(!field.canRotate(p,target.heading))throw new IllegalStateException("Turn blocked");
             double a=Pose.angle(target.heading-p.heading);
             if(Math.abs(a)>Math.toRadians(1.5)){Outputs o=new Outputs();o.turnClockwise=-FieldLayout.clip(Math.toDegrees(a)*.08,field.turnPower);return o;}
-            stage=3;route=null;
+            stage=3;route=null;path=null;
         }
         if(p.distance(target)<.65&&Math.abs(Pose.angle(target.heading-p.heading))<Math.toRadians(2))return null;
-        return follow(p,target,target.heading);
+        return follow(p,target,target.heading,slice);
     }
-    private Outputs follow(Pose p,Pose target,double heading) {
-        if(route==null){route=plan(p,target,heading);if(route==null)throw new IllegalStateException("No collision-free route");}
-        while(route.size()>1&&(p.distance(route.get(0))<.6||field.clear(p,route.get(1),heading))){checkWork();route.remove(0);}
+    private Outputs follow(Pose p,Pose target,double heading,Slice slice){
+        if(route==null){
+            if(path==null)path=new PathSearch(p,target,heading);
+            while(!path.done&&slice.more())path.step();
+            if(!path.done){planning=true;return new Outputs();}
+            route=path.result;path=null;if(route==null)throw new IllegalStateException("No collision-free route");
+        }
+        while(route.size()>1&&(p.distance(route.get(0))<.6||field.clear(p,route.get(1),heading))){checkStop();route.remove(0);}
         Pose q=route.get(0);double dx=q.x-p.x,dy=q.y-p.y,c=Math.cos(p.heading),s=Math.sin(p.heading);
         Outputs o=new Outputs();o.forward=(dx*c+dy*s)*.35;o.strafeRight=(dx*s-dy*c)*.35;
         double mag=Math.hypot(o.forward,o.strafeRight);if(mag>field.drivePower){o.forward*=field.drivePower/mag;o.strafeRight*=field.drivePower/mag;}
         o.turnClockwise=-FieldLayout.clip(Math.toDegrees(Pose.angle(heading-p.heading))*.08,field.turnPower);return o;
     }
+    private final class TurnSearch {
+        final Pose start;final double heading;
+        final PriorityQueue<Pose> candidates;
+        int cell;boolean initialized,done;Pose result,candidate;PathSearch search;List<Pose> approach;
+        TurnSearch(Pose start,double heading){this.start=start;this.heading=heading;candidates=new PriorityQueue<Pose>(Comparator.comparingDouble((Pose p)->p.distance(start)).thenComparingDouble(p->p.x).thenComparingDouble(p->p.y));}
+        void step(){
+            checkStop();
+            if(!initialized){initialized=true;if(field.canRotate(start,heading)){result=start;done=true;return;}}
+            // Test rotation only for the nearest candidates actually considered,
+            // not all 841 grid points (each rotation samples 25 footprints).
+            if(cell<29*29){int i=cell++;Pose p=new Pose(-56+(i/29)*4,-56+(i%29)*4,start.heading);if(field.allowed(p))candidates.add(p);return;}
+            if(search==null){candidate=candidates.poll();if(candidate==null){done=true;return;}if(!field.canRotate(candidate,heading))return;search=new PathSearch(start,candidate,start.heading);}
+            search.step();
+            if(search.done){if(search.result!=null){result=candidate;approach=search.result;done=true;}search=null;}
+        }
+    }
     private static final class Node {
-        final Pose p;final int x,y;double cost=Double.POSITIVE_INFINITY;Node parent;
-        Node(int x,int y,double h){this.x=x;this.y=y;p=new Pose(x,y,h);}
+        final Pose p;final int x,y,index;double cost=Double.POSITIVE_INFINITY;Node parent;
+        Node(int x,int y,int index,double h){this.x=x;this.y=y;this.index=index;p=new Pose(x,y,h);}
         String key(){return x+":"+y;}
     }
-    public List<Pose> plan(Pose start,Pose goal,double heading) {
-        beginWork();try{checkWork();return planInternal(start,goal,heading);}finally{endWork();}
-    }
-    private List<Pose> planInternal(Pose start,Pose goal,double heading) {
-        if(!start.finite()||!goal.finite()||!Double.isFinite(heading)||Math.abs(start.x)>72.001||Math.abs(start.y)>72.001)return null;
-        if(!field.allowed(new Pose(goal.x,goal.y,heading)))return null;
-        if(field.clear(start,goal,heading))return new ArrayList<Pose>(Arrays.asList(goal));
-        List<Node> nodes=new ArrayList<Node>();Map<String,Node> map=new HashMap<String,Node>();
-        for(int x=-64;x<=64;x+=4)for(int y=-64;y<=64;y+=4){checkWork();Node n=new Node(x,y,heading);if(field.allowed(n.p)){nodes.add(n);map.put(n.key(),n);}}
-        Node first=near(nodes,start,heading),last=near(nodes,goal,heading);if(first==null||last==null)return null;
-        PriorityQueue<Node> open=new PriorityQueue<Node>(Comparator.comparingDouble(n->n.cost+n.p.distance(last.p)));
-        Set<String> closed=new HashSet<String>();first.cost=0;open.add(first);
-        int[][] offsets={{4,0},{-4,0},{0,4},{0,-4},{4,4},{4,-4},{-4,4},{-4,-4}};
-        while(!open.isEmpty()){
-            checkWork();
-            Node n=open.poll();if(closed.contains(n.key()))continue;
-            if(n==last){List<Pose> result=new ArrayList<Pose>();result.add(goal);for(Node q=n;q!=null;q=q.parent)result.add(0,q.p);return result;}
+    private final class PathSearch {
+        final Pose start,goal;final double heading;
+        final Map<String,Node> map=new HashMap<String,Node>();
+        final PriorityQueue<Node> nearStart,nearGoal;
+        PriorityQueue<Node> open;
+        final Set<String> closed=new HashSet<String>();
+        int phase,cell,nearTries;Node first,last,trace;boolean done;List<Pose> result;
+        PathSearch(Pose start,Pose goal,double heading){
+            this.start=start;this.goal=goal;this.heading=heading;
+            nearStart=new PriorityQueue<Node>(Comparator.comparingDouble((Node n)->n.p.distance(start)).thenComparingInt(n->n.index));
+            nearGoal=new PriorityQueue<Node>(Comparator.comparingDouble((Node n)->n.p.distance(goal)).thenComparingInt(n->n.index));
+        }
+        void step(){
+            checkStop();if(done)return;
+            if(phase==0){
+                if(!start.finite()||!goal.finite()||!Double.isFinite(heading)||Math.abs(start.x)>72.001||Math.abs(start.y)>72.001||!field.allowed(new Pose(goal.x,goal.y,heading))){done=true;return;}
+                if(field.clear(start,goal,heading)){result=new ArrayList<Pose>(Arrays.asList(goal));done=true;return;}phase=1;return;
+            }
+            if(phase==1){
+                if(cell<33*33){int i=cell++;Node n=new Node(-64+(i/33)*4,-64+(i%33)*4,i,heading);if(field.allowed(n.p)){map.put(n.key(),n);nearStart.add(n);nearGoal.add(n);}return;}
+                phase=2;nearTries=0;return;
+            }
+            if(phase==2||phase==3){
+                PriorityQueue<Node> near=phase==2?nearStart:nearGoal;Node n=near.poll();
+                if(n==null||nearTries++>=24){done=true;return;}
+                if(field.clear(phase==2?start:goal,n.p,heading)){
+                    if(phase==2){first=n;phase=3;nearTries=0;}
+                    else{last=n;open=new PriorityQueue<Node>(Comparator.comparingDouble(q->q.cost+q.p.distance(last.p)));first.cost=0;open.add(first);phase=4;}
+                }return;
+            }
+            if(phase==5){if(trace==null){done=true;return;}result.add(0,trace.p);trace=trace.parent;return;}
+            Node n=open.poll();if(n==null){done=true;return;}if(closed.contains(n.key()))return;
+            if(n==last){result=new ArrayList<Pose>();result.add(goal);trace=n;phase=5;return;}
             closed.add(n.key());
-            for(int[] d:offsets){Node q=map.get((n.x+d[0])+":"+(n.y+d[1]));if(q==null||closed.contains(q.key())||!field.clear(n.p,q.p,heading))continue;
-                double cost=n.cost+Math.hypot(d[0],d[1]);if(cost<q.cost){open.remove(q);q.cost=cost;q.parent=n;open.add(q);}}
-        }return null;
+            for(int[] offset:NEIGHBORS){
+                int dx=offset[0],dy=offset[1];checkStop();Node q=map.get((n.x+dx)+":"+(n.y+dy));
+                if(q==null||closed.contains(q.key())||!field.clear(n.p,q.p,heading))continue;
+                double cost=n.cost+Math.hypot(dx,dy);if(cost<q.cost){open.remove(q);q.cost=cost;q.parent=n;open.add(q);}
+            }
+        }
     }
-    private Node near(List<Node> nodes,Pose p,double h) {
-        List<Node> sorted=new ArrayList<Node>(nodes);sorted.sort(Comparator.comparingDouble(n->n.p.distance(p)));
-        for(int i=0;i<Math.min(24,sorted.size());i++){checkWork();if(field.clear(p,sorted.get(i).p,h))return sorted.get(i);}return null;
-    }
+    /** Synchronous diagnostic/test helper. Runtime movement uses resumable searches above. */
+    public List<Pose> plan(Pose start,Pose goal,double heading){PathSearch search=new PathSearch(start,goal,heading);while(!search.done){checkStop();search.step();}return search.result;}
 }

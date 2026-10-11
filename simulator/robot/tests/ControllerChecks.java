@@ -148,6 +148,20 @@ public final class ControllerChecks {
         }
         Pose wrapped=Pose.validatedOdometry(1,2,10000*Math.PI);
         check(wrapped!=null&&Math.abs(wrapped.heading)<=Math.PI,"Large valid heading wraps in constant time");
-        System.out.println("Shared Java routine, STOP/interruption, cancellable routing, corrupt odometry and idempotent shutdown checks passed.");
+        // Model a slow Hub: each clock poll consumes 10 ms, forcing many slices.
+        final long[] slowClock={0};final boolean[] cancelSlow={false};
+        Navigator sliced=new Navigator(f,()->cancelSlow[0],()->{slowClock[0]+=10000000L;return slowClock[0];});
+        Pose slowStart=new Pose(-45,40,Math.PI/2),slowGoal=new Pose(45,-40,Math.PI/2);Outputs planned=null;int pending=0;
+        for(int i=0;i<10000;i++){
+            planned=sliced.move(slowStart,slowGoal);
+            if(!sliced.isPlanning())break;
+            pending++;check(planned!=null&&planned.forward==0&&planned.strafeRight==0&&planned.turnClockwise==0,"Pending planning must hold zero drive");
+        }
+        check(pending>25&&slowClock[0]>250000000L,"Slow planning must span well beyond the old cutoff");
+        check(!sliced.isPlanning()&&planned!=null&&Math.hypot(planned.forward,planned.strafeRight)>0,"Slow planning must eventually produce a usable route, not WAITING");
+        sliced.reset();sliced.move(slowStart,slowGoal);cancelSlow[0]=true;
+        try{sliced.move(slowStart,slowGoal);throw new AssertionError("STOP must cancel pending planning");}
+        catch(java.util.concurrent.CancellationException expected){ }
+        System.out.println("Shared Java routine, resumable slow-Hub planning, STOP, corrupt odometry and shutdown checks passed.");
     }
 }
