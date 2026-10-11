@@ -24,7 +24,7 @@ Java uses simulation time in the browser and a monotonic clock on the robot. The
 
 ## FTC repository integration
 
-This folder is bundled inside the FTC repository at `simulator/`. `TeamCode/build.gradle` directly includes `robot/shared/src/main/java` and `robot/ftc/src/main/java` using `shared-sources.gradle`. No separate checkout, machine-specific source link, or Java copy is needed.
+This folder is bundled inside the FTC repository at `simulator/`. `TeamCode/build.gradle` registers `robot/shared/src/main/java` and `robot/ftc/src/main/java` directly in its Android `sourceSets`. No separate checkout, machine-specific source link, or Java copy is needed. Open the whole repository root in Android Studio and sync Gradle after pulling changes. Opening only TeamCode, copying only AutoStateMachine.java, or an unsuccessful sync can leave `biobuzz` imports unresolved. Missing required shared files now produce a clear Gradle error rather than a cascade of missing symbols. The standalone `shared-sources.gradle` helper remains available for separate simulator checkouts.
 
 Android Studio and the desktop runner compile the same shared sources. Build/deploy the FTC project normally. **Red/Blue Team One/Two Auto** now wrap the shared controller in camera-free mode with the existing QuantumStorm hardware and simulator alliance start. **BIOBUZZ Shared Java Red/Blue** use the configurable FTC adapter; its calibration gate remains in place.
 

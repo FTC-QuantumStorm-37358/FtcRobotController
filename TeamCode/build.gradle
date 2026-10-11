@@ -19,6 +19,15 @@ apply from: '../build.dependencies.gradle'
 android {
     namespace = 'org.firstinspires.ftc.teamcode'
 
+    // Register shared folders directly in the Android module so Gradle and
+    // Android Studio import the same source roots (no separate IDE marking).
+    sourceSets {
+        main {
+            java.srcDir rootProject.file('simulator/robot/shared/src/main/java')
+            java.srcDir rootProject.file('simulator/robot/ftc/src/main/java')
+        }
+    }
+
     packagingOptions {
         jniLibs.useLegacyPackaging true
     }
@@ -28,6 +37,15 @@ dependencies {
     implementation project(':FtcRobotController')
 }
 
-// BIOBUZZ: compile the same Java controller for the FTC robot and local simulator.
-ext.biobuzzRoot = rootProject.file('simulator').absolutePath
-apply from: rootProject.file('simulator/robot/ftc/shared-sources.gradle')
+// Fail clearly if only the OpMode was copied instead of the complete repository.
+def requiredBiobuzzSources = [
+    'simulator/robot/shared/src/main/java/org/firstinspires/ftc/teamcode/biobuzz/RobotIO.java',
+    'simulator/robot/shared/src/main/java/org/firstinspires/ftc/teamcode/biobuzz/FieldLayout.java',
+    'simulator/robot/shared/src/main/java/org/firstinspires/ftc/teamcode/biobuzz/AutoStateMachine.java',
+    'simulator/robot/ftc/src/main/java/org/firstinspires/ftc/teamcode/biobuzz/ftc/FtcRobotIO.java'
+]
+requiredBiobuzzSources.each { relativePath ->
+    if (!rootProject.file(relativePath).isFile()) {
+        throw new GradleException("Missing shared BIOBUZZ source: ${relativePath}. Open the complete FtcRobotController repository on the simulator branch, then sync Gradle.")
+    }
+}
