@@ -10,7 +10,8 @@ const {GamePhysics,robotAllowed}=await import('../dist/game-physics.js');
 const {fencePose,simulate,makeTarget}=await import('../dist/ballistics.js');
 const {fireNextBall}=await import('../dist/next-shot.js');
 await compileJava();
-for(const cameraFree of [false,true])for(const unknownInventory of (cameraFree?[false,true]:[false]))for(const alliance of [0,1]){
+for(const cameraFree of [false,true])for(const inventoryMode of (cameraFree?['measured','unknown','empty']:['measured']))for(const alliance of [0,1]){
+ const unknownInventory=inventoryMode==='unknown',emptyField=inventoryMode==='empty';
  const child=launchJava(),lines=createInterface({input:child.stdout}),queue=[],waiters=[];
  lines.on('line',line=>{const m=JSON.parse(line);if(waiters.length)waiters.shift()(m);else queue.push(m);});
  const next=()=>queue.length?Promise.resolve(queue.shift()):new Promise(resolve=>waiters.push(resolve));
@@ -19,7 +20,9 @@ for(const cameraFree of [false,true])for(const unknownInventory of (cameraFree?[
  try{
   const field=buildField(),robot=buildRobot(),scene=new T.Scene();scene.add(field,robot);
   const game=new GamePhysics(field,scene,robot);game.pose=fencePose(alliance);game.syncRobot();
-  const camera=new SimSensors(game);let time=0,seq=0,shots=0,lastStatus='',lastCount=4,parkStartedAt=null;
+  if(emptyField){for(const ball of game.balls){game.world.removeBody(ball.body);ball.mesh.removeFromParent();}game.balls=[];game.inventory=[];for(const flower of game.flowers)flower.queue=[];}
+  const camera=new SimSensors(game);let time=0,seq=0,shots=0,lastStatus='',lastCount=game.inventory.length,parkStartedAt=null;
+  const feedDurations=[];let wasFeeding=false;
   const pickups=[],firedSources=[],tiltTimes=[];let lastTilts=0,tiltsAtPark=null,lastFlowerShotAt=null;
   const actuators=new SimActuators(game,power=>{const source=game.nextBall?.startZone;const fired=fireNextBall(game,{power,angle:66.5,height:6,compression:.15},makeTarget(game.raisedCell(alliance)),{pollen:.5,nectar:.5},simulate);if(fired){shots++;firedSources.push(source);if(source==='flower')lastFlowerShotAt=time;}return fired;});
   const read=(time,pipeline)=>{const s=camera.read(time,pipeline,ready);if(cameraFree){s.cameraConnected=false;s.vision={valid:false,pipeline,capturedAt:time,targets:[]};}if(unknownInventory)s.ballCount=-1;return s;};
@@ -37,21 +40,26 @@ for(const cameraFree of [false,true])for(const unknownInventory of (cameraFree?[
    const short=r.status.split(' · ')[0];
    if(short!==lastStatus){console.log(alliance,time,short);lastStatus=short;}
    const o=r.outputs;actuators.apply(o,.02,time);
+   if(o.feederPower>0){if(!wasFeeding)feedDurations.push(0);feedDurations[feedDurations.length-1]+=.02;}wasFeeding=o.feederPower>0;
    if(game.hives[alliance].tilts>lastTilts){tiltTimes.push(time+.02);lastTilts=game.hives[alliance].tilts;}
    assert(game.inventory.length<=4);assert(robotAllowed(game.pose));
    if(game.inventory.length>lastCount)pickups.push(...game.inventory.slice(lastCount).map(b=>b.startZone));lastCount=game.inventory.length;
    time=Number((time+.02).toFixed(8));seq++;
    r=await send({type:'step',runId:'routine'+alliance,seq,time,sensors:read(time,o.pipeline)});
   }
-  console.log('RESULT',{alliance,cameraFree,unknownInventory,parkStartedAt,time,shots,pickups,lastFlowerShotAt,tiltTimes,status:r.status,pose:game.pose,hive:game.hives[alliance].counts,tilts:game.hives[alliance].tilts});
+  console.log('RESULT',{alliance,cameraFree,inventoryMode,parkStartedAt,time,shots,pickups,feedDurations,lastFlowerShotAt,tiltTimes,status:r.status,pose:game.pose,hive:game.hives[alliance].counts,tilts:game.hives[alliance].tilts});
   assert.equal(parkStartedAt,26,'Parking must begin at the 26-second trigger');
   assert.equal(r.state,'PARK');
   assert.equal(r.running,false);
+  if(cameraFree){assert.equal(feedDurations.length,3,'All three shot attempts must execute');for(const duration of feedDurations)assert(duration>=1.98&&duration<=2.04,'Each fixed shot must run its complete two-second feed timer');}
+  if(emptyField){assert.equal(shots,0,'An empty field must not manufacture actual shots');assert.deepEqual(pickups,[],'No fabricated pickups');}
+  else{
   assert.deepEqual(pickups,[...Array(4).fill('garden'),...Array(4).fill('flower')],'Only the four Garden and four Flower balls may be picked up');
   assert.equal(game.inventory.length,0,'No extra inventory after the final Flower batch');
   assert.deepEqual(firedSources,[...Array(4).fill('robot'),...Array(4).fill('garden'),...Array(4).fill('flower')],'All three batches must actually fire in order');
   assert(lastFlowerShotAt<26,'All Flower shots must finish before parking');
   assert(tiltsAtPark>=2,'Flower shots must cause a second completed physical tilt before parking');
+  }
   if(cameraFree){assert.match(r.status,/Hive tilt unverified/);assert.doesNotMatch(r.status,/Flower tilt confirmed/);}
   else assert.match(r.status,/Flower tilt confirmed/,'Java must independently confirm the final tilt from measured AprilTags');
   assert(time<30,'Parking must finish before 30 seconds');

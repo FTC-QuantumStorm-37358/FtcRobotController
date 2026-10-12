@@ -140,14 +140,14 @@ public final class AutoStateMachine {
                     break;
                 case SHOOTING:
                     if(!useVision){
-                        if(sensors.ballCount==0){shooterAt=Double.NaN;pickup();break;}
+                        // Fixed routine: always execute this bounded shot attempt,
+                        // even with zero/unknown balls. Never infer shots or inventory.
                         out.shooterPower=power;
                         if(Double.isNaN(shooterAt))shooterAt=now;
                         if(shootStep==ShootStep.CHECK_BALLS){shootStep=ShootStep.AIM;stateAt=now;age=0;}
                         if(shootStep==ShootStep.AIM&&now-shooterAt>=1){shootStep=ShootStep.FIRE;stateAt=now;age=0;}
                         if(shootStep==ShootStep.FIRE){
-                            if(sensors.ballCount<0&&age>=timedFeedSeconds){shooterAt=Double.NaN;pickup();break;}
-                            if(sensors.ballCount>=0&&age>3){fail("Balls stuck in indexer",false);break;}
+                            if(age>=timedFeedSeconds){shooterAt=Double.NaN;pickup();break;}
                             out.feederPower=1;
                         }
                         break;

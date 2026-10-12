@@ -68,6 +68,7 @@ public final class AutoStateMachine {
         opMode.telemetry.addLine("Camera-free: Limelight and camera tilt servo are not used.");
         opMode.telemetry.addLine("Routine: shoot -> Garden -> shoot -> Flower -> shoot -> park at 26 s.");
         opMode.telemetry.addLine("Inventory unknown: timed pickup/feed attempts; Hive tilt unverified.");
+        opMode.telemetry.addLine("Every shot cycle runs its full timer, even with an empty indexer.");
         opMode.telemetry.addLine("Calibrate start, odometry, waypoints and shooter before testing.");
         opMode.telemetry.update();
     }

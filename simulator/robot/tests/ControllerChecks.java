@@ -115,12 +115,14 @@ public final class ControllerChecks {
             check(io.count==2,"Partial Garden count is not fabricated");
             io.pose=f.farHive[alliance];for(int i=0;i<70;i++)step(io,auto);
             check(io.out.feederPower==1,"Partial Garden batch shoots without tags");
-            io.count=0;step(io,auto);check(auto.destination()==f.flower[alliance],"Garden shot leads to Flower");
+            io.count=0;step(io,auto);check(io.out.feederPower==1,"Empty count must not shorten the timed Garden shot");
+            io.time+=2.1;auto.tick();check(auto.destination()==f.flower[alliance],"Timed Garden shot leads to Flower");
             io.pose=f.flower[alliance];step(io,auto);io.count=1;io.time+=3.1;auto.tick();
             check(auto.destination()==f.farHive[alliance],"Partial Flower pickup returns to Hive");
             io.pose=f.farHive[alliance];for(int i=0;i<70;i++)step(io,auto);
             check(io.out.feederPower==1,"Flower batch shoots without tags");
-            io.count=0;step(io,auto);check(auto.getState()==AutoStateMachine.State.WAITING,"Only completed three-batch route waits for park");
+            io.count=0;step(io,auto);check(io.out.feederPower==1,"Empty count must not shorten the timed Flower shot");
+            io.time+=2.1;auto.tick();check(auto.getState()==AutoStateMachine.State.WAITING,"Only completed three-batch route waits for park");
             io.time=26;auto.tick();check(auto.getState()==AutoStateMachine.State.PARK,"Partial batches preserve park trigger");
         }
         // Slower measured progress must not trip a simulator-speed deadline.
@@ -174,6 +176,28 @@ public final class ControllerChecks {
             stopFixed[0]=true;try{fixed.move(f.garden[team],f.farHive[team]);throw new AssertionError("Fixed route must still honor STOP");}
             catch(java.util.concurrent.CancellationException expected){ }
         }
-        System.out.println("Shared Java fixed camera-free routes, partial pickups, dynamic planning, STOP and odometry checks passed.");
+        // All three cycles still run with a permanently empty, measured indexer.
+        for(int team=0;team<2;team++){
+            io=new IO();io.count=0;io.connected=false;io.visible=false;io.pose=f.hive[team];auto=new AutoStateMachine(io,f,false);auto.start(team,.4);
+            for(int batch=0;batch<3;batch++){
+                io.pose=batch==0?f.hive[team]:f.farHive[team];
+                for(int i=0;i<70;i++)step(io,auto);
+                check(auto.getState()==AutoStateMachine.State.SHOOTING&&io.out.shooterPower>0&&io.out.feederPower==1,"Empty batch "+batch+" must spin and feed");
+                check(io.count==0,"Empty shot attempt must preserve measured zero");
+                for(int i=0;i<100;i++)step(io,auto);
+                if(batch<2){
+                    check(auto.getState()==AutoStateMachine.State.MOVING,"Timed empty shot advances to pickup");
+                    io.pose=batch==0?f.garden[team]:f.flower[team];step(io,auto);io.time+=3.1;auto.tick();
+                    check(auto.destination()==f.farHive[team],"Empty pickup still returns to shooting pose");
+                }
+            }
+            check(auto.getState()==AutoStateMachine.State.WAITING,"Three empty shot cycles finish routine");
+            io.time=26;auto.tick();check(auto.getState()==AutoStateMachine.State.PARK,"Empty routine preserves park trigger");
+            io.time=30;auto.tick();stopped(io,"Empty routine hard deadline");
+        }
+        io=new IO();io.count=4;io.connected=false;io.visible=false;io.pose=f.hive[0];auto=new AutoStateMachine(io,f,false);auto.start(0,.4);
+        for(int i=0;i<170;i++)step(io,auto);
+        check(auto.destination()==f.garden[0],"An unchanged full count cannot extend the fixed feed cycle indefinitely");
+        System.out.println("Shared Java fixed routes, three empty shot cycles, partial pickups, STOP and odometry checks passed.");
     }
 }
