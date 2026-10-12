@@ -7,12 +7,14 @@ public final class AutoStateMachine {
     public static final double PARK_START_SECONDS=26.0;
     public static final double AUTO_END_SECONDS=30.0;
     public enum State { INIT, MOVING, SHOOTING, INTAKE, ERROR, WAIT_TILT, WAITING, PARK, STOPPED }
+    public enum Routine { FULL, SINGLE_TILT }
     private enum ShootStep { CHECK_BALLS, AIM, FIRE }
     private enum Source { GARDEN, FLOWER }
     private final RobotIO io;
     private final FieldLayout field;
     private final Navigator navigator;
     private final boolean useVision;
+    private final Routine routine;
     /** Timed attempts when inventory is unavailable; never manufacture a ball count. */
     public double timedFeedSeconds=2.0,timedPickupSeconds=3.0;
     private HiveVision hiveVision;
@@ -33,6 +35,11 @@ public final class AutoStateMachine {
     private Outputs last=new Outputs();
     public AutoStateMachine(RobotIO io,FieldLayout field) { this(io,field,true); }
     public AutoStateMachine(RobotIO io,FieldLayout field,boolean useVision) {
+        this(io,field,useVision,Routine.FULL);
+    }
+    public AutoStateMachine(RobotIO io,FieldLayout field,boolean useVision,Routine routine) {
+        if(routine==null)throw new IllegalArgumentException("Routine is required");
+        this.routine=routine;
         this.io=io;this.field=field;this.useVision=useVision;this.navigator=new Navigator(field,io::stopRequested);
     }
     public void start(int alliance,double power) {
@@ -52,7 +59,8 @@ public final class AutoStateMachine {
     public double elapsed() { return Math.max(0,io.nowSeconds()-startAt); }
     public String status() {
         return state+(state==State.MOVING?" → "+destinationName:state==State.SHOOTING?" · "+shootStep:state==State.INTAKE?" · "+source:"")
-            +String.format(java.util.Locale.ROOT," · %.1f / 30 s · park starts at 26 s",elapsed())
+            +String.format(java.util.Locale.ROOT," · %.1f / 30 s",elapsed())
+            +(routine==Routine.SINGLE_TILT?" · Single tilt: park after opening shot cycle":" · park starts at 26 s")
             +(!useVision?" · Camera-free: fixed route, no tag detection, Hive tilt unverified":"")
             +(navigator.isPlanning()?" · Planning route (STOP available)":"")
             +(flowerTiltConfirmed?" · Flower tilt confirmed":"")+(error.isEmpty()?"":" · "+error);
@@ -68,10 +76,12 @@ public final class AutoStateMachine {
     }
     private Pose hive() { return flipped?field.farHive[alliance]:field.hive[alliance]; }
     private void pickup() {
+        if(routine==Routine.SINGLE_TILT){beginParking();return;}
         if(!gardenDone){source=Source.GARDEN;moveThen(field.garden[alliance],"Garden",State.INTAKE);}
         else if(!flowerDone){source=Source.FLOWER;moveThen(field.flower[alliance],"Flower",State.INTAKE);}
         else{finalShotHiveState=flipped?1:0;enter(useVision?State.WAIT_TILT:State.WAITING);}
     }
+    private void beginParking(){destination=field.parkingTarget(currentPose,alliance);enter(State.PARK);}
     private void finishPickup() {
         if(source==Source.GARDEN)gardenDone=true;if(source==Source.FLOWER)flowerDone=true;
         if(!useVision){
@@ -108,7 +118,7 @@ public final class AutoStateMachine {
         // The final four seconds belong exclusively to parking, regardless of
         // which scoring or pickup state was active before the transition.
         if(state!=State.PARK&&elapsed()>=PARK_START_SECONDS){
-            destination=field.parkingTarget(sensors.pose,alliance);enter(State.PARK);
+            beginParking();
         }
         double age=now-stateAt;
         State before=state;
@@ -208,6 +218,7 @@ public final class AutoStateMachine {
                     break;
                 case ERROR:
                     if(recoverable&&retries++<3&&destination!=null)enter(State.MOVING);
+                    else if(routine==Routine.SINGLE_TILT)beginParking();
                     else enter(State.WAITING);break;
                 case WAIT_TILT:
                     int settled=hiveVision.state(now);

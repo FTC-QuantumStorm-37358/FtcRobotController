@@ -30,6 +30,10 @@ Android Studio and the desktop runner compile the same shared sources. Build/dep
 
 ## Camera-free routine
 
+### Additional Single Tilt OpModes
+
+The existing full-routine OpModes are unchanged. Four additional Driver Station entries are available: **Red Team One Single Tilt**, **Red Team Two Single Tilt**, **Blue Team One Single Tilt**, and **Blue Team Two Single Tilt**. Each has its own annotated Java OpMode, with shared lifecycle/controller logic. They assume the starting Hive cell is UP, run only the opening timed four-preload shot attempt, and start parking immediately afterward (normally about 3 seconds), not at 26 seconds. They never visit the Garden/Flower, run the intake, return for another shot cycle, or wait for a camera-confirmed tilt. The alliance partner is expected to handle the second tilt. Existing fixed-route starts/calibration, no-Limelight operation, empty-indexer shot attempts, STOP checks and 30-second hard stop still apply. A tilt/four actual shots cannot be guaranteed without balls and calibrated shooting. The desktop test protocol accepts `singleTilt:true` with `cameraFree:true`; physical tests cover all four entries with loaded and empty indexers.
+
 ### STOP responsiveness
 
 The controller checks STOP before/after sensor reads and before sending outputs. Camera-free mode follows a small set of alliance-mirrored simulator corridors and turn-clearance points, checking their segments against field geometry without runtime grid/A* search or a planning clock. Red/Blue Team One/Two telemetry explicitly shows `Fixed simulator route; no route search`. Vision-enabled mode retains resumable dynamic planning with a 20 ms/4096-work-unit slice budget. The global 26/30-second deadlines always win. Both robot adapters validate raw Pinpoint readings, shutdown avoids duplicate stop batches, and INIT reports/logs the hardware setup stage. SDK stuck detection and failsafe remain enabled: blocked I2C/USB calls still require hardware/log investigation. No SDK watchdog timeout is increased and no warning is hidden.

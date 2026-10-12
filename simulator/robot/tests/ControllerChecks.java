@@ -198,6 +198,20 @@ public final class ControllerChecks {
         io=new IO();io.count=4;io.connected=false;io.visible=false;io.pose=f.hive[0];auto=new AutoStateMachine(io,f,false);auto.start(0,.4);
         for(int i=0;i<170;i++)step(io,auto);
         check(auto.destination()==f.garden[0],"An unchanged full count cannot extend the fixed feed cycle indefinitely");
-        System.out.println("Shared Java fixed routes, three empty shot cycles, partial pickups, STOP and odometry checks passed.");
+        for(int team=0;team<2;team++)for(int inventory:new int[]{-1,0,4}){
+            io=new IO();io.count=inventory;io.connected=false;io.visible=false;io.pose=f.hive[team];
+            auto=new AutoStateMachine(io,f,false,AutoStateMachine.Routine.SINGLE_TILT);auto.start(team,.4);
+            for(int i=0;i<70;i++){step(io,auto);check(io.out.intakePower==0,"Single tilt never enables pickup");}
+            check(io.out.feederPower==1,"Single tilt executes the opening shot even if empty");
+            for(int i=0;i<100;i++){step(io,auto);check(auto.getState()!=AutoStateMachine.State.INTAKE,"Single tilt has no Garden or Flower state");}
+            check(auto.getState()==AutoStateMachine.State.PARK&&io.time<26,"Single tilt parks immediately after opening shot, not at 26 seconds");
+            check(io.out.feederPower==0&&io.out.shooterPower==0&&io.out.intakePower==0,"Single tilt parking cancels all mechanisms");
+            check(io.count==inventory,"Single tilt does not manufacture inventory or a detected tilt");
+            io.pose=f.parkingTarget(io.pose,team);step(io,auto);check(!auto.isRunning(),"Single tilt stops when parked");stopped(io,"Single tilt arrival");
+        }
+        io=new IO();io.pose=f.hive[0];io.count=-1;auto=new AutoStateMachine(io,f,false,AutoStateMachine.Routine.SINGLE_TILT);auto.start(0,.4);
+        for(int i=0;i<170;i++)step(io,auto);
+        io.time=30;auto.tick();check(!auto.isRunning(),"Stalled single-tilt parking still obeys 30 seconds");stopped(io,"Single tilt hard deadline");
+        System.out.println("Shared Java full/single-tilt routines, empty shot cycles, fixed routes, STOP and odometry checks passed.");
     }
 }

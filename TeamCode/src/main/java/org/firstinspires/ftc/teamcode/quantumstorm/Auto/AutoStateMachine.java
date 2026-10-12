@@ -8,6 +8,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.biobuzz.FieldLayout;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.*;
+import org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine.Routine;
 import org.firstinspires.ftc.teamcode.biobuzz.ftc.SafeShutdown;
 import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
@@ -30,6 +31,9 @@ public final class AutoStateMachine {
     private final org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine routine;
 
     public AutoStateMachine(LinearOpMode opMode,AutoStartPosition position) {
+        this(opMode,position,Routine.FULL);
+    }
+    public AutoStateMachine(LinearOpMode opMode,AutoStartPosition position,Routine selectedRoutine) {
         this.opMode=opMode;this.position=position;
         int alliance=position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2?0:1;
         FieldLayout field=new FieldLayout();Pose start=field.hive[alliance];
@@ -59,14 +63,17 @@ public final class AutoStateMachine {
                 if(o.intakePower>0)intake.start();else intake.stop();
             }
         };
-        routine=new org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine(io,field,false);
+        routine=new org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine(io,field,false,selectedRoutine);
         routine.timedFeedSeconds=Constants.AUTO_FEED_TIME_SEC;
         routine.timedPickupSeconds=Constants.AUTO_PICKUP_TIMEOUT_SEC;
         opMode.telemetry.addData("Autonomous",position.label);
         opMode.telemetry.addData("Required simulator start","X %.3f, Y %.3f in, heading %.1f deg",start.x,start.y,Math.toDegrees(start.heading));
         opMode.telemetry.addLine("Team One/Two use the SAME simulator start; not the old side-wall starts.");
         opMode.telemetry.addLine("Camera-free: Limelight and camera tilt servo are not used.");
-        opMode.telemetry.addLine("Routine: shoot -> Garden -> shoot -> Flower -> shoot -> park at 26 s.");
+        opMode.telemetry.addLine(selectedRoutine==Routine.SINGLE_TILT
+            ?"SINGLE TILT: opening four-ball shot attempt -> park immediately. No pickups."
+            :"Routine: shoot -> Garden -> shoot -> Flower -> shoot -> park at 26 s.");
+        if(selectedRoutine==Routine.SINGLE_TILT)opMode.telemetry.addLine("Assumes starting Hive cell is UP; partner handles second tilt. Tilt is not detected.");
         opMode.telemetry.addLine("Inventory unknown: timed pickup/feed attempts; Hive tilt unverified.");
         opMode.telemetry.addLine("Every shot cycle runs its full timer, even with an empty indexer.");
         opMode.telemetry.addLine("Calibrate start, odometry, waypoints and shooter before testing.");
