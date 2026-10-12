@@ -26,6 +26,7 @@ for(const cameraFree of [false,true])for(const unknownInventory of (cameraFree?[
   let r=await send({type:'start',runId:'routine'+alliance,seq,time,alliance,cameraFree,shooterPower:.395,sensors:read(time,0)});
   while(r.running&&time<30.1){
    assert.equal(r.type,'command');assert(robotAllowed(game.pose));
+   if(cameraFree)assert.doesNotMatch(r.status,/Planning route|AprilTag not found|Camera disconnected/,'Camera-free routine must not enter runtime route search or detection waits');
    assert.notEqual(r.state,'EXTRA_PICKUP','No optional pickup state may run');
    if(r.state==='WAITING')for(const key of ['forward','strafeRight','turnClockwise','shooterPower','feederPower','intakePower'])assert.equal(r.outputs[key],0,'Completed routine must hold still until parking');
    if(r.state==='PARK'){

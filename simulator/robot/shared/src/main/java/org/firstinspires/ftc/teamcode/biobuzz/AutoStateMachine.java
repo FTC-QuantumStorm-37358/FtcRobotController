@@ -39,6 +39,7 @@ public final class AutoStateMachine {
         if(alliance<0||alliance>1||!Double.isFinite(power)||power<0||power>1)throw new IllegalArgumentException("Invalid alliance or shooter power");
         this.alliance=alliance;this.power=power;startAt=lastNow=io.nowSeconds();running=true;retries=0;
         hiveVision=useVision?new HiveVision(field,alliance):null;
+        navigator.useScriptedRoute(!useVision,alliance);
         gardenDone=flowerDone=flipped=flowerTiltConfirmed=false;finalShotHiveState=-1;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
         shooterAt=Double.NaN;
     }
@@ -52,7 +53,7 @@ public final class AutoStateMachine {
     public String status() {
         return state+(state==State.MOVING?" → "+destinationName:state==State.SHOOTING?" · "+shootStep:state==State.INTAKE?" · "+source:"")
             +String.format(java.util.Locale.ROOT," · %.1f / 30 s · park starts at 26 s",elapsed())
-            +(!useVision?" · Camera-free: fixed poses, Hive tilt unverified":"")
+            +(!useVision?" · Camera-free: fixed route, no tag detection, Hive tilt unverified":"")
             +(navigator.isPlanning()?" · Planning route (STOP available)":"")
             +(flowerTiltConfirmed?" · Flower tilt confirmed":"")+(error.isEmpty()?"":" · "+error);
     }

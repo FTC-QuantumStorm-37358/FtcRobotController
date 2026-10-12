@@ -18,6 +18,8 @@ public final class Navigator {
     private TurnSearch turning;
     private PathSearch path;
     private boolean planning;
+    private boolean scripted;
+    private int alliance;
     public Navigator(FieldLayout field){this(field,()->Thread.currentThread().isInterrupted());}
     public Navigator(FieldLayout field,BooleanSupplier cancelled){this(field,cancelled,System::nanoTime);}
     public Navigator(FieldLayout field,BooleanSupplier cancelled,LongSupplier clock){this.field=field;this.cancelled=cancelled;this.clock=clock;}
@@ -29,9 +31,11 @@ public final class Navigator {
     }
     public void reset(){stage=0;route=null;turnPose=null;turning=null;path=null;planning=false;}
     public boolean isPlanning(){return planning;}
+    public void useScriptedRoute(boolean enabled,int alliance){this.scripted=enabled;this.alliance=alliance;reset();}
     public List<Pose> route(){return route==null?new ArrayList<Pose>():new ArrayList<Pose>(route);}
     /** Pending searches return zero drive, not an exception or false arrival. */
     public Outputs move(Pose p,Pose target){
+        if(scripted)return moveScripted(p,target);
         checkStop();planning=false;Slice slice=new Slice();
         if(stage==0){
             if(turning==null)turning=new TurnSearch(p,target.heading);
@@ -50,6 +54,54 @@ public final class Navigator {
         if(p.distance(target)<.65&&Math.abs(Pose.angle(target.heading-p.heading))<Math.toRadians(2))return null;
         return follow(p,target,target.heading,slice);
     }
+    private Pose fixedPoint(double x,double y,double heading){return new Pose(alliance==0?x:-x,alliance==0?y:-y,heading);}
+    private Outputs moveScripted(Pose p,Pose target){
+        checkStop();planning=false;
+        if(stage==0){
+            if(field.canRotate(p,target.heading))turnPose=p;
+            else{
+                double best=Double.POSITIVE_INFINITY;
+                double[][] clearance={{-56,-56},{-52,-32},{-56,-40},{-52,-36},{-52,-40},{-48,-36},{-52,-24},{-52,-28},{-48,-24}};
+                for(double[] xy:clearance){
+                    checkStop();Pose q=fixedPoint(xy[0],xy[1],p.heading);double distance=p.distance(q);
+                    if(distance<best&&field.canRotate(q,target.heading)&&field.clear(p,q,p.heading)){best=distance;turnPose=q;}
+                }
+                if(turnPose==null)throw new IllegalStateException("Fixed turn approach blocked: verify start/odometry/field calibration");
+            }
+            stage=p.distance(turnPose)<.01?2:1;
+        }
+        if(stage==1){
+            if(p.distance(turnPose)<.6){stage=2;route=null;}
+            else{if(route==null)route=fixedPath(p,turnPose,p.heading);return driveRoute(p,turnPose,p.heading);}
+        }
+        if(stage==2){
+            checkStop();if(!field.canRotate(p,target.heading))throw new IllegalStateException("Fixed-route turn blocked");
+            double a=Pose.angle(target.heading-p.heading);
+            if(Math.abs(a)>Math.toRadians(1.5)){Outputs o=new Outputs();o.turnClockwise=-FieldLayout.clip(Math.toDegrees(a)*.08,field.turnPower);return o;}
+            stage=3;route=null;
+        }
+        if(p.distance(target)<.65&&Math.abs(Pose.angle(target.heading-p.heading))<Math.toRadians(2))return null;
+        if(route==null)route=fixedPath(p,target,target.heading);
+        return driveRoute(p,target,target.heading);
+    }
+    /** A handful of validated, alliance-mirrored corridor templates; no graph search. */
+    private List<Pose> fixedPath(Pose start,Pose goal,double heading){
+        Pose rear=fixedPoint(-12.75,56,heading),upper=fixedPoint(-40,36,heading),lower=fixedPoint(-46,-44,heading),bypass=fixedPoint(-52,-8,heading);
+        Pose[][] templates={{goal},{bypass,goal},{rear,upper,goal},{lower,upper,goal},{upper,lower,goal},{upper,goal},{lower,goal},{rear,upper,lower,goal}};
+        for(Pose[] template:templates){
+            checkStop();Pose previous=start;boolean clear=true;
+            for(Pose waypoint:template){checkStop();if(!field.clear(previous,waypoint,heading)){clear=false;break;}previous=waypoint;}
+            if(clear)return new ArrayList<Pose>(Arrays.asList(template));
+        }
+        throw new IllegalStateException("Fixed corridor blocked: verify start/odometry/field calibration");
+    }
+    private Outputs driveRoute(Pose p,Pose target,double heading){
+        while(route.size()>1&&(p.distance(route.get(0))<.6||field.clear(p,route.get(1),heading))){checkStop();route.remove(0);}
+        Pose q=route.get(0);double dx=q.x-p.x,dy=q.y-p.y,c=Math.cos(p.heading),s=Math.sin(p.heading);
+        Outputs o=new Outputs();o.forward=(dx*c+dy*s)*.35;o.strafeRight=(dx*s-dy*c)*.35;
+        double mag=Math.hypot(o.forward,o.strafeRight);if(mag>field.drivePower){o.forward*=field.drivePower/mag;o.strafeRight*=field.drivePower/mag;}
+        o.turnClockwise=-FieldLayout.clip(Math.toDegrees(Pose.angle(heading-p.heading))*.08,field.turnPower);return o;
+    }
     private Outputs follow(Pose p,Pose target,double heading,Slice slice){
         if(route==null){
             if(path==null)path=new PathSearch(p,target,heading);
@@ -57,11 +109,7 @@ public final class Navigator {
             if(!path.done){planning=true;return new Outputs();}
             route=path.result;path=null;if(route==null)throw new IllegalStateException("No collision-free route");
         }
-        while(route.size()>1&&(p.distance(route.get(0))<.6||field.clear(p,route.get(1),heading))){checkStop();route.remove(0);}
-        Pose q=route.get(0);double dx=q.x-p.x,dy=q.y-p.y,c=Math.cos(p.heading),s=Math.sin(p.heading);
-        Outputs o=new Outputs();o.forward=(dx*c+dy*s)*.35;o.strafeRight=(dx*s-dy*c)*.35;
-        double mag=Math.hypot(o.forward,o.strafeRight);if(mag>field.drivePower){o.forward*=field.drivePower/mag;o.strafeRight*=field.drivePower/mag;}
-        o.turnClockwise=-FieldLayout.clip(Math.toDegrees(Pose.angle(heading-p.heading))*.08,field.turnPower);return o;
+        return driveRoute(p,target,heading);
     }
     private final class TurnSearch {
         final Pose start;final double heading;

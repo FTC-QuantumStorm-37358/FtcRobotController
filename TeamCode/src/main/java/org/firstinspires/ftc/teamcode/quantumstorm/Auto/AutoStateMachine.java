@@ -96,6 +96,7 @@ public final class AutoStateMachine {
                 opMode.telemetry.addData("Autonomous",position.label);
                 opMode.telemetry.addData("Routine",routine.status());
                 opMode.telemetry.addData("AprilTags","Not required (camera-free routine)");
+                opMode.telemetry.addData("Navigation","Fixed simulator route; no route search");
                 opMode.telemetry.addData("Balls","Unknown (timed attempts)");
                 odometry.addTelemetry(opMode.telemetry);opMode.telemetry.update();
                 opMode.idle();

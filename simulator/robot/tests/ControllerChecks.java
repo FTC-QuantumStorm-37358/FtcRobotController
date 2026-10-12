@@ -126,7 +126,7 @@ public final class ControllerChecks {
         // Slower measured progress must not trip a simulator-speed deadline.
         io=new IO();io.connected=false;io.visible=false;io.count=-1;io.pose=f.hive[0];auto=new AutoStateMachine(io,f,false);auto.start(0,.4);
         for(int i=0;i<170;i++)step(io,auto);
-        for(int i=0;i<140;i++){io.pose=new Pose(io.pose.x-.1,io.pose.y,io.pose.heading);io.time+=.1;auto.tick();}
+        for(int i=0;i<140;i++){io.pose=new Pose(io.pose.x,io.pose.y-.1,io.pose.heading);io.time+=.1;auto.tick();}
         check(auto.getState()==AutoStateMachine.State.MOVING,"Slow but progressing Garden approach continues");
         io.time+=3.1;auto.tick();check(auto.status().contains("Movement stalled toward Garden"),"A genuinely stalled approach still faults");stopped(io,"Garden motion stall");
         auto.stop();stopped(io,"Manual stop after slow approach");
@@ -162,6 +162,18 @@ public final class ControllerChecks {
         sliced.reset();sliced.move(slowStart,slowGoal);cancelSlow[0]=true;
         try{sliced.move(slowStart,slowGoal);throw new AssertionError("STOP must cancel pending planning");}
         catch(java.util.concurrent.CancellationException expected){ }
-        System.out.println("Shared Java routine, resumable slow-Hub planning, STOP, corrupt odometry and shutdown checks passed.");
+        // Fixed camera-free navigation must never even consult a planner clock.
+        for(int team=0;team<2;team++){
+            final boolean[] stopFixed={false};Navigator fixed=new Navigator(f,()->stopFixed[0],()->{throw new AssertionError("Fixed routine must not enter route search");});
+            fixed.useScriptedRoute(true,team);
+            Outputs firstMove=fixed.move(f.hive[team],f.garden[team]);
+            check(firstMove!=null&&!fixed.isPlanning(),"Fixed Garden route starts immediately without planning");
+            Pose previous=f.hive[team];for(Pose waypoint:fixed.route()){check(f.clear(previous,waypoint,f.garden[team].heading),"Every fixed Garden corridor segment must be collision-checked");previous=waypoint;}
+            check(previous==f.garden[team],"Fixed corridor ends at Garden");
+            fixed.reset();check(fixed.move(f.garden[team],f.farHive[team])!=null,"Fixed Garden return has a safe turn approach");
+            stopFixed[0]=true;try{fixed.move(f.garden[team],f.farHive[team]);throw new AssertionError("Fixed route must still honor STOP");}
+            catch(java.util.concurrent.CancellationException expected){ }
+        }
+        System.out.println("Shared Java fixed camera-free routes, partial pickups, dynamic planning, STOP and odometry checks passed.");
     }
 }
