@@ -7,7 +7,8 @@ const ctx=new Proxy({},{get:()=>()=>{},set:()=>true});globalThis.document={creat
 const {buildField,buildRobot}=await import('../dist/model.js');
 const {GamePhysics}=await import('../dist/game-physics.js');
 const {JavaAutonomousClient}=await import('../dist/autonomous.js');
-const {simulate,makeTarget}=await import('../dist/ballistics.js');
+const {AUTONOMOUS_MODES,placeAutonomousRobot}=await import('../dist/autonomous-modes.js');
+const {simulate,makeTarget,fencePose}=await import('../dist/ballistics.js');
 const {fireNextBall}=await import('../dist/next-shot.js');
 const child=spawn(process.execPath,['server.mjs'],{env:{...process.env,PORT:'0'},stdio:['ignore','pipe','pipe']});
 let logs='';
@@ -29,6 +30,12 @@ try{
  await new Promise(resolve=>setTimeout(resolve,50));
  // Reconnect starts a fresh JVM with a fresh sequence; closing it cancels old outputs.
  driver.start(1,.3);await waitCommand();assert.equal(driver.seq,0);assert.equal(driver.time,0);driver.stop();
+ for(const mode of AUTONOMOUS_MODES){
+  await new Promise(resolve=>setTimeout(resolve,50));game.reset();placeAutonomousRobot(game,mode);
+  driver.start(mode.alliance,.395,mode);await waitCommand();assert.equal(driver.state,'MOVING');assert.match(driver.status,/Camera-free/);
+  assert.equal(/Single tilt/.test(driver.status),mode.singleTilt);assert.equal(driver.navigation.destination.x,fencePose(mode.alliance).x);
+  driver.stop();assert.equal(driver.queued,null);
+ }
  const denied=await new Promise((resolve,reject)=>{const socket=connect(port,'127.0.0.1',()=>socket.write(`GET /robot HTTP/1.1\r\nHost: localhost:${port}\r\nOrigin: http://unrelated.example\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==\r\n\r\n`));let text='';socket.on('data',d=>text+=d);socket.on('end',()=>resolve(text));socket.on('error',reject);});
  assert.match(denied,/403 Forbidden/);
  console.log('Local HTTP + actual WebSocket/JVM + browser transport: physical shots, fresh reconnect, manual stop and origin isolation passed.');

@@ -28,7 +28,7 @@ for(const [id,title] of [['G422','Human outside alliance area'],['G424','Coach t
 for(const [id,title] of [['G426','Human introduced nectar early'],['G427','Illegal human nectar introduction'],['G428','Human removed field ball']])rule(id,title,[{label:'Minor foul per ball',minor:1}]);
 rule('T405','Driving during field measurement',[W,{label:'Subsequent event violation: yellow card',yellow:true}]);
 export class Penalties{
- constructor(){this.reset();}
+ constructor(alliance=0){this.alliance=alliance;this.reset();}
  reset(){this.events=[];this.keys=new Set();this.matchRules=new Set();this.yellow=0;this.red=false;this.disabled=false;this.held=false;this.timed=false;this.started=0;this.phase='auto';this.teleopElapsed=0;this.time=0;this.active=new Set();}
  start(now){this.reset();this.timed=true;this.started=now;}
  updateClock(now){if(!this.timed)return;this.time=Math.max(0,(now-this.started)/1000);this.phase=this.time<30?'auto':this.time<38?'transition':this.time<158?'teleop':'ended';this.teleopElapsed=Math.max(0,this.time-38);}
@@ -50,7 +50,7 @@ export class Penalties{
  episode(id,on,detail=''){if(!on){this.active.delete(id);return;}if(this.active.has(id))return;this.active.add(id);this.assess(id,0,{detail,source:'Automatic'});}
  manualInput(autonomous=false){if((this.timed||autonomous)&&this.phase==='auto')this.episode('G401',true,'Driver input during AUTO; stop and safety remain allowed.');}
  powered(on){if(!on){this.active.delete('G403');this.active.delete('G404');this.active.delete('G401');return;}if(this.timed&&['transition','ended'].includes(this.phase))this.episode(this.phase==='transition'?'G403':'G404',true);}
- collected(item){this.active.delete('G407');if(item.type==='blue')this.assess('G408',0,{key:`G408:${item.body.id}:${item.pickups}`,detail:'Red robot collected blue nectar.',source:'Automatic'});if(item.freshSpill)this.assess('G409',0,{key:`G409:${item.body.id}:${item.spills}`,source:'Automatic'});}
+ collected(item){this.active.delete('G407');const opponent=this.alliance===0?'blue':'red';if(item.type===opponent)this.assess('G408',0,{key:`G408:${item.body.id}:${item.pickups}`,detail:`${this.alliance===0?'Red':'Blue'} robot collected ${opponent} nectar.`,source:'Automatic'});if(item.freshSpill)this.assess('G409',0,{key:`G409:${item.body.id}:${item.spills}`,source:'Automatic'});}
  sample(game){
   this.episode('G407',game.inventory.length>4);
   for(const b of game.balls){if(b.held||b.storedInFlower||!b.robotHandled)continue;

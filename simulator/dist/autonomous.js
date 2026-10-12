@@ -9,7 +9,7 @@ export class JavaAutonomousClient {
   this.running=false;this.available=false;this.status='Checking Java controller…';this.state='STOPPED';this.generation=0;this.time=0;this.navigation={destination:null,route:[]};
  }
  async checkServer(){try{const r=await fetch('/api/java-status');const result=await r.json();this.available=result.ready;this.status=result.message;}catch{this.status='Java autonomous requires the local npm start server.';}this.onStatus();return this.available;}
- start(alliance=0,shooterPower=.395){
+ start(alliance=0,shooterPower=.395,{cameraFree=false,singleTilt=false}={}){
   this.stop('Ready');this.running=true;this.state='CONNECTING';this.status='Connecting to Java…';
   this.time=0;this.accumulator=0;this.seq=0;this.pipeline=0;this.queued=null;this.actuators.reset();this.sensors.reset();
   const generation=++this.generation;this.runId=globalThis.crypto.randomUUID();
@@ -24,7 +24,7 @@ export class JavaAutonomousClient {
     if(m.type==='ready'){
      if(m.protocol!==1||m.engine!=='java'||m.tickSeconds!==tick)throw new Error('Java protocol mismatch');
      this.tagMap={nearTags:m.nearTags,farTags:m.farTags};
-     this.send({type:'start',alliance:Number(alliance),shooterPower:Number(shooterPower),sensors:this.sensors.read(0,0,this.tagMap)});return;
+     this.send({type:'start',alliance:Number(alliance),shooterPower:Number(shooterPower),cameraFree:Boolean(cameraFree),singleTilt:Boolean(singleTilt),sensors:this.sensors.read(0,0,this.tagMap)});return;
     }
     if(m.type!=='command'||m.protocol!==1||m.runId!==this.runId||m.seq!==this.seq||Math.abs(m.time-this.time)>1e-8)throw new Error('Stale Java command');
     clearTimeout(this.timer);this.pending=false;
