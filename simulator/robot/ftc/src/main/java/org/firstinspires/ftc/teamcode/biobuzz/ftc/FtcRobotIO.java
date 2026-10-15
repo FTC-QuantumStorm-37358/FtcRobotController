@@ -83,6 +83,7 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         return (config.tagHeightAxis==0?p.x:config.tagHeightAxis==1?p.y:p.z)+config.robotOriginHeightInches;
     }
     public void apply(Outputs o) {
+        o=o.copy();if(config.movementOnly){o.intakePower=o.shooterPower=o.feederPower=0;o.pipeline=0;}
         if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.intakePower==0&&o.shooterPower==0&&o.feederPower==0){stopActuators();return;}
         actuatorsStopped=false;
         double[] w=o.wheelPowers();

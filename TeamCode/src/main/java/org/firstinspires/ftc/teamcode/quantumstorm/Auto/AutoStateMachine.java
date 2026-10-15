@@ -16,9 +16,9 @@ import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Intake;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Shooter;
 import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
 
-/** Camera-free hardware wrapper around the simulator's shared controller.
- * Calibrate the simulator start, Pinpoint offsets/directions, simulation waypoints
- * and shooter power on hardware. Unknown inventory stays -1, never assumed full.
+/** Drive-only, camera-free rehearsal of the simulator's shared controller.
+ * Calibrate start, Pinpoint offsets/directions, waypoints and drive speed.
+ * Simulator dwell timers remain; scoring mechanisms are held OFF.
  */
 public final class AutoStateMachine {
     private final LinearOpMode opMode;
@@ -41,7 +41,7 @@ public final class AutoStateMachine {
         drive=new MecanumDrive(opMode.hardwareMap);
         initStage("Initializing odometry_1: verify Pinpoint wiring/configuration");
         odometry=new PinpointOdometry(opMode.hardwareMap,new Pose2D(DistanceUnit.INCH,start.x,start.y,AngleUnit.RADIANS,start.heading));
-        initStage("Initializing shooter and intake");
+        initStage("Initializing and disabling shooter and intake (movement-only)");
         shooter=new Shooter(opMode.hardwareMap);intake=new Intake(opMode.hardwareMap);
         RobotIO io=new RobotIO(){
             private boolean stopped;
@@ -58,25 +58,21 @@ public final class AutoStateMachine {
                 }
                 stopped=false;
                 double[] wheels=o.wheelPowers();drive.setPowers(wheels[0],wheels[1],wheels[2],wheels[3]);
-                if(o.shooterPower>0)shooter.spinUp();else shooter.stop();
-                if(o.feederPower>0)shooter.feed();else shooter.stopFeed();
-                if(o.intakePower>0)intake.start();else intake.stop();
+                // Hardware interlock: autonomous is drive-only even if an upstream output regresses.
+                shooter.stop();intake.stop();
             }
         };
-        routine=new org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine(io,field,false,selectedRoutine);
-        routine.timedFeedSeconds=Constants.AUTO_FEED_TIME_SEC;
-        routine.timedPickupSeconds=Constants.AUTO_PICKUP_TIMEOUT_SEC;
+        routine=new org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine(io,field,false,selectedRoutine,true);
         opMode.telemetry.addData("Autonomous",position.label);
         opMode.telemetry.addData("Required simulator start","X %.3f, Y %.3f in, heading %.1f deg",start.x,start.y,Math.toDegrees(start.heading));
         opMode.telemetry.addLine("Team One/Two use the SAME simulator start; not the old side-wall starts.");
         opMode.telemetry.addLine("Camera-free: Limelight and camera tilt servo are not used.");
         opMode.telemetry.addLine(selectedRoutine==Routine.SINGLE_TILT
-            ?"SINGLE TILT: opening four-ball shot attempt -> park immediately. No pickups."
-            :"Routine: shoot -> Garden -> shoot -> Flower -> shoot -> park at 26 s.");
-        if(selectedRoutine==Routine.SINGLE_TILT)opMode.telemetry.addLine("Assumes starting Hive cell is UP; partner handles second tilt. Tilt is not detected.");
-        opMode.telemetry.addLine("Inventory unknown: timed pickup/feed attempts; Hive tilt unverified.");
-        opMode.telemetry.addLine("Every shot cycle runs its full timer, even with an empty indexer.");
-        opMode.telemetry.addLine("Calibrate start, odometry, waypoints and shooter before testing.");
+            ?"DRIVE ONLY: opening pause -> Garden pickup motion/pause -> park."
+            :"DRIVE ONLY: Hive pause -> Garden -> Hive pause -> Flower -> Hive pause -> optional sweep -> park at 26 s.");
+        opMode.telemetry.addLine("Shooter, feeder and intake remain OFF. No shots, collection or Hive tilt.");
+        opMode.telemetry.addLine("Simulator dwell timers; inventory does not alter the dry-run route.");
+        opMode.telemetry.addLine("Calibrate start, odometry and drive speed; physical arrival times may differ.");
         opMode.telemetry.update();
     }
 
@@ -105,7 +101,7 @@ public final class AutoStateMachine {
                 opMode.telemetry.addData("Routine",routine.status());
                 opMode.telemetry.addData("AprilTags","Not required (camera-free routine)");
                 opMode.telemetry.addData("Navigation","Fixed simulator route; no route search");
-                opMode.telemetry.addData("Balls","Unknown (timed attempts)");
+                opMode.telemetry.addData("Mechanisms","DISABLED: movement-only test");
                 odometry.addTelemetry(opMode.telemetry);opMode.telemetry.update();
                 opMode.idle();
             }

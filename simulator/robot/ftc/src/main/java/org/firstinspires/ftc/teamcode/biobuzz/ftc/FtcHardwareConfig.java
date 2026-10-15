@@ -10,6 +10,7 @@ public class FtcHardwareConfig {
     public boolean calibrated=false;
     /** Default to fixed-pose autonomy; explicitly enable only with calibrated vision. */
     public boolean useVision=false;
+    public boolean movementOnly=true;
     public final FieldLayout field=new FieldLayout();
     public final Pose[] start={field.hive[0],field.hive[1]};
     public String frontLeft="left_front_drive",frontRight="right_front_drive",backLeft="left_back_drive",backRight="right_back_drive";
@@ -31,6 +32,7 @@ public class FtcHardwareConfig {
     public boolean occupiedSignalLow=true;
     public interface BallCounter { int count(); }
     public BallCounter createBallCounter(HardwareMap map) {
+        if(movementOnly)return ()->-1;
         if(!useVision&&ballSlotNames.length==0)return ()->-1; // Unknown, not a fabricated count.
         if(ballSlotNames.length!=4)throw new IllegalStateException("Configure ballSlotNames or provide a sensor-backed BallCounter; the old SoftwareIndexer assumes counts.");
         final DigitalChannel[] slots=new DigitalChannel[4];
@@ -38,6 +40,7 @@ public class FtcHardwareConfig {
         return ()->{int count=0;for(DigitalChannel slot:slots)if(slot.getState()!=occupiedSignalLow)count++;return count;};
     }
     public void validate() {
+        if(movementOnly&&useVision)throw new IllegalArgumentException("Movement-only requires useVision=false");
         if(!calibrated)throw new IllegalStateException("Calibrate field/start poses, pod offsets/directions and shooter power in FtcHardwareConfig; configure vision/count sensors if used, then mark calibrated=true.");
         if(useVision&&(!hiveHeightCalibrated||tagHeightAxis<0||tagHeightAxis>2||!Double.isFinite(robotOriginHeightInches)))
             throw new IllegalStateException("Calibrate robot-space tag heights at tiltUp, including camera pose, vertical axis and origin height.");

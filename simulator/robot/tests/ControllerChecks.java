@@ -218,6 +218,15 @@ public final class ControllerChecks {
         io=new IO();io.pose=f.hive[0];io.count=-1;auto=new AutoStateMachine(io,f,false,AutoStateMachine.Routine.SINGLE_TILT);auto.start(0,.4);
         for(int i=0;i<170;i++)step(io,auto);
         io.time=30;auto.tick();check(!auto.isRunning(),"Stalled single-tilt parking still obeys 30 seconds");stopped(io,"Single tilt hard deadline");
+        for(AutoStateMachine.Routine mode:AutoStateMachine.Routine.values()){
+            io=new IO();io.pose=f.hive[0];io.count=4;io.connected=false;
+            auto=new AutoStateMachine(io,f,false,mode,true);auto.start(0,1);
+            for(int i=0;i<100;i++){step(io,auto);check(io.out.shooterPower==0&&io.out.feederPower==0&&io.out.intakePower==0,"Dry-run shot dwell must never power a mechanism");}
+            check(auto.status().contains("MOVEMENT ONLY"),"Dry run must be visible in telemetry");
+            io.requestStop=true;step(io,auto);check(!auto.isRunning(),"Dry run honors immediate STOP");stopped(io,"Dry-run STOP");
+            io.requestStop=false;auto.start(0,1);io.time+=30;auto.tick();check(!auto.isRunning(),"Dry run hard deadline");stopped(io,"Dry-run deadline");
+            auto.start(0,1);io.odom=false;step(io,auto);check(!auto.isRunning(),"Dry run still requires valid odometry");stopped(io,"Dry-run odometry fault");
+        }
         System.out.println("Shared Java full/single-tilt routines, empty shot cycles, fixed routes, STOP and odometry checks passed.");
     }
 }

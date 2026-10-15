@@ -15,6 +15,9 @@ public final class AutoStateMachine {
     private final Navigator navigator;
     private final boolean useVision;
     private final Routine routine;
+    private final boolean movementOnly;
+    /** Nominal measured-inventory simulator dwell times; not inferred ball counts. */
+    public static final double DRY_GARDEN_SECONDS=.14,DRY_FLOWER_SECONDS=2.34;
     /** Timed attempts when inventory is unavailable; never manufacture a ball count. */
     public double timedFeedSeconds=2.0,timedPickupSeconds=3.0;
     private HiveVision hiveVision;
@@ -40,7 +43,12 @@ public final class AutoStateMachine {
         this(io,field,useVision,Routine.FULL);
     }
     public AutoStateMachine(RobotIO io,FieldLayout field,boolean useVision,Routine routine) {
+        this(io,field,useVision,routine,false);
+    }
+    public AutoStateMachine(RobotIO io,FieldLayout field,boolean useVision,Routine routine,boolean movementOnly) {
         if(routine==null)throw new IllegalArgumentException("Routine is required");
+        if(movementOnly&&useVision)throw new IllegalArgumentException("Movement-only uses fixed simulator poses, not vision");
+        this.movementOnly=movementOnly;
         this.routine=routine;
         this.io=io;this.field=field;this.useVision=useVision;this.navigator=new Navigator(field,io::stopRequested);
     }
@@ -64,6 +72,7 @@ public final class AutoStateMachine {
             +String.format(java.util.Locale.ROOT," · %.1f / 30 s",elapsed())
             +(routine==Routine.SINGLE_TILT?" · Single tilt: opening shots, Garden pickup, then park":" · park starts at 26 s")
             +(extraAttempted?" · Extra pollen sweep attempted":"")
+            +(movementOnly?" · MOVEMENT ONLY: mechanisms OFF, simulator dwell timing":"")
             +(!useVision?" · Camera-free: fixed route, no tag detection, Hive tilt unverified":"")
             +(navigator.isPlanning()?" · Planning route (STOP available)":"")
             +(flowerTiltConfirmed?" · Flower tilt confirmed":"")+(error.isEmpty()?"":" · "+error);
@@ -101,7 +110,7 @@ public final class AutoStateMachine {
     private void fail(String reason,boolean recoverable) { routeFailed=true;error=reason;this.recoverable=recoverable;enter(State.ERROR); }
     /** One bounded search of the known pollen outlet, not camera-dependent ball detection. */
     private void tryExtraPickup(int count) {
-        if(routine!=Routine.FULL||extraAttempted||routeFailed||!gardenDone||!flowerDone||count>=4)return;
+        if(routine!=Routine.FULL||extraAttempted||routeFailed||!gardenDone||!flowerDone||!movementOnly&&count>=4)return;
         Pose flower=field.flower[alliance];
         // Inset from the wall so the forward sweep clears the Flower's housing.
         Pose start=new Pose(flower.x+(alliance==0?2:-2),flower.y,flower.heading);
@@ -141,7 +150,7 @@ public final class AutoStateMachine {
             beginParking();
         }
         else if(extraAttempted&&(state==State.EXTRA_PICKUP||state==State.MOVING&&afterMove==State.EXTRA_PICKUP)
-                &&(elapsed()>=25||sensors.ballCount>=4))enter(State.WAITING);
+                &&(elapsed()>=25||!movementOnly&&sensors.ballCount>=4))enter(State.WAITING);
         double age=now-stateAt;
         State before=state;
         try {
@@ -208,11 +217,12 @@ public final class AutoStateMachine {
                     }
                     break;
                 case INTAKE:
-                    if(sensors.ballCount>=4){finishPickup();break;}
+                    if(movementOnly&&age+1e-9>=(source==Source.GARDEN?DRY_GARDEN_SECONDS:DRY_FLOWER_SECONDS)){finishPickup();break;}
+                    if(!movementOnly&&sensors.ballCount>=4){finishPickup();break;}
                     // Garden intake already runs on approach; reserve the longer
                     // dwell for the Flower's release and sweep.
-                    if(!useVision&&sensors.ballCount<0&&age>=(source==Source.GARDEN?Math.min(1,timedPickupSeconds):timedPickupSeconds)){finishPickup();break;}
-                    if(!useVision&&age>=timedPickupSeconds){
+                    if(!movementOnly&&!useVision&&sensors.ballCount<0&&age>=(source==Source.GARDEN?Math.min(1,timedPickupSeconds):timedPickupSeconds)){finishPickup();break;}
+                    if(!movementOnly&&!useVision&&age>=timedPickupSeconds){
                         // Preserve the measured count, including zero. A partial
                         // pickup does not cancel the remaining Garden/Flower route.
                         error="Pickup attempt ended with "+sensors.ballCount+" measured balls; continuing routine";
@@ -239,7 +249,7 @@ public final class AutoStateMachine {
                     }else out.turnClockwise=.2;
                     break;
                 case EXTRA_PICKUP:
-                    if(age>=1.2||sensors.ballCount>=4){enter(State.WAITING);break;}
+                    if(age>=1.2||!movementOnly&&sensors.ballCount>=4){enter(State.WAITING);break;}
                     Outputs sweep=navigator.move(sensors.pose,extraSweep);
                     if(sweep==null){enter(State.WAITING);break;}
                     out=sweep;out.intakePower=1;out.pipeline=1;break;
@@ -270,6 +280,8 @@ public final class AutoStateMachine {
         // Start intake while approaching a pickup spot, before the chassis pushes the balls away.
         if(running&&state==State.MOVING&&(afterMove==State.INTAKE||afterMove==State.EXTRA_PICKUP)&&sensors.ballCount<4&&sensors.pose.distance(destination)<24){out.intakePower=1;out.pipeline=1;}
         if(running&&state==State.MOVING&&afterMove==State.SHOOTING){out.shooterPower=power;if(Double.isNaN(shooterAt))shooterAt=now;}
+        // Preserve state timers and chassis motion; never energize a mechanism in a dry run.
+        if(movementOnly){out.shooterPower=out.feederPower=out.intakePower=0;out.pipeline=0;}
         if(io.stopRequested()){stop();return;}
         last=out;io.apply(out);
     }

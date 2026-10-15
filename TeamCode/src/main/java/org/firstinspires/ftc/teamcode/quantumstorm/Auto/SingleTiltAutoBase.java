@@ -3,7 +3,7 @@ package org.firstinspires.ftc.teamcode.quantumstorm.Auto;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine.Routine;
 
-/** Opening four-ball attempt, then park; all decisions stay in the shared controller. */
+/** Drive-only rehearsal: opening pause, Garden pickup motion/pause, then park. */
 public abstract class SingleTiltAutoBase extends LinearOpMode {
     protected abstract AutoStartPosition startPosition();
     @Override public final void runOpMode(){

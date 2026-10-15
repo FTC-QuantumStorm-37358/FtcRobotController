@@ -26,6 +26,14 @@ Java uses simulation time in the browser and a monotonic clock on the robot. The
 
 ## FTC repository integration
 
+### Current hardware mode: movement-only rehearsal
+
+All eight QuantumStorm autonomous entries now run the shared controller with movement-only enabled. The SDK BIOBUZZ adapter also defaults `FtcHardwareConfig.movementOnly=true` (with `useVision=false`). The browser stays in normal scoring mode. Robot outputs suppress shooter, feeder, intake and camera-pipeline commands; both hardware adapters independently block scoring mechanisms as a second safeguard. Existing mechanism devices are still initialized and stopped, so their configured hardware names must remain valid. TeleOp is unchanged.
+
+The robot retains the simulator's pauses instead of skipping the shooting/pickup states: nominal one-second spin-up plus two-second feed dwell, 0.14-second Garden dwell and 2.34-second Flower release/sweep dwell. These are dry-run schedule constants, not invented ball counts. Full/unknown inventory cannot skip the route or prolong pickup in movement-only mode. Chassis movement during the Flower sweep and optional leftover sweep remains; no real collection or scoring is expected. Full routines still start parking at 26 seconds; Single Tilt rehearses opening pause → Garden → park. STOP, odometry validation, stalled-motion checks and the 30-second hard deadline remain active.
+
+This matches nominal simulator sequencing and dwell timing, not a guarantee of identical physical arrival times. Real travel time depends on motor speed, odometry, starting pose and field calibration. Do not replace feedback with blind timed driving to force the schedule. The desktop test protocol accepts `movementOnly:true` alongside `cameraFree:true` for regression checks; normal webpage runs omit it.
+
 This folder is bundled inside the FTC repository at `simulator/`. `TeamCode/build.gradle` registers `robot/shared/src/main/java` and `robot/ftc/src/main/java` directly in its Android `sourceSets`. No separate checkout, machine-specific source link, or Java copy is needed. Open the whole repository root in Android Studio and sync Gradle after pulling changes. Opening only TeamCode, copying only AutoStateMachine.java, or an unsuccessful sync can leave `biobuzz` imports unresolved. Missing required shared files now produce a clear Gradle error rather than a cascade of missing symbols. The standalone `shared-sources.gradle` helper remains available for separate simulator checkouts.
 
 Android Studio and the desktop runner compile the same shared sources. Build/deploy the FTC project normally. **Red/Blue Team One/Two Auto** now wrap the shared controller in camera-free mode with the existing QuantumStorm hardware and simulator alliance start. **BIOBUZZ Shared Java Red/Blue** use the configurable FTC adapter; its calibration gate remains in place.
