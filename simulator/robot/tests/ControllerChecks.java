@@ -191,7 +191,11 @@ public final class ControllerChecks {
                     check(auto.destination()==f.farHive[team],"Empty pickup still returns to shooting pose");
                 }
             }
-            check(auto.getState()==AutoStateMachine.State.WAITING,"Three empty shot cycles finish routine");
+            check(auto.getState()==AutoStateMachine.State.WAITING||auto.getState()==AutoStateMachine.State.MOVING,
+                "Three empty shot cycles finish routine or start a bounded leftover search");
+            check(io.out.feederPower==0&&io.out.shooterPower==0,"Optional pickup never adds another shot");
+            io.time=25;auto.tick();check(auto.getState()==AutoStateMachine.State.WAITING,"Optional pickup ends by 25 seconds");
+            stopped(io,"Extra pickup cutoff");
             io.time=26;auto.tick();check(auto.getState()==AutoStateMachine.State.PARK,"Empty routine preserves park trigger");
             io.time=30;auto.tick();stopped(io,"Empty routine hard deadline");
         }
@@ -201,10 +205,12 @@ public final class ControllerChecks {
         for(int team=0;team<2;team++)for(int inventory:new int[]{-1,0,4}){
             io=new IO();io.count=inventory;io.connected=false;io.visible=false;io.pose=f.hive[team];
             auto=new AutoStateMachine(io,f,false,AutoStateMachine.Routine.SINGLE_TILT);auto.start(team,.4);
-            for(int i=0;i<70;i++){step(io,auto);check(io.out.intakePower==0,"Single tilt never enables pickup");}
+            for(int i=0;i<70;i++){step(io,auto);check(io.out.intakePower==0,"Single tilt shoots before pickup");}
             check(io.out.feederPower==1,"Single tilt executes the opening shot even if empty");
-            for(int i=0;i<100;i++){step(io,auto);check(auto.getState()!=AutoStateMachine.State.INTAKE,"Single tilt has no Garden or Flower state");}
-            check(auto.getState()==AutoStateMachine.State.PARK&&io.time<26,"Single tilt parks immediately after opening shot, not at 26 seconds");
+            while(io.time<3.2)step(io,auto);
+            check(auto.destination()==f.garden[team],"Single tilt collects Garden pollen after opening shots");
+            io.pose=f.garden[team];step(io,auto);step(io,auto);io.time+=3.1;auto.tick();
+            check(auto.getState()==AutoStateMachine.State.PARK&&io.time<26,"Single tilt parks after bounded pickup, without another shot");
             check(io.out.feederPower==0&&io.out.shooterPower==0&&io.out.intakePower==0,"Single tilt parking cancels all mechanisms");
             check(io.count==inventory,"Single tilt does not manufacture inventory or a detected tilt");
             io.pose=f.parkingTarget(io.pose,team);step(io,auto);check(!auto.isRunning(),"Single tilt stops when parked");stopped(io,"Single tilt arrival");

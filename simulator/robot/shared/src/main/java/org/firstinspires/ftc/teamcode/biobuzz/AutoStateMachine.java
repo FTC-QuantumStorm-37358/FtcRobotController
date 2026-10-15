@@ -6,7 +6,7 @@ import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.*;
 public final class AutoStateMachine {
     public static final double PARK_START_SECONDS=26.0;
     public static final double AUTO_END_SECONDS=30.0;
-    public enum State { INIT, MOVING, SHOOTING, INTAKE, ERROR, WAIT_TILT, WAITING, PARK, STOPPED }
+    public enum State { INIT, MOVING, SHOOTING, INTAKE, EXTRA_PICKUP, ERROR, WAIT_TILT, WAITING, PARK, STOPPED }
     public enum Routine { FULL, SINGLE_TILT }
     private enum ShootStep { CHECK_BALLS, AIM, FIRE }
     private enum Source { GARDEN, FLOWER }
@@ -26,6 +26,8 @@ public final class AutoStateMachine {
     private String destinationName="",error="";
     private boolean running,gardenDone,flowerDone,flipped,recoverable;
     private boolean flowerTiltConfirmed;
+    private boolean extraAttempted,routeFailed;
+    private Pose extraSweep;
     private int finalShotHiveState;
     private int alliance,retries;
     private double startAt,stateAt,lastNow,power;
@@ -47,7 +49,7 @@ public final class AutoStateMachine {
         this.alliance=alliance;this.power=power;startAt=lastNow=io.nowSeconds();running=true;retries=0;
         hiveVision=useVision?new HiveVision(field,alliance):null;
         navigator.useScriptedRoute(!useVision,alliance);
-        gardenDone=flowerDone=flipped=flowerTiltConfirmed=false;finalShotHiveState=-1;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
+        gardenDone=flowerDone=flipped=flowerTiltConfirmed=extraAttempted=routeFailed=false;finalShotHiveState=-1;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
         shooterAt=Double.NaN;
     }
     public void stop() { boolean alreadyStopped=!running&&state==State.STOPPED;running=false;state=State.STOPPED;last=new Outputs();if(!alreadyStopped)io.apply(last); }
@@ -60,7 +62,8 @@ public final class AutoStateMachine {
     public String status() {
         return state+(state==State.MOVING?" → "+destinationName:state==State.SHOOTING?" · "+shootStep:state==State.INTAKE?" · "+source:"")
             +String.format(java.util.Locale.ROOT," · %.1f / 30 s",elapsed())
-            +(routine==Routine.SINGLE_TILT?" · Single tilt: park after opening shot cycle":" · park starts at 26 s")
+            +(routine==Routine.SINGLE_TILT?" · Single tilt: opening shots, Garden pickup, then park":" · park starts at 26 s")
+            +(extraAttempted?" · Extra pollen sweep attempted":"")
             +(!useVision?" · Camera-free: fixed route, no tag detection, Hive tilt unverified":"")
             +(navigator.isPlanning()?" · Planning route (STOP available)":"")
             +(flowerTiltConfirmed?" · Flower tilt confirmed":"")+(error.isEmpty()?"":" · "+error);
@@ -76,7 +79,6 @@ public final class AutoStateMachine {
     }
     private Pose hive() { return flipped?field.farHive[alliance]:field.hive[alliance]; }
     private void pickup() {
-        if(routine==Routine.SINGLE_TILT){beginParking();return;}
         if(!gardenDone){source=Source.GARDEN;moveThen(field.garden[alliance],"Garden",State.INTAKE);}
         else if(!flowerDone){source=Source.FLOWER;moveThen(field.flower[alliance],"Flower",State.INTAKE);}
         else{finalShotHiveState=flipped?1:0;enter(useVision?State.WAIT_TILT:State.WAITING);}
@@ -84,6 +86,7 @@ public final class AutoStateMachine {
     private void beginParking(){destination=field.parkingTarget(currentPose,alliance);enter(State.PARK);}
     private void finishPickup() {
         if(source==Source.GARDEN)gardenDone=true;if(source==Source.FLOWER)flowerDone=true;
+        if(routine==Routine.SINGLE_TILT){shooterAt=Double.NaN;beginParking();return;}
         if(!useVision){
             // Scripted far-side return, matching the default simulation sequence.
             // This is an assumption, not a detected/confirmed Hive tip.
@@ -95,7 +98,24 @@ public final class AutoStateMachine {
             ?field.hive[alliance]:field.farHive[alliance];
         moveThen(observation,"Hive",State.SHOOTING);
     }
-    private void fail(String reason,boolean recoverable) { error=reason;this.recoverable=recoverable;enter(State.ERROR); }
+    private void fail(String reason,boolean recoverable) { routeFailed=true;error=reason;this.recoverable=recoverable;enter(State.ERROR); }
+    /** One bounded search of the known pollen outlet, not camera-dependent ball detection. */
+    private void tryExtraPickup(int count) {
+        if(routine!=Routine.FULL||extraAttempted||routeFailed||!gardenDone||!flowerDone||count>=4)return;
+        Pose flower=field.flower[alliance];
+        // Inset from the wall so the forward sweep clears the Flower's housing.
+        Pose start=new Pose(flower.x+(alliance==0?2:-2),flower.y,flower.heading);
+        Pose sweep=new Pose(start.x+8*Math.cos(start.heading),start.y+8*Math.sin(start.heading),start.heading);
+        double speed=Math.max(1,20*field.drivePower);
+        // Budget rotation, approach, sweep and margin before the 26-second cutoff.
+        double needed=currentPose.distance(start)*1.6/speed+2.4;
+        double parkNeeded=Math.max(start.distance(field.parkingTarget(start,alliance)),sweep.distance(field.parkingTarget(sweep,alliance)))/speed+.6;
+        if(elapsed()+needed>25||parkNeeded>4||!field.canRotate(currentPose,start.heading)
+                ||!field.clear(currentPose,start,start.heading)||!field.clear(start,sweep,start.heading)
+                ||!field.clear(start,field.parkingTarget(start,alliance),start.heading)
+                ||!field.clear(sweep,field.parkingTarget(sweep,alliance),start.heading))return;
+        extraAttempted=true;extraSweep=sweep;moveThen(start,"Flower leftover pollen",State.EXTRA_PICKUP);
+    }
     private Target tag(Vision vision,double now) {
         return hiveVision.aim(now,flipped);
     }
@@ -120,6 +140,8 @@ public final class AutoStateMachine {
         if(state!=State.PARK&&elapsed()>=PARK_START_SECONDS){
             beginParking();
         }
+        else if(extraAttempted&&(state==State.EXTRA_PICKUP||state==State.MOVING&&afterMove==State.EXTRA_PICKUP)
+                &&(elapsed()>=25||sensors.ballCount>=4))enter(State.WAITING);
         double age=now-stateAt;
         State before=state;
         try {
@@ -216,6 +238,11 @@ public final class AutoStateMachine {
                         Target t=sensors.vision.targets[0];out.forward=Math.abs(t.tx)<20?.3:0;out.turnClockwise=FieldLayout.clip(t.tx*.02,.3);
                     }else out.turnClockwise=.2;
                     break;
+                case EXTRA_PICKUP:
+                    if(age>=1.2||sensors.ballCount>=4){enter(State.WAITING);break;}
+                    Outputs sweep=navigator.move(sensors.pose,extraSweep);
+                    if(sweep==null){enter(State.WAITING);break;}
+                    out=sweep;out.intakePower=1;out.pipeline=1;break;
                 case ERROR:
                     if(recoverable&&retries++<3&&destination!=null)enter(State.MOVING);
                     else if(routine==Routine.SINGLE_TILT)beginParking();
@@ -226,7 +253,7 @@ public final class AutoStateMachine {
                         flowerTiltConfirmed=true;flipped=settled==1;enter(State.WAITING);
                     }else if(age>5)fail("Flower Hive tilt not confirmed",false);
                     break;
-                case WAITING:break; // Hold with all actuators off until parking starts at 26 seconds.
+                case WAITING:tryExtraPickup(sensors.ballCount);break;
                 case PARK:
                     Outputs park=navigator.move(sensors.pose,destination);
                     if(park==null)running=false;else out=park;break;
@@ -241,7 +268,7 @@ public final class AutoStateMachine {
         // State transitions cancel every actuator from the previous state in this same tick.
         if(!running||state==State.ERROR||state!=before)out=new Outputs();
         // Start intake while approaching a pickup spot, before the chassis pushes the balls away.
-        if(running&&state==State.MOVING&&afterMove==State.INTAKE&&sensors.ballCount<4&&sensors.pose.distance(destination)<24){out.intakePower=1;out.pipeline=1;}
+        if(running&&state==State.MOVING&&(afterMove==State.INTAKE||afterMove==State.EXTRA_PICKUP)&&sensors.ballCount<4&&sensors.pose.distance(destination)<24){out.intakePower=1;out.pipeline=1;}
         if(running&&state==State.MOVING&&afterMove==State.SHOOTING){out.shooterPower=power;if(Double.isNaN(shooterAt))shooterAt=now;}
         if(io.stopRequested()){stop();return;}
         last=out;io.apply(out);
