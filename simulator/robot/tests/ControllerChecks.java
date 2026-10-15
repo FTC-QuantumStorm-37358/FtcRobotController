@@ -5,10 +5,10 @@ import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.*;
 public final class ControllerChecks {
     private static final class IO implements RobotIO {
         double time,readDuration=0,stale=0,height=52.02;int count=4,pipeline=0,id=30;boolean connected=true,odom=true,visible=true;
-        Pose pose;Outputs out=new Outputs();boolean requestStop;int reads,applies;
+        Pose pose;Outputs out=new Outputs();boolean requestStop,throwRead;int reads,applies;
         public boolean stopRequested(){return requestStop||Thread.currentThread().isInterrupted();}
         public double nowSeconds(){return time;}
-        public Sensors readSensors(){reads++;time+=readDuration;return new Sensors(pose,time-stale,odom,connected,count,
+        public Sensors readSensors(){reads++;if(throwRead)throw new IllegalStateException("Transient test I2C read");time+=readDuration;return new Sensors(pose,time-stale,odom,connected,count,
             new Vision(visible,pipeline,time,new Target[]{new Target(id,0,0,height),new Target(id+1,0,0,height)}));}
         public void apply(Outputs o){applies++;out=o.copy();}
     }
@@ -223,9 +223,17 @@ public final class ControllerChecks {
             auto=new AutoStateMachine(io,f,false,mode,true);auto.start(0,1);
             for(int i=0;i<100;i++){step(io,auto);check(io.out.shooterPower==0&&io.out.feederPower==0&&io.out.intakePower==0,"Dry-run shot dwell must never power a mechanism");}
             check(auto.status().contains("MOVEMENT ONLY"),"Dry run must be visible in telemetry");
+            AutoStateMachine.State heldState=auto.getState();io.odom=false;step(io,auto);
+            check(auto.isRunning()&&auto.getState()==AutoStateMachine.State.SAFETY_HOLD,"Bad odometry holds motors OFF without ending dry run");stopped(io,"Dry-run safety hold");
+            io.time+=.5;step(io,auto);io.odom=true;step(io,auto);
+            check(auto.isRunning()&&auto.getState()==heldState,"Recovered sensor resumes the interrupted pretend-shoot state");
+            io.throwRead=true;step(io,auto);check(auto.isRunning()&&auto.getState()==AutoStateMachine.State.SAFETY_HOLD,"Transient read exception must not exit dry run");stopped(io,"Read exception hold");
+            io.throwRead=false;step(io,auto);check(auto.isRunning()&&auto.getState()==heldState,"Read recovery resumes without skipping dwell");
             io.requestStop=true;step(io,auto);check(!auto.isRunning(),"Dry run honors immediate STOP");stopped(io,"Dry-run STOP");
             io.requestStop=false;auto.start(0,1);io.time+=30;auto.tick();check(!auto.isRunning(),"Dry run hard deadline");stopped(io,"Dry-run deadline");
-            auto.start(0,1);io.odom=false;step(io,auto);check(!auto.isRunning(),"Dry run still requires valid odometry");stopped(io,"Dry-run odometry fault");
+            auto.start(0,1);io.odom=false;step(io,auto);check(auto.isRunning(),"Dry run stays alive with invalid odometry but no drive");stopped(io,"Dry-run odometry fault");
+            io.time+=26;auto.tick();check(auto.isRunning()&&auto.getState()==AutoStateMachine.State.PARK,"Parking state starts at deadline even during sensor hold");stopped(io,"Invalid-odometry parking hold");
+            io.time+=4;auto.tick();check(!auto.isRunning(),"An unrecovered sensor still cannot extend autonomous beyond 30 seconds");stopped(io,"Sensor hold deadline");
         }
         System.out.println("Shared Java full/single-tilt routines, empty shot cycles, fixed routes, STOP and odometry checks passed.");
     }

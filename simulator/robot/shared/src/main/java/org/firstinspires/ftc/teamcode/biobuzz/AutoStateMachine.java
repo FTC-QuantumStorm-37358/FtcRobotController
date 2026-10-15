@@ -6,7 +6,7 @@ import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.*;
 public final class AutoStateMachine {
     public static final double PARK_START_SECONDS=26.0;
     public static final double AUTO_END_SECONDS=30.0;
-    public enum State { INIT, MOVING, SHOOTING, INTAKE, EXTRA_PICKUP, ERROR, WAIT_TILT, WAITING, PARK, STOPPED }
+    public enum State { INIT, MOVING, SHOOTING, INTAKE, EXTRA_PICKUP, SAFETY_HOLD, ERROR, WAIT_TILT, WAITING, PARK, STOPPED }
     public enum Routine { FULL, SINGLE_TILT }
     private enum ShootStep { CHECK_BALLS, AIM, FIRE }
     private enum Source { GARDEN, FLOWER }
@@ -31,6 +31,9 @@ public final class AutoStateMachine {
     private boolean flowerTiltConfirmed;
     private boolean extraAttempted,routeFailed;
     private Pose extraSweep;
+    private State resumeState;
+    private double holdAt,resumeStateAt;
+    private boolean fallbackActive;
     private int finalShotHiveState;
     private int alliance,retries;
     private double startAt,stateAt,lastNow,power;
@@ -58,11 +61,13 @@ public final class AutoStateMachine {
         hiveVision=useVision?new HiveVision(field,alliance):null;
         navigator.useScriptedRoute(!useVision,alliance);
         gardenDone=flowerDone=flipped=flowerTiltConfirmed=extraAttempted=routeFailed=false;finalShotHiveState=-1;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
+        resumeState=null;fallbackActive=false;currentPose=null;
         shooterAt=Double.NaN;
     }
     public void stop() { boolean alreadyStopped=!running&&state==State.STOPPED;running=false;state=State.STOPPED;last=new Outputs();if(!alreadyStopped)io.apply(last); }
     public boolean isRunning() { return running; }
     public State getState() { return state; }
+    public String lastError() { return error; }
     public Outputs getOutputs() { return last.copy(); }
     public Pose destination() { return running&&(state==State.MOVING||state==State.PARK)?destination:null; }
     public java.util.List<Pose> route() { return running&&(state==State.MOVING||state==State.PARK)?navigator.route():new java.util.ArrayList<Pose>(); }
@@ -80,6 +85,7 @@ public final class AutoStateMachine {
     private void enter(State state) { this.state=state;stateAt=io.nowSeconds();navigator.reset();if(state==State.SHOOTING)shootStep=ShootStep.CHECK_BALLS; }
     private void moveThen(Pose target,String name,State after) {
         destination=target;destinationName=name;afterMove=after;enter(State.MOVING);
+        if(movementOnly){fallbackActive=false;navigator.useScriptedRoute(true,alliance);}
         Pose current=currentPose;
         progressPose=current;progressAt=io.nowSeconds();
         // Never run a synchronous search just to estimate a deadline.
@@ -108,6 +114,10 @@ public final class AutoStateMachine {
         moveThen(observation,"Hive",State.SHOOTING);
     }
     private void fail(String reason,boolean recoverable) { routeFailed=true;error=reason;this.recoverable=recoverable;enter(State.ERROR); }
+    private void safetyHold(String reason,double now){
+        error=reason;
+        if(state!=State.SAFETY_HOLD&&state!=State.PARK){resumeState=state;resumeStateAt=stateAt;holdAt=now;enter(State.SAFETY_HOLD);}
+    }
     /** One bounded search of the known pollen outlet, not camera-dependent ball detection. */
     private void tryExtraPickup(int count) {
         if(routine!=Routine.FULL||extraAttempted||routeFailed||!gardenDone||!flowerDone||!movementOnly&&count>=4)return;
@@ -132,18 +142,37 @@ public final class AutoStateMachine {
         if(io.stopRequested()){stop();return;}
         Outputs out=new Outputs();double now=io.nowSeconds();
         if(!running){last=out;io.apply(out);return;}
-        Sensors sensors=io.readSensors();now=io.nowSeconds();
+        Sensors sensors;String readError="";
+        try{sensors=io.readSensors();}
+        catch(java.util.concurrent.CancellationException e){stop();return;}
+        catch(RuntimeException e){
+            if(!movementOnly)throw e;
+            readError="Sensor read failed: "+e.getMessage();
+            sensors=new Sensors(currentPose==null?field.hive[alliance]:currentPose,io.nowSeconds(),false,false,-1,Vision.empty(0,io.nowSeconds()));
+        }
+        now=io.nowSeconds();
         if(io.stopRequested()){stop();return;}
         if(!Double.isFinite(now)||now<lastNow){fail("Clock moved backward",false);running=false;last=out;io.apply(out);return;}lastNow=now;
         if(elapsed()>=AUTO_END_SECONDS){running=false;error="30-second autonomous limit; all actuators stopped";last=out;io.apply(out);return;}
+        // A safety hold keeps the loop alive but never drives on invalid measurements.
+        if(movementOnly&&state!=State.PARK&&elapsed()>=PARK_START_SECONDS){
+            destination=currentPose==null?null:field.parkingTarget(currentPose,alliance);resumeState=null;enter(State.PARK);
+        }
         if(!sensors.odometryValid||!sensors.pose.finite()||now-sensors.sampledAt<0||now-sensors.sampledAt>.25){
+            if(movementOnly){safetyHold(readError.isEmpty()?"Odometry unavailable or stale; drive held OFF":readError,now);last=out;io.apply(out);return;}
             fail("Odometry unavailable or stale",false);running=false;last=out;io.apply(out);return;
         }
-        if(sensors.ballCount<-1||sensors.ballCount>4||(useVision&&(sensors.ballCount<0||!sensors.cameraConnected))){
+        if(!movementOnly&&(sensors.ballCount<-1||sensors.ballCount>4||(useVision&&(sensors.ballCount<0||!sensors.cameraConnected)))){
             fail(sensors.ballCount<0||sensors.ballCount>4?"Ball-count sensor unavailable":"Camera disconnected",false);running=false;last=out;io.apply(out);return;
         }
         if(useVision)hiveVision.update(sensors.vision,now);
         currentPose=sensors.pose;
+        if(movementOnly&&state==State.SAFETY_HOLD){
+            double held=now-holdAt;state=resumeState;resumeState=null;stateAt=resumeStateAt+held;
+            if(!Double.isNaN(shooterAt))shooterAt+=held;
+            navigator.reset();progressPose=currentPose;progressAt=now;error="";
+        }
+        if(state==State.PARK&&destination==null)destination=field.parkingTarget(currentPose,alliance);
         // The final four seconds belong exclusively to parking, regardless of
         // which scoring or pickup state was active before the transition.
         if(state!=State.PARK&&elapsed()>=PARK_START_SECONDS){
@@ -272,7 +301,11 @@ public final class AutoStateMachine {
         }catch(java.util.concurrent.CancellationException e){
             stop();return;
         }catch(IllegalStateException e){
-            if(state==State.PARK)running=false;
+            if(movementOnly&&state==State.MOVING&&!fallbackActive&&destination!=null){
+                fallbackActive=true;navigator.useScriptedRoute(false,alliance);progressPose=currentPose;progressAt=now;
+                error="Fixed path unavailable; safe replanning: "+e.getMessage();out=new Outputs();
+            }
+            else if(state==State.PARK){error="Parking route unavailable: "+e.getMessage();running=false;}
             else fail(e.getMessage(),true);
         }
         // State transitions cancel every actuator from the previous state in this same tick.
