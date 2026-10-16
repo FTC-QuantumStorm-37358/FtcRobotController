@@ -17,6 +17,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
     // Mechanism motors
     private DcMotor intake;
     private DcMotor shooter;
+    private DcMotor shooter2;
 
     // CR servos
     private CRServo rightIntakeServo;
@@ -30,10 +31,29 @@ public class QuantumStormTeleOp extends LinearOpMode {
     private int intakeState = 0;
 
     private boolean shooterRunning = false;
+    private boolean shooter2Running = false;
 
     // For intake toggle buttons
     private boolean previousA = false;
     private boolean previousB = false;
+
+    // Shooter powers, each adjustable independently
+    private double shooterSpeed = Constants.SHOOTER_1_POWER;
+    private double shooter2Speed = Constants.SHOOTER_2_POWER;
+
+    // For the shooter on/off toggles
+    private boolean previousGamepad2A = false;
+    private boolean previousGamepad2B = false;
+
+    // For the shoulder buttons and triggers used as speed steps
+    private boolean previousLeftBumper = false;
+    private boolean previousLeftTrigger = false;
+    private boolean previousRightBumper = false;
+    private boolean previousRightTrigger = false;
+
+    // Powers before the most recent change, for tuning telemetry
+    private double previousShooterSpeed = Constants.SHOOTER_1_POWER;
+    private double previousShooter2Speed = Constants.SHOOTER_2_POWER;
 
     @Override
     public void runOpMode() {
@@ -48,6 +68,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         shooter = hardwareMap.get(DcMotor.class, Constants.SHOOTER_MOTOR);
 
+        shooter2 = hardwareMap.get(DcMotor.class, Constants.SHOOTER_2_MOTOR);
+
         rightIntakeServo = hardwareMap.get(CRServo.class, Constants.RIGHT_INTAKE_SERVO);
 
         leftIntakeServo = hardwareMap.get(CRServo.class, Constants.LEFT_INTAKE_SERVO);
@@ -61,6 +83,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         intake.setDirection(DcMotor.Direction.FORWARD);
         shooter.setDirection(DcMotor.Direction.FORWARD);
+        shooter2.setDirection(DcMotor.Direction.FORWARD);
 
 
         // =========================================================
@@ -86,6 +109,9 @@ public class QuantumStormTeleOp extends LinearOpMode {
         shooter.setZeroPowerBehavior(
                 DcMotor.ZeroPowerBehavior.FLOAT);
 
+        shooter2.setZeroPowerBehavior(
+                DcMotor.ZeroPowerBehavior.FLOAT);
+
 
         // =========================================================
         // START EVERYTHING STOPPED
@@ -106,8 +132,12 @@ public class QuantumStormTeleOp extends LinearOpMode {
         telemetry.addLine("");
 
         telemetry.addLine("GAMEPAD 2 - SHOOTER");
-        telemetry.addLine("Y = Shooter ON");
-        telemetry.addLine("X = Shooter OFF");
+        telemetry.addLine("A = Shooter 1 ON/OFF");
+        telemetry.addLine("B = Shooter 2 ON/OFF");
+        telemetry.addLine("LB = Shooter 1 Power Up");
+        telemetry.addLine("LT = Shooter 1 Power Down");
+        telemetry.addLine("RB = Shooter 2 Power Up");
+        telemetry.addLine("RT = Shooter 2 Power Down");
         telemetry.addLine("D-Pad UP = Shooter Forward");
         telemetry.addLine("D-Pad DOWN = Shooter Reverse");
 
@@ -190,24 +220,82 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // GAMEPAD 2 - SHOOTER MOTOR
             // =====================================================
 
-            // Y = shooter ON
-            if (gamepad2.y) {
-                shooterRunning = true;
+            boolean currentGamepad2A = gamepad2.a;
+            boolean currentGamepad2B = gamepad2.b;
+
+            // Triggers are analog, so treat them as pressed past a threshold
+            boolean currentLeftBumper = gamepad2.left_bumper;
+            boolean currentLeftTrigger =
+                    gamepad2.left_trigger > Constants.TRIGGER_THRESHOLD;
+            boolean currentRightBumper = gamepad2.right_bumper;
+            boolean currentRightTrigger =
+                    gamepad2.right_trigger > Constants.TRIGGER_THRESHOLD;
+
+
+            // A = shooter 1 on/off toggle
+            if (currentGamepad2A && !previousGamepad2A) {
+                shooterRunning = !shooterRunning;
             }
 
-            // X = shooter OFF
-            if (gamepad2.x) {
-                shooterRunning = false;
+            // B = shooter 2 on/off toggle
+            if (currentGamepad2B && !previousGamepad2B) {
+                shooter2Running = !shooter2Running;
             }
+
+
+            // LB = shooter 1 power up
+            if (currentLeftBumper && !previousLeftBumper) {
+                previousShooterSpeed = shooterSpeed;
+                shooterSpeed = clampShooterPower(
+                        shooterSpeed + Constants.SHOOTER_POWER_INCREMENT);
+            }
+
+            // LT = shooter 1 power down
+            if (currentLeftTrigger && !previousLeftTrigger) {
+                previousShooterSpeed = shooterSpeed;
+                shooterSpeed = clampShooterPower(
+                        shooterSpeed - Constants.SHOOTER_POWER_INCREMENT);
+            }
+
+            // RB = shooter 2 power up
+            if (currentRightBumper && !previousRightBumper) {
+                previousShooter2Speed = shooter2Speed;
+                shooter2Speed = clampShooterPower(
+                        shooter2Speed + Constants.SHOOTER_POWER_INCREMENT);
+            }
+
+            // RT = shooter 2 power down
+            if (currentRightTrigger && !previousRightTrigger) {
+                previousShooter2Speed = shooter2Speed;
+                shooter2Speed = clampShooterPower(
+                        shooter2Speed - Constants.SHOOTER_POWER_INCREMENT);
+            }
+
+
+            previousGamepad2A = currentGamepad2A;
+            previousGamepad2B = currentGamepad2B;
+            previousLeftBumper = currentLeftBumper;
+            previousLeftTrigger = currentLeftTrigger;
+            previousRightBumper = currentRightBumper;
+            previousRightTrigger = currentRightTrigger;
 
 
             if (shooterRunning) {
 
-                shooter.setPower(Constants.SHOOTER_POWER);
+                shooter.setPower(shooterSpeed);
 
             } else {
 
                 shooter.setPower(0);
+            }
+
+            if (shooter2Running) {
+
+                shooter2.setPower(shooter2Speed);
+
+            } else {
+
+                shooter2.setPower(0);
             }
 
 
@@ -269,19 +357,30 @@ public class QuantumStormTeleOp extends LinearOpMode {
             telemetry.addLine("=== DRIVER 2 ===");
 
 
-            if (shooterRunning) {
+            telemetry.addData(
+                    "Shooter 1",
+                    "%s @ %.0f%%",
+                    shooterRunning ? "ON" : "OFF",
+                    shooterSpeed * 100);
 
-                telemetry.addData(
-                        "Shooter",
-                        "RUNNING @ %.0f%%",
-                        Constants.SHOOTER_POWER * 100);
+            // Previous -> current, so a power that works can be written down
+            telemetry.addData(
+                    "Shooter 1 Power",
+                    "%.2f -> %.2f",
+                    previousShooterSpeed,
+                    shooterSpeed);
 
-            } else {
+            telemetry.addData(
+                    "Shooter 2",
+                    "%s @ %.0f%%",
+                    shooter2Running ? "ON" : "OFF",
+                    shooter2Speed * 100);
 
-                telemetry.addData(
-                        "Shooter",
-                        "STOPPED");
-            }
+            telemetry.addData(
+                    "Shooter 2 Power",
+                    "%.2f -> %.2f",
+                    previousShooter2Speed,
+                    shooter2Speed);
 
 
             if (gamepad2.dpad_up) {
@@ -321,9 +420,27 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         intake.setPower(0);
         shooter.setPower(0);
+        shooter2.setPower(0);
 
         rightIntakeServo.setPower(0);
         leftIntakeServo.setPower(0);
         shooterServo.setPower(0);
+    }
+
+    /**
+     * Keeps an adjustable shooter power inside the configured bounds.
+     * Shooter 1 runs negative, so the range spans both signs.
+     */
+    private double clampShooterPower(double power) {
+
+        if (power < Constants.SHOOTER_POWER_MIN) {
+            return Constants.SHOOTER_POWER_MIN;
+        }
+
+        if (power > Constants.SHOOTER_POWER_MAX) {
+            return Constants.SHOOTER_POWER_MAX;
+        }
+
+        return power;
     }
 }
