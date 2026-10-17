@@ -20,6 +20,8 @@ for(const mode of AUTONOMOUS_MODES.filter(m=>m.teamRole)){
   const field=buildField(),robot=buildRobot(),scene=new T.Scene();scene.add(field,robot);
   const game=new GamePhysics(field,scene,robot);placeAutonomousRobot(game,mode);
   assert(robotAllowed(game.pose),'Legal start');
+  if(mode.teamRole===2){assert.equal(game.pose.z,mode.alliance===0?-6:6);assert(Math.abs(game.pose.z)<10,'Start is between Loading Zone and side Flower, not in the Loading Zone');}
+  const stock=game.balls.filter(b=>b.storedOutside);assert.equal(stock.length,10);assert(stock.every(b=>!b.body.world&&Math.abs(b.body.position.x)/.0254>72));
   assert.equal(game.hives[mode.alliance].tilts,mode.teamRole===2?1:0,'Partner tilt must be physically complete at Team 2 start');
   for(const side of [-1,1])assert.equal(game.balls.filter(b=>b.startZone==='garden'&&Math.sign(b.body.position.x)===side).length,4);
   const sources=[],sensors=new SimSensors(game,{enabled:false});
@@ -44,6 +46,7 @@ for(const mode of AUTONOMOUS_MODES.filter(m=>m.teamRole)){
   assert.equal(r.state,'PARK');assert(!r.running&&time<30,'Park before deadline');
   assert.deepEqual(sources,[...Array(4).fill('robot'),...Array(mode.teamRole===2?4:0).fill('garden')]);
   assert.equal(pickups.size,mode.teamRole===2?4:0);
+  assert(stock.every(b=>!b.held&&!b.body.world&&Math.abs(b.body.position.x)/.0254>72),'Unused nectar remains outside throughout autonomous');
   assert.equal(game.hives[mode.alliance].tilts,mode.teamRole===2?2:1,'Physical tilt, not state label');
   assert(!sources.includes('flower'),'Role routines must use only preloads and Garden pollen');
   assert(Math.hypot(game.pose.x-(mode.alliance===0?-59:59),game.pose.z-(mode.alliance===0?-30:30))<.7,'Actual park pose');

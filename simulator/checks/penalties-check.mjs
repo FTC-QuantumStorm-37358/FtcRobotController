@@ -10,12 +10,12 @@ const ctx=new Proxy({},{get:()=>()=>{},set:()=>true});globalThis.document={creat
 const scene=new T.Scene(),field=buildField(),robot=buildRobot();scene.add(field,robot);const game=new GamePhysics(field,scene,robot),r=game.rules;
 assert.equal(Object.keys(RULES).length,41);
 // Real measured pickup: warning, no invented foul points or automatic intent.
-const blue=game.balls.find(b=>b.type==='blue'&&b.startZone==='loading');game.inventory.pop().held=false;assert(game.collect(blue));assert.equal(r.events.at(-1).id,'G408');assert.equal(r.points,0);assert.equal(r.yellow,0);
+const blue=game.createBall('blue',[40,1.81,0]);game.inventory.pop().held=false;assert(game.collect(blue));assert.equal(r.events.at(-1).id,'G408');assert.equal(r.points,0);assert.equal(r.yellow,0);
 r.assess('G408',1);r.assess('G408',1);assert.equal(r.yellow,1); // per MATCH
 r.assess('G409',1);assert(r.red);assert.equal(new PracticeScore().read(game).total,0);
 game.reset();assert.equal(game.rules.events.length,0);assert(!game.rules.disabled);
 // Original field nectar is not charged; robot-handled nectar entering early is.
-const nectar=game.balls.find(b=>b.type==='red'&&b.startZone==='loading'),f=game.flowers[0];nectar.body.position.set(f.x*INCH,10*INCH,f.z*INCH);r.sample(game);assert.equal(r.points,0);nectar.robotHandled=true;r.sample(game);r.sample(game);assert.equal(r.points,20);assert.equal(r.events[0].id,'G410');assert.equal(new PracticeScore().read(game).total,0);assert.equal(new PracticeScore().read(game).opponentPenaltyPoints,20);
+const nectar=game.createBall('red',[40,1.81,0]),f=game.flowers[0];nectar.body.position.set(f.x*INCH,10*INCH,f.z*INCH);r.sample(game);assert.equal(r.points,0);nectar.robotHandled=true;r.sample(game);r.sample(game);assert.equal(r.points,20);assert.equal(r.events[0].id,'G410');assert.equal(new PracticeScore().read(game).total,0);assert.equal(new PracticeScore().read(game).opponentPenaltyPoints,20);
 r.reset();nectar.penaltyFlower=null;nectar.previousRulePosition=null;r.start(0);r.updateClock(97999);assert(!r.lastMinute);r.updateClock(98000);assert(r.lastMinute);r.sample(game);assert.equal(r.points,0);
 // Clock continues independently of physics; exact period boundaries.
 r.updateClock(29999);assert.equal(r.phase,'auto');r.manualInput();r.manualInput();assert.equal(r.events.length,1);r.updateClock(30000);assert.equal(r.phase,'transition');r.powered(true);r.powered(true);assert.equal(r.events.length,2);r.updateClock(38000);assert.equal(r.phase,'teleop');r.updateClock(158000);assert.equal(r.phase,'ended');r.powered(true);assert.equal(r.events.at(-1).id,'G404');

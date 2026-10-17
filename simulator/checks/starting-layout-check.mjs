@@ -3,9 +3,17 @@ const ctx=new Proxy({},{get:()=>()=>{},set:()=>true});globalThis.document={creat
 const {buildField,buildRobot}=await import('../dist/model.js');const {GamePhysics}=await import('../dist/game-physics.js');
 const field=buildField(),robot=buildRobot(),scene=new T.Scene();scene.add(field,robot);const g=new GamePhysics(field,scene,robot);
 assert.equal(g.balls.length,44);assert.equal(g.inventory.length,4);assert(g.inventory.every(b=>b.type==='pollen'));
-for(const type of ['red','blue']){const nectar=g.balls.filter(b=>b.type===type);assert.equal(nectar.filter(b=>b.startZone==='hive').length,3);assert.equal(nectar.filter(b=>b.startZone==='loading').length,5);}
+const staged=[];
+for(const type of ['red','blue']){
+ const nectar=g.balls.filter(b=>b.type===type);assert.equal(nectar.filter(b=>b.startZone==='hive').length,3);
+ const stock=nectar.filter(b=>b.startZone==='alliance');assert.equal(stock.length,5);
+ for(const b of stock){assert(b.storedOutside&&!b.body.world);assert.equal(Math.sign(b.body.position.x),type==='red'?-1:1);assert(Math.abs(b.body.position.x)/.0254>73+b.r/.0254);staged.push([b,b.body.position.clone()]);}
+}
+assert(!g.balls.some(b=>b.startZone==='loading'),'No nectar in the Loading Zones');
 assert.equal(g.balls.filter(b=>b.startZone==='garden').length,8);assert(g.flowers.every(f=>f.queue.length===4));assert(g.hives.every(h=>h.counts.reduce((n,c)=>n+c.nectar,0)===3));
 for(let i=0;i<120;i++)g.step(1/60);assert(g.flowers.every(f=>!f.released&&f.queue.length===4));assert(g.hives.every(h=>h.tilts===0&&h.counts.reduce((n,c)=>n+c.nectar,0)===3));
+for(const [b,p] of staged){assert.deepEqual(b.body.position,p,'Outside stock must not be clamped into the field');assert(b.mesh.visible);}
+const loaded=g.inventory;g.inventory=[];for(const [b] of staged)assert.equal(g.collect(b),false,'Outside stock cannot be collected');g.inventory=loaded;
 // Empty the inventory without teleporting flowers into it; test release and later movement pickup.
 for(const item of g.inventory){item.held=false;scene.add(item.mesh);item.mesh.visible=true;item.body.position.set(0,.1,0);g.world.addBody(item.body);}g.inventory=[];
 const flower=g.flowers.find(f=>f.x===-24);g.pose={x:flower.x,z:flower.z+11.4,theta:0};g.syncRobot();const ids=[...flower.queue];g.drive(1,0,0,1/60);assert(flower.released);const distance=g.travelDistance;

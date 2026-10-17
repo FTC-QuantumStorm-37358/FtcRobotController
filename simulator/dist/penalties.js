@@ -53,7 +53,7 @@ export class Penalties{
  collected(item){this.active.delete('G407');const opponent=this.alliance===0?'blue':'red';if(item.type===opponent)this.assess('G408',0,{key:`G408:${item.body.id}:${item.pickups}`,detail:`${this.alliance===0?'Red':'Blue'} robot collected ${opponent} nectar.`,source:'Automatic'});if(item.freshSpill)this.assess('G409',0,{key:`G409:${item.body.id}:${item.spills}`,source:'Automatic'});}
  sample(game){
   this.episode('G407',game.inventory.length>4);
-  for(const b of game.balls){if(b.held||b.storedInFlower||!b.robotHandled)continue;
+  for(const b of game.balls){if(b.held||b.storedInFlower||b.storedOutside||!b.robotHandled)continue;
    const p=b.body.position,r=b.r,x=p.x/INCH,y=p.y/INCH,z=p.z/INCH,ri=r/INCH;
    const flower=game.flowers.find(f=>Math.hypot(x-f.x,z-f.z)<2.22+ri&&y+ri>4.4&&y-ri<21.5);
    if(flower&&b.penaltyFlower!==flower.index){b.penaltyFlower=flower.index;

@@ -22,7 +22,7 @@ export class PracticeScore{
   const hive=game.hives[this.alliance],raised=game.raisedCell(this.alliance),counts=hive.counts[hive.cells.indexOf(raised)],cell=counts.pollen+counts.nectar;
   let garden=0;const flowers=game.flowers.map(f=>({f,items:[]}));
   for(const ball of game.balls){
-   if(ball.held)continue;const p={x:ball.body.position.x/INCH,y:ball.body.position.y/INCH,z:ball.body.position.z/INCH},r=ball.r/INCH;
+   if(ball.held||ball.storedOutside)continue;const p={x:ball.body.position.x/INCH,y:ball.body.position.y/INCH,z:ball.body.position.z/INCH},r=ball.r/INCH;
    // At least partial garden overlap; balls in the air above the garden qualify
    // provisionally because this zone is infinitely tall (final assessment waits for rest).
    const gx=this.alliance===0?p.x:-p.x,gz=this.alliance===0?p.z:-p.z;
