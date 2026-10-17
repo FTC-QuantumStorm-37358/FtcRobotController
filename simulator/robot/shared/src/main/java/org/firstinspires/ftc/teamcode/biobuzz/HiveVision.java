@@ -14,11 +14,6 @@ public final class HiveVision {
     private int candidate=-1,confirmed=-1,frames;
     public HiveVision(FieldLayout field,int alliance) {
         if(alliance<0||alliance>1)throw new IllegalArgumentException("Alliance must be 0 or 1");
-        if(!Double.isFinite(field.upperTagHeight)||!Double.isFinite(field.lowerTagHeight)
-                ||!Double.isFinite(field.tagHeightTolerance)||!Double.isFinite(field.tagHeightMotionTolerance)
-                ||field.tagHeightTolerance<=0||field.tagHeightMotionTolerance<=0
-                ||field.upperTagHeight-field.lowerTagHeight<=2*field.tagHeightTolerance)
-            throw new IllegalArgumentException("Hive height calibration must have separate up/down bands");
         this.field=field;this.alliance=alliance;
     }
     public void update(Vision vision,double now) {

@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 
-@TeleOp(name = "Quantum Storm Two Driver", group = "Quantum Storm")
+@TeleOp(name = "Quantum Storm Two Driver1", group = "Quantum Storm")
 public class QuantumStormTeleOp extends LinearOpMode {
 
     // Drive chain
