@@ -36,6 +36,9 @@ public final class SimulatorMain implements RobotIO {
             if(id.length()<1||id.length()>80||next!=0||Json.number(m,"time")!=0)throw new IllegalArgumentException("Invalid start envelope");
             auto.stop();runId=id;seq=0;time=0;sensors=decodeSensors(Json.object(m.get("sensors")));
             AutoStateMachine.Routine routine=m.containsKey("singleTilt")&&Json.bool(m,"singleTilt")?AutoStateMachine.Routine.SINGLE_TILT:AutoStateMachine.Routine.FULL;
+            int role=m.containsKey("teamRole")?Json.integer(m,"teamRole"):0;
+            if(role<0||role>2)throw new IllegalArgumentException("Invalid team role");
+            if(role!=0)routine=role==1?AutoStateMachine.Routine.TEAM_ONE:AutoStateMachine.Routine.TEAM_TWO;
             auto=new AutoStateMachine(this,field,!m.containsKey("cameraFree")||!Json.bool(m,"cameraFree"),routine,m.containsKey("movementOnly")&&Json.bool(m,"movementOnly"));
             auto.start(Json.integer(m,"alliance"),Json.number(m,"shooterPower"));auto.tick();
         }else{

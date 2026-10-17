@@ -1,5 +1,16 @@
 # Shared Java robot control
 
+## Simulator partner roles (current webpage)
+
+The four main webpage modes now select separate simulator roles via `teamRole`:
+
+- **Red/Blue Team One Auto:** start in front of that alliance's Hive, shoot four preloaded pollen, clear the nearby Flower, then park immediately. No Garden/Flower collection.
+- **Red/Blue Team Two Auto:** start at browser X/Z `(-62.9,-36)` / `(62.9,36)`, along the Loading Zone centerline and inset to fit the chassis. Its partner's first tilt is a stated solo-simulation initial condition: four physical partner pollen are placed into the initial raised Cell and physics advances until the first tilt settles. These are not counted as this robot's shots. The robot shoots four preloads at the far face, collects the Garden's four pollen, shoots those four at the far face, allows 3.5 seconds of bounded flight/settling time, then parks. This timer is not sensor confirmation; regression checks require a real second tilt before parking starts.
+
+Each Garden contains exactly **four pollen**, without stacked extras. Base practice stock is 28 pollen and 16 nectar; Team Two setup adds its partner's four scored pollen explicitly. This is the requested practice setup, not a claim about official full-field stock. Both roles retain manual stop, collision checks, a 26-second parking fallback and a 30-second hard stop. The four legacy Single Tilt selections and direct legacy Full-controller tests remain available separately.
+
+These changes are **simulator selections only**: uploaded FTC OpMode wrappers and autonomous-only PR #10 are unchanged. The webpage's Java filename identifies the corresponding robot entry, not a promise that its uploaded hardware mode uses this simulator role. All routine decisions live in shared Java (`TEAM_ONE` / `TEAM_TWO`); JavaScript only selects the role, initializes the scene and supplies physics/transport. Test with `node checks/team-role-check.mjs` from `simulator/`.
+
 The browser and the robot compile the same files in `shared/src/main/java`. Change autonomous decisions there once. The browser has no JavaScript autonomous state machine.
 
 | Folder | Responsibility |
@@ -20,7 +31,7 @@ npm start
 
 Open `http://localhost:8000`. Start autonomous with the UI button. Restart the server after changing Java sources; it compiles them on startup. Refresh the browser after changing HTML/JavaScript. A compile error disables autonomous but leaves manual simulation available.
 
-Choose a mode in **Autonomous mode / Java file**, then click **Start autonomous**. The dropdown has the four full routines and four Single Tilt routines, with the mapped OpMode filename shown underneath. Changing selection resets the field to that alliance start; starting also gives a fresh field/four preloads while preserving shooter settings. Team One/Two share their alliance start. All eight entries use the camera-free shared Java routine/configuration used by the robot; the browser does not execute FTC hardware wrapper files or arbitrary Java files. The menu is locked during a run/timed match; stop or reset before switching. Blue choices switch aiming, robot label, scoring and opponent-nectar checks to blue. The optional synthetic vision preview is not required.
+Choose a mode in **Autonomous mode / Java file**, then click **Start autonomous**. The dropdown has four partner-role routines and four legacy Single Tilt routines, with the mapped OpMode filename shown underneath. Changing selection resets the field to that alliance start; starting also gives a fresh field/four preloads while preserving shooter settings. Team One/Two use their separate role starts described above. Main selections use simulator role overrides of the shared controller; legacy selections retain the older configuration. The browser does not execute FTC hardware wrapper files or arbitrary Java files. The menu is locked during a run/timed match; stop or reset before switching. Blue choices switch aiming, robot label, scoring and opponent-nectar checks to blue. The optional synthetic vision preview is not required.
 
 Java uses simulation time in the browser and a monotonic clock on the robot. The browser advances physics in 20 ms steps only after the matching Java response. Rendering is independent; a slow browser can run simulation slower than real time. Pending responses, dropped connections, manual input, page hiding and Escape cannot leave an old drive command running. Independent browser runs use fresh Java processes.
 

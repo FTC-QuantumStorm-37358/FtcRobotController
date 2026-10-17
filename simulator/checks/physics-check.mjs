@@ -5,7 +5,7 @@ const {buildField,buildRobot}=await import('../dist/model.js');
 const {GamePhysics,desiredTilt,robotAllowed}=await import('../dist/game-physics.js');
 const {simulate,makeTarget,SHOT_POSE}=await import('../dist/ballistics.js');
 function setup(){const field=buildField(),robot=buildRobot(),scene=new T.Scene();scene.add(field,robot);return new GamePhysics(field,scene,robot);}
-const game=setup();assert.equal(game.balls.length,56);assert.equal(game.inventory.length,4);assert(robotAllowed(game.pose));assert(game.drive(1,0,0,.1));game.pose={...SHOT_POSE};game.syncRobot();
+const game=setup();assert.equal(game.balls.length,44);assert.equal(game.inventory.length,4);assert(robotAllowed(game.pose));assert(game.drive(1,0,0,.1));game.pose={...SHOT_POSE};game.syncRobot();
 const settings={power:.4,angle:71.5,height:6,transfer:.5,compression:.15,pose:game.pose,diameter:2.8};
 const shot=simulate(settings,makeTarget(game.raisedCell()));assert(shot.origin.y>6&&shot.origin.y<10);assert.equal(shot.status,'entry');assert(game.shoot(shot));assert.equal(game.inventory.length,3);assert(!game.shoot(shot));
 let maxLoad=0;for(let i=0;i<240;i++){game.step(1/120);maxLoad=Math.max(maxLoad,...game.hives[0].counts.map(c=>c.pollen));}assert(maxLoad>=1,'Physical shot must enter and remain inside the hive');

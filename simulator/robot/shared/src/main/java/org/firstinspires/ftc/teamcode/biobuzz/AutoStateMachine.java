@@ -7,7 +7,7 @@ public final class AutoStateMachine {
     public static final double PARK_START_SECONDS=26.0;
     public static final double AUTO_END_SECONDS=30.0;
     public enum State { INIT, MOVING, SHOOTING, INTAKE, EXTRA_PICKUP, SAFETY_HOLD, ERROR, WAIT_TILT, WAITING, PARK, STOPPED }
-    public enum Routine { FULL, SINGLE_TILT }
+    public enum Routine { FULL, SINGLE_TILT, TEAM_ONE, TEAM_TWO }
     private enum ShootStep { CHECK_BALLS, AIM, FIRE }
     private enum Source { GARDEN, FLOWER }
     private final RobotIO io;
@@ -36,6 +36,7 @@ public final class AutoStateMachine {
     private boolean fallbackActive;
     private int finalShotHiveState;
     private int alliance,retries;
+    private int shotBatches;
     private double startAt,stateAt,lastNow,power;
     private double shooterAt,moveDeadline;
     private Pose progressPose;
@@ -51,6 +52,7 @@ public final class AutoStateMachine {
     public AutoStateMachine(RobotIO io,FieldLayout field,boolean useVision,Routine routine,boolean movementOnly) {
         if(routine==null)throw new IllegalArgumentException("Routine is required");
         if(movementOnly&&useVision)throw new IllegalArgumentException("Movement-only uses fixed simulator poses, not vision");
+        if(useVision&&(routine==Routine.TEAM_ONE||routine==Routine.TEAM_TWO))throw new IllegalArgumentException("Partner roles require camera-free mode");
         this.movementOnly=movementOnly;
         this.routine=routine;
         this.io=io;this.field=field;this.useVision=useVision;this.navigator=new Navigator(field,io::stopRequested);
@@ -61,6 +63,7 @@ public final class AutoStateMachine {
         hiveVision=useVision?new HiveVision(field,alliance):null;
         navigator.useScriptedRoute(!useVision,alliance);
         gardenDone=flowerDone=flipped=flowerTiltConfirmed=extraAttempted=routeFailed=false;finalShotHiveState=-1;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
+        shotBatches=0;flipped=routine==Routine.TEAM_TWO;
         resumeState=null;fallbackActive=false;currentPose=null;
         shooterAt=Double.NaN;
     }
@@ -75,7 +78,8 @@ public final class AutoStateMachine {
     public String status() {
         return state+(state==State.MOVING?" → "+destinationName:state==State.SHOOTING?" · "+shootStep:state==State.INTAKE?" · "+source:"")
             +String.format(java.util.Locale.ROOT," · %.1f / 30 s",elapsed())
-            +(routine==Routine.SINGLE_TILT?" · Single tilt: opening shots, Garden pickup, then park":" · park starts at 26 s")
+            +(routine==Routine.SINGLE_TILT?" · Single tilt: opening shots, Garden pickup, then park":routine==Routine.TEAM_ONE||routine==Routine.TEAM_TWO?" · park after task (26 s fallback)":" · park starts at 26 s")
+            +(routine==Routine.TEAM_ONE?" · Team 1: four preloads, then park":routine==Routine.TEAM_TWO?" · Team 2: partner first tilt assumed; preloads, Garden, then park":"")
             +(extraAttempted?" · Extra pollen sweep attempted":"")
             +(movementOnly?" · MOVEMENT ONLY: mechanisms OFF, simulator dwell timing":"")
             +(!useVision?" · Camera-free: fixed route, no tag detection, Hive tilt unverified":"")
@@ -99,6 +103,15 @@ public final class AutoStateMachine {
         else{finalShotHiveState=flipped?1:0;enter(useVision?State.WAIT_TILT:State.WAITING);}
     }
     private void beginParking(){destination=field.parkingTarget(currentPose,alliance);enter(State.PARK);}
+    private void finishShot(){
+        shooterAt=Double.NaN;shotBatches++;
+        if(routine==Routine.TEAM_ONE){
+            Pose start=field.hive[alliance];
+            moveThen(new Pose(start.x,alliance==0?55:-55,start.heading),"Parking approach",State.PARK);return;
+        }
+        if(routine==Routine.TEAM_TWO&&shotBatches>=2){enter(State.WAIT_TILT);return;}
+        pickup();
+    }
     private void finishPickup() {
         if(source==Source.GARDEN)gardenDone=true;if(source==Source.FLOWER)flowerDone=true;
         if(routine==Routine.SINGLE_TILT){shooterAt=Double.NaN;beginParking();return;}
@@ -193,7 +206,7 @@ public final class AutoStateMachine {
                         enter(State.INTAKE);break;
                     }
                     Outputs drive=navigator.move(sensors.pose,destination);
-                    if(drive==null)enter(afterMove);else out=drive;
+                    if(drive==null){if(afterMove==State.PARK)beginParking();else enter(afterMove);}else out=drive;
                     if(state==State.MOVING){
                         if(navigator.isPlanning()){
                             progressPose=sensors.pose;progressAt=now;stateAt=now;
@@ -217,7 +230,7 @@ public final class AutoStateMachine {
                         if(shootStep==ShootStep.CHECK_BALLS){shootStep=ShootStep.AIM;stateAt=now;age=0;}
                         if(shootStep==ShootStep.AIM&&now-shooterAt>=1){shootStep=ShootStep.FIRE;stateAt=now;age=0;}
                         if(shootStep==ShootStep.FIRE){
-                            if(age>=timedFeedSeconds){shooterAt=Double.NaN;pickup();break;}
+                            if(age>=timedFeedSeconds){finishShot();break;}
                             out.feederPower=1;
                         }
                         break;
@@ -287,6 +300,8 @@ public final class AutoStateMachine {
                     else if(routine==Routine.SINGLE_TILT)beginParking();
                     else enter(State.WAITING);break;
                 case WAIT_TILT:
+                    // Bounded flight/settling time, not a camera-confirmed tilt.
+                    if(routine==Routine.TEAM_TWO){if(age>=3.5)beginParking();break;}
                     int settled=hiveVision.state(now);
                     if(settled>=0&&settled!=finalShotHiveState){
                         flowerTiltConfirmed=true;flipped=settled==1;enter(State.WAITING);

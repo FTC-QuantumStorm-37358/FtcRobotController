@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {AUTONOMOUS_MODES,autonomousMode,placeAutonomousRobot} from '../dist/autonomous-modes.js';
+import {AUTONOMOUS_MODES,autonomousMode,autonomousStart,placeAutonomousRobot} from '../dist/autonomous-modes.js';
 import {JavaAutonomousClient} from '../dist/autonomous.js';
 import {fencePose,INCH} from '../dist/ballistics.js';
 import {PracticeScore} from '../dist/practice-score.js';
@@ -11,11 +11,11 @@ assert.equal(AUTONOMOUS_MODES.length,8);assert.equal(new Set(AUTONOMOUS_MODES.ma
 for(const mode of AUTONOMOUS_MODES){
  assert(html.includes(`<option value="${mode.id}">${mode.label}</option>`));assert.equal(autonomousMode(mode.id),mode);
  const source=readFileSync(new URL(`../../TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/Auto/${mode.file}`,import.meta.url),'utf8');assert(source.includes(`name = "${mode.label}"`)||source.includes(`name="${mode.label}"`));
- const game={pose:null,rules:new Penalties(),syncRobot(){this.synced=true;}};placeAutonomousRobot(game,mode);assert.deepEqual(game.pose,fencePose(mode.alliance));assert.equal(game.rules.alliance,mode.alliance);assert(game.synced);
+ const game={pose:null,rules:new Penalties(),syncRobot(){this.synced=true;},preparePartnerTilt(a){this.partner=a;}};placeAutonomousRobot(game,mode);assert.deepEqual(game.pose,autonomousStart(mode));assert.equal(game.partner,mode.teamRole===2?mode.alliance:undefined);assert.equal(game.rules.alliance,mode.alliance);assert(game.synced);
  let socket;const packets=[];const driver=new JavaAutonomousClient(game,{url:'ws://test/robot',socketFactory:()=>socket={send:text=>packets.push(JSON.parse(text)),close(){}}});
  driver.sensors.read=()=>({pose:{x:game.pose.x,y:-game.pose.z,heading:0},sampledAt:0,odometryValid:true,cameraConnected:false,ballCount:4,vision:{valid:false,pipeline:0,capturedAt:0,targets:[]}});
  driver.start(mode.alliance,.395,mode);socket.onmessage({data:JSON.stringify({type:'ready',protocol:1,engine:'java',tickSeconds:.02,nearTags:[],farTags:[]})});
- assert.equal(packets[0].alliance,mode.alliance);assert.equal(packets[0].cameraFree,true);assert.equal(packets[0].singleTilt,mode.singleTilt);assert.equal(packets[0].seq,0);driver.stop();assert.equal(driver.pending,false);
+ assert.equal(packets[0].alliance,mode.alliance);assert.equal(packets[0].cameraFree,true);assert.equal(packets[0].singleTilt,mode.singleTilt);assert.equal(packets[0].teamRole,mode.teamRole??0);assert.equal(packets[0].seq,0);driver.stop();assert.equal(driver.pending,false);
 }
 assert.throws(()=>autonomousMode('unknown'));
 const red={},blue={},rules=new Penalties(1),game={pose:{x:59,z:30,theta:0},rules,

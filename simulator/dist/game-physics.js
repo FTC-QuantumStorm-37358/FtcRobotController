@@ -29,10 +29,20 @@ export class GamePhysics{
  for(const h of this.hives){const cell=this.raisedCell(h.index),cellIndex=h.cells.indexOf(cell);for(let i=0;i<3;i++){const p=new T.Vector3(-5+i*5,2.05,-3.7).applyMatrix4(cell.matrixWorld),item=this.createBall(h.index===0?'red':'blue',p.toArray());item.startZone='hive';item.resident=`${h.index}:${cellIndex}`;item.residence=.2;}}
  // Five matching nectar in each 11 × 23 inch loading zone.
  for(const side of [-1,1])for(let i=0;i<5;i++){const item=this.createBall(side<0?'red':'blue',[side*66.5+(i%2?1.9:-1.9),1.81,side*36-4+Math.floor(i/2)*4]);item.startZone='loading';}
- // Preserve forty pollen: four in this robot, sixteen in flowers, twenty in gardens.
- for(const side of [-1,1]){for(let i=0;i<7;i++){const item=this.createBall('pollen',[side*(50.5+i*2.85),1.41,-side*70.5]);item.startZone='garden';}for(let i=0;i<3;i++){const item=this.createBall('pollen',[side*(51.925+i*5.7),1.41+Math.sqrt(2.8**2-1.425**2),-side*70.5]);item.startZone='garden';}}
+ // Requested practice stock: exactly four pollen in each Garden.
+ for(const side of [-1,1])for(let i=0;i<4;i++){const item=this.createBall('pollen',[side*(54+i*2.85),1.41,-side*70.5]);item.startZone='garden';}
  for(const flower of this.flowers)for(let i=0;i<4;i++){const item=this.createBall('pollen',[flower.x,1.83+i*2.8,flower.z]);item.startZone='flower';item.storedInFlower=flower;this.world.removeBody(item.body);flower.queue.push(item);}
  for(let i=0;i<4;i++){const item=this.createBall('pollen',[this.pose.x,1.5,this.pose.z]);item.startZone='robot';this.collect(item);}this.updateCounts(0);this.message='Four pollen loaded. Touch a flower to release its pollen, then collect with the front intake.';this.syncRobot();this.revision++;}
+ // Team 2 solo setup: partner's assumed first tilt, caused by real pollen bodies.
+ // No shot/tilt counter is fabricated; Java still controls every live decision.
+ preparePartnerTilt(alliance){
+  const h=this.hives[alliance];if(h.tilts)return;
+  this.field.updateMatrixWorld(true);const cell=this.raisedCell(alliance),index=h.cells.indexOf(cell);
+  for(let i=0;i<4;i++){const p=new T.Vector3(i%2?4:-4,5,i<2?-1.5:2).applyMatrix4(cell.matrixWorld),b=this.createBall('pollen',p.toArray());b.startZone='partner';b.resident=`${alliance}:${index}`;b.residence=.2;}
+  this.updateCounts(0);for(let i=0;i<150;i++)this.step(.02);
+  this.elapsed=0;this.accumulator=0;this.countClock=0;this.rules.reset();this.rules.alliance=alliance;
+  this.message='Team 2 setup: partner first tilt assumed complete; four preloads remain in this robot.';this.revision++;
+ }
  touchFlowers(pose){for(const f of this.flowers){if(f.released)continue;/* Use the same footprint as the flower movement blocker, including corners. */if(overlap(pose,{x:f.x,z:f.z,hx:2.25,hz:2.25})){f.released=true;f.nextRelease=this.elapsed;this.message='Flower touched: four pollen roll out. Touch them with the front intake to collect.';this.revision++;}}}
  releaseFlowerBalls(){for(const f of this.flowers){if(!f.released||!f.queue.length||this.elapsed<f.nextRelease)continue;const item=f.queue.shift();item.storedInFlower=null;item.immuneUntil=this.elapsed+.8;item.pickupAfterMove=this.travelDistance+1.4;const outlet=this.flowerOutlet(f,item);item.body.position.set(outlet.x*M,1.45*M,outlet.z*M);item.body.velocity.set(outlet.vx,0,outlet.vz);item.body.angularVelocity.set(outlet.vz/item.r,0,-outlet.vx/item.r);item.body.collisionFilterMask=1|2|4;item.body.aabbNeedsUpdate=true;item.body.wakeUp();this.world.addBody(item.body);f.nextRelease=this.elapsed+.4;f.queue.forEach((remaining,i)=>remaining.body.position.set(f.x*M,(1.83+i*2.8)*M,f.z*M));this.revision++;}}
 

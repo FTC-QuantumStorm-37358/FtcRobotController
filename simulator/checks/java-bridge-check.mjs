@@ -33,7 +33,7 @@ try{
  for(const mode of AUTONOMOUS_MODES){
   await new Promise(resolve=>setTimeout(resolve,50));game.reset();placeAutonomousRobot(game,mode);
   driver.start(mode.alliance,.395,mode);await waitCommand();assert.equal(driver.state,'MOVING');assert.match(driver.status,/Camera-free/);
-  assert.equal(/Single tilt/.test(driver.status),mode.singleTilt);assert.equal(driver.navigation.destination.x,fencePose(mode.alliance).x);
+  assert.equal(/Single tilt/.test(driver.status),mode.singleTilt);assert.equal(driver.navigation.destination.x,mode.teamRole===2?(mode.alliance===0?-53:53):fencePose(mode.alliance).x);
   driver.stop();assert.equal(driver.queued,null);
  }
  const denied=await new Promise((resolve,reject)=>{const socket=connect(port,'127.0.0.1',()=>socket.write(`GET /robot HTTP/1.1\r\nHost: localhost:${port}\r\nOrigin: http://unrelated.example\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==\r\n\r\n`));let text='';socket.on('data',d=>text+=d);socket.on('end',()=>resolve(text));socket.on('error',reject);});

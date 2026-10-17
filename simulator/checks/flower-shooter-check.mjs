@@ -17,7 +17,7 @@ for(let index=0;index<4;index++){
   sideDisplacements.push((b.body.position.x/.0254-f.x)*(-f.direction.z)+(b.body.position.z/.0254-f.z)*f.direction.x);
  }
  assert.equal(sideDisplacements.filter(x=>x<0).length,2);assert.equal(sideDisplacements.filter(x=>x>0).length,2);
- assert.equal(g.balls.length,56,'No released balls may disappear from world stock');
+ assert.equal(g.balls.length,44,'No released balls may disappear from world stock');
 }
 // Move and rotate for 90 rendered frames WITHOUT rebuilding the shooter or preview.
 const g=setup();g.pose={x:40,z:35,theta:0};g.syncRobot();const mount=createShooterMount(g.robot),settings={angle:71.5,height:6,compression:.15};updateShooterMount(mount,settings,2.8);const wheel=mount.children[0],geometry=wheel.geometry;
