@@ -14,8 +14,9 @@ import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Shooter;
 
 /** Odometry-free, drive-only playback of a simulator recording. No sensor hardware is mapped. */
 public final class AutoStateMachine {
-    // Hardware-only open-loop travel adjustment; leave recorded timing and turns unchanged.
+    // Hardware-only open-loop power adjustments; leave recorded timing unchanged.
     private static final double TRANSLATION_POWER_SCALE=0.50;
+    private static final double TURN_POWER_SCALE=0.50;
     private final LinearOpMode opMode;
     private final AutoStartPosition position;
     private final ElapsedTime clock=new ElapsedTime();
@@ -39,6 +40,7 @@ public final class AutoStateMachine {
                 stopped=false;Outputs adjusted=o.copy();
                 adjusted.forward*=TRANSLATION_POWER_SCALE;
                 adjusted.strafeRight*=TRANSLATION_POWER_SCALE;
+                adjusted.turnClockwise*=TURN_POWER_SCALE;
                 double[] w=adjusted.wheelPowers();drive.setPowers(w[0],w[1],w[2],w[3]);
                 // Independent hardware interlock: playback cannot activate scoring mechanisms.
                 shooter.stop();intake.stop();
@@ -52,7 +54,7 @@ public final class AutoStateMachine {
         opMode.telemetry.addData("Required physical start","X %.3f, Y %.3f in, heading %.1f deg",start.x,start.y,Math.toDegrees(start.heading));
         opMode.telemetry.addLine("Team One/Two share their alliance start. Place and align the robot manually.");
         opMode.telemetry.addData("Recorded duration","%.2f seconds; original simulator pauses retained",replay.duration());
-        opMode.telemetry.addData("Travel power","%.0f%%; turns and timing unchanged",100*TRANSLATION_POWER_SCALE);
+        opMode.telemetry.addData("Travel / turn power","%.0f%% / %.0f%%; timing unchanged",100*TRANSLATION_POWER_SCALE,100*TURN_POWER_SCALE);
         opMode.telemetry.addLine("OPEN LOOP: cannot correct slipping, wrong speed or obstacles. Clear field; keep STOP ready.");
         opMode.telemetry.update();
     }
@@ -70,7 +72,7 @@ public final class AutoStateMachine {
                 opMode.telemetry.addData("Routine",replay.status());opMode.telemetry.addData("State",replay.getState());
                 opMode.telemetry.addData("Last error",replay.lastError().isEmpty()?"None":replay.lastError());
                 opMode.telemetry.addData("Odometry / vision / inventory","NOT USED (timer playback)");
-                opMode.telemetry.addData("Travel power","%.0f%%; turns unchanged",100*TRANSLATION_POWER_SCALE);
+                opMode.telemetry.addData("Travel / turn power","%.0f%% / %.0f%%; timing unchanged",100*TRANSLATION_POWER_SCALE,100*TURN_POWER_SCALE);
                 opMode.telemetry.addData("Mechanisms","DISABLED");opMode.telemetry.update();opMode.idle();
             }
         }catch(java.util.concurrent.CancellationException ignored){/* STOP is normal. */}
