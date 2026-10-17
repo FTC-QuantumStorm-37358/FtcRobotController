@@ -4,6 +4,7 @@ import android.util.Size;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
@@ -70,6 +71,10 @@ public class AutoVisionTest extends LinearOpMode {
     @Override
     public void runOpMode() {
         MecanumDrive drive = new MecanumDrive(hardwareMap);
+        DcMotor intake = hardwareMap.get(DcMotor.class, Constants.INTAKE_MOTOR);
+        intake.setDirection(DcMotor.Direction.FORWARD);
+        intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        intake.setPower(0);
         Servo cameraServo = hardwareMap.get(Servo.class, Constants.LIMELIGHT_TILT_SERVO);
 
         ColorBlobLocatorProcessor yellowLocator = createColorLocator(ColorRange.YELLOW);
@@ -119,6 +124,7 @@ public class AutoVisionTest extends LinearOpMode {
         }
 
         if (!opModeIsActive()) {
+            intake.setPower(0);
             drive.stop();
             portal.close();
             return;
@@ -143,6 +149,7 @@ public class AutoVisionTest extends LinearOpMode {
                 List<AprilTagDetection> tags = aprilTagProcessor.getDetections();
 
                 if (aimedUpAtHive) {
+                    intake.setPower(0);
                     // =========================================================
                     // AIMED UP: SEARCH FOR APRILTAGS & CENTER TO FIRE AT HIVE
                     // =========================================================
@@ -194,6 +201,7 @@ public class AutoVisionTest extends LinearOpMode {
                     // AIMED DOWN: SEARCH FOR BALLS & AVOID OPPOSING COLOR
                     // =========================================================
                     if (!hazardColorBlobs.isEmpty()) {
+                        intake.setPower(0);
                         ColorBlobLocatorProcessor.Blob hazard = largest(hazardColorBlobs);
                         double hazardX = hazard.getBoxFit().center.x;
                         double turnAway = hazardX >= FRAME_WIDTH / 2.0
@@ -206,6 +214,7 @@ public class AutoVisionTest extends LinearOpMode {
                                 : (!yellowBlobs.isEmpty() ? largest(yellowBlobs) : null);
 
                         if (target == null) {
+                            intake.setPower(0);
                             drive.drive(0, 0, SEARCH_TURN_POWER);
                             telemetry.addData("Action", "Aimed DOWN: Searching for %s / yellow balls",
                                     targetColorName.toLowerCase());
@@ -215,12 +224,15 @@ public class AutoVisionTest extends LinearOpMode {
                             int area = largestArea(target);
 
                             if (area >= TARGET_STOP_AREA) {
+                                // Run the intake only once the ball is close enough to collect.
+                                intake.setPower(Constants.INTAKE_POWER);
                                 // Ball reached! Stop driving and angle servo UP to align with the Hive
                                 drive.stop();
                                 cameraServo.setPosition(SERVO_UP_TAG_POS);
                                 telemetry.addData("Action", "Ball reached! Tilting servo UP to find Hive...");
                                 sleep(300); // Brief pause to let the servo physically tilt up
                             } else {
+                                intake.setPower(0);
                                 double strafe = Math.abs(horizontalError) <= CENTER_TOLERANCE_PIXELS
                                         ? 0
                                         : clamp(horizontalError / (FRAME_WIDTH / 2.0) * MAX_STRAFE_POWER,
@@ -246,6 +258,7 @@ public class AutoVisionTest extends LinearOpMode {
                 sleep(50);
             }
         } finally {
+            intake.setPower(0);
             drive.stop();
             portal.close();
         }
