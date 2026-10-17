@@ -61,7 +61,7 @@ public final class Navigator {
             if(field.canRotate(p,target.heading))turnPose=p;
             else{
                 double best=Double.POSITIVE_INFINITY;
-                double[][] clearance={{-12.75,56},{-32,56},{-36,52},{-40,52},{-56,-56},{-52,-32},{-56,-40},{-52,-36},{-52,-40},{-48,-36},{-52,-24},{-52,-28},{-48,-24}};
+                double[][] clearance={{-56,-56},{-52,-32},{-56,-40},{-52,-36},{-52,-40},{-48,-36},{-52,-24},{-52,-28},{-48,-24}};
                 for(double[] xy:clearance){
                     checkStop();Pose q=fixedPoint(xy[0],xy[1],p.heading);double distance=p.distance(q);
                     if(distance<best&&field.canRotate(q,target.heading)&&field.clear(p,q,p.heading)){best=distance;turnPose=q;}

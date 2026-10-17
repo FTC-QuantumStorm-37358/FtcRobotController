@@ -13,9 +13,6 @@ public final class SimulatorMain implements RobotIO {
     private Outputs outputs=new Outputs();
     private final FieldLayout field=new FieldLayout();
     private AutoStateMachine auto=new AutoStateMachine(this,field);
-    private TimedDriveReplay timed;
-    private void stopControl(){auto.stop();if(timed!=null)timed.stop();}
-    private void tickControl(){if(timed!=null)timed.tick();else auto.tick();}
     private String runId="";
     private int seq=-1;
     public double nowSeconds(){return time;}
@@ -26,32 +23,31 @@ public final class SimulatorMain implements RobotIO {
         System.out.println(Json.write(Json.map("type","ready","protocol",1,"engine","java","tickSeconds",.02,"nearTags",tagLists(main.field.nearTags),"farTags",tagLists(main.field.farTags))));
         BufferedReader reader=new BufferedReader(new InputStreamReader(System.in,StandardCharsets.UTF_8));String line;
         while((line=reader.readLine())!=null){try{if(line.length()>131072)throw new IllegalArgumentException("Message too large");System.out.println(Json.write(main.message(Json.object(Json.parse(line)))));}
-            catch(RuntimeException e){main.stopControl();System.out.println(Json.write(Json.map("type","error","runId",main.runId,"seq",main.seq,"message",e.getMessage()==null?"Invalid message":e.getMessage())));}}
-        main.stopControl();
+            catch(RuntimeException e){main.auto.stop();System.out.println(Json.write(Json.map("type","error","runId",main.runId,"seq",main.seq,"message",e.getMessage()==null?"Invalid message":e.getMessage())));}}
+        main.auto.stop();
     }
     private static List<List<Integer>> tagLists(int[][] groups){List<List<Integer>> result=new ArrayList<List<Integer>>();for(int[] group:groups){List<Integer> ids=new ArrayList<Integer>();for(int id:group)ids.add(id);result.add(ids);}return result;}
     private static Object pose(Pose p) { return p==null?null:Json.map("x",p.x,"y",p.y,"heading",p.heading); }
-    private Object navigation() { List<Object> route=new ArrayList<Object>();if(timed!=null)return Json.map("destination",null,"route",route);for(Pose p:auto.route())route.add(pose(p));return Json.map("destination",pose(auto.destination()),"route",route); }
+    private Object navigation() { List<Object> route=new ArrayList<Object>();for(Pose p:auto.route())route.add(pose(p));return Json.map("destination",pose(auto.destination()),"route",route); }
     private Object message(Map<String,Object> m){
         if(Json.integer(m,"protocol")!=1)throw new IllegalArgumentException("Unsupported protocol");
         String type=Json.string(m,"type"),id=Json.string(m,"runId");int next=Json.integer(m,"seq");
         if(type.equals("start")){
             if(id.length()<1||id.length()>80||next!=0||Json.number(m,"time")!=0)throw new IllegalArgumentException("Invalid start envelope");
-            stopControl();runId=id;seq=0;time=0;sensors=decodeSensors(Json.object(m.get("sensors")));
+            auto.stop();runId=id;seq=0;time=0;sensors=decodeSensors(Json.object(m.get("sensors")));
             AutoStateMachine.Routine routine=m.containsKey("singleTilt")&&Json.bool(m,"singleTilt")?AutoStateMachine.Routine.SINGLE_TILT:AutoStateMachine.Routine.FULL;
             auto=new AutoStateMachine(this,field,!m.containsKey("cameraFree")||!Json.bool(m,"cameraFree"),routine,m.containsKey("movementOnly")&&Json.bool(m,"movementOnly"));
-            timed=m.containsKey("timedReplay")&&Json.bool(m,"timedReplay")?new TimedDriveReplay(this,routine):null;
-            if(timed!=null)timed.start(Json.integer(m,"alliance"));else auto.start(Json.integer(m,"alliance"),Json.number(m,"shooterPower"));tickControl();
+            auto.start(Json.integer(m,"alliance"),Json.number(m,"shooterPower"));auto.tick();
         }else{
             if(!id.equals(runId)||next!=seq+1)throw new IllegalArgumentException("Stale run or out-of-order sequence");
-            if(type.equals("stop")){seq=next;stopControl();}
+            if(type.equals("stop")){seq=next;auto.stop();}
             else if(type.equals("step")){
                 double nextTime=Json.number(m,"time");if(Math.abs(nextTime-time-.02)>1e-8)throw new IllegalArgumentException("Expected fixed 20 ms step");
-                seq=next;time=nextTime;sensors=decodeSensors(Json.object(m.get("sensors")));tickControl();
+                seq=next;time=nextTime;sensors=decodeSensors(Json.object(m.get("sensors")));auto.tick();
             }else throw new IllegalArgumentException("Unknown message type");
         }
         double[] w=outputs.wheelPowers();
-        return Json.map("type","command","protocol",1,"runId",runId,"seq",seq,"time",time,"running",timed!=null?timed.isRunning():auto.isRunning(),"state",(timed!=null?timed.getState():auto.getState()).name(),"status",timed!=null?timed.status():auto.status(),"navigation",navigation(),
+        return Json.map("type","command","protocol",1,"runId",runId,"seq",seq,"time",time,"running",auto.isRunning(),"state",auto.getState().name(),"status",auto.status(),"navigation",navigation(),
             "outputs",Json.map("wheelPowers",Arrays.asList(w[0],w[1],w[2],w[3]),"forward",outputs.forward,"strafeRight",outputs.strafeRight,"turnClockwise",outputs.turnClockwise,"shooterPower",outputs.shooterPower,"feederPower",outputs.feederPower,"intakePower",outputs.intakePower,"pipeline",outputs.pipeline));
     }
     private Sensors decodeSensors(Map<String,Object> m){

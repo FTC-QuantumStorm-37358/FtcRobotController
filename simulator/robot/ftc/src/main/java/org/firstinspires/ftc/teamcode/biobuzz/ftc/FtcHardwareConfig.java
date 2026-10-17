@@ -45,7 +45,7 @@ public class FtcHardwareConfig {
         if(useVision&&(!hiveHeightCalibrated||tagHeightAxis<0||tagHeightAxis>2||!Double.isFinite(robotOriginHeightInches)))
             throw new IllegalStateException("Calibrate robot-space tag heights at tiltUp, including camera pose, vertical axis and origin height.");
         if(shooterPower<0||shooterPower>1||!Double.isFinite(shooterPower))throw new IllegalArgumentException("Shooter power");
-        for(Pose[] poses:new Pose[][]{start,field.hive,field.farHive,field.garden,field.flower,field.nearFlower})for(Pose p:poses)
+        for(Pose[] poses:new Pose[][]{start,field.hive,field.farHive,field.garden,field.flower})for(Pose p:poses)
             if(p==null||!p.finite()||!field.allowed(p))throw new IllegalArgumentException("Invalid field calibration pose");
         for(int[][] groups:new int[][][]{field.nearTags,field.farTags})for(int[] ids:groups)
             if(ids.length==0)throw new IllegalArgumentException("Missing hive AprilTag IDs");

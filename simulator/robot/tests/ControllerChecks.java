@@ -35,16 +35,6 @@ public final class ControllerChecks {
         return auto;
     }
     public static void main(String[] args){
-        TravelDistanceGuard distance=new TravelDistanceGuard();distance.reset();
-        distance.begin("MOVING → Nearest Flower",AutoStateMachine.Routine.SINGLE_TILT,new Pose(0,0,0));
-        check(Math.abs(distance.reference()-29.594)<.1,"Nearest Flower reference must come from measured simulator inches");
-        distance.update(new Pose(3,4,0));check(Math.abs(distance.traveled()-5)<1e-9,"Measure actual path distance, not X alone or motor time");
-        distance.update(new Pose(0,0,0));check(Math.abs(distance.traveled()-10)<1e-9,"Backtracking must count toward runaway protection");
-        distance.update(new Pose(40,0,0));check(distance.exceeded(),"Recorded-distance overshoot must trip even when odometry reports continuing motion");
-        double beforeHold=distance.traveled();distance.resumeAt(new Pose(50,0,0));distance.update(new Pose(50,0,0));check(distance.traveled()==beforeHold,"Do not fabricate travel across a sensor fault");
-        distance.begin("MOVING → Hive scripted far face",AutoStateMachine.Routine.FULL,new Pose(0,0,0));double firstReturn=distance.reference();
-        distance.begin("MOVING → Hive scripted far face",AutoStateMachine.Routine.FULL,new Pose(0,0,0));check(distance.reference()<firstReturn,"Repeated Hive returns need their own recorded distances");
-        distance.begin("unknown leg",AutoStateMachine.Routine.FULL,new Pose(0,0,0));check(distance.exceeded(),"Missing distance recordings must fail safe");
         IO io=new IO();io.readDuration=.001;AutoStateMachine auto=make(io);auto.start(0,.4);
         for(int i=0;i<70;i++){io.time+=.02;auto.tick();}
         check(auto.isRunning(),"Reading a real sensor advances wall time; fresh data must not be rejected as future data");
@@ -218,8 +208,8 @@ public final class ControllerChecks {
             for(int i=0;i<70;i++){step(io,auto);check(io.out.intakePower==0,"Single tilt shoots before pickup");}
             check(io.out.feederPower==1,"Single tilt executes the opening shot even if empty");
             while(io.time<3.2)step(io,auto);
-            check(auto.destination()==f.nearFlower[team],"Single tilt visits the nearest Flower after opening shots");
-            io.pose=f.nearFlower[team];step(io,auto);step(io,auto);io.time+=3.1;auto.tick();
+            check(auto.destination()==f.garden[team],"Single tilt collects Garden pollen after opening shots");
+            io.pose=f.garden[team];step(io,auto);step(io,auto);io.time+=3.1;auto.tick();
             check(auto.getState()==AutoStateMachine.State.PARK&&io.time<26,"Single tilt parks after bounded pickup, without another shot");
             check(io.out.feederPower==0&&io.out.shooterPower==0&&io.out.intakePower==0,"Single tilt parking cancels all mechanisms");
             check(io.count==inventory,"Single tilt does not manufacture inventory or a detected tilt");

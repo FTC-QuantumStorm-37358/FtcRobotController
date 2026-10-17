@@ -23,7 +23,7 @@ public abstract class SharedBioBuzzAuto extends LinearOpMode {
                 }
                 if(isStopRequested())return;
                 auto.start(alliance,config.shooterPower);
-                while(opModeIsActive()&&auto.isRunning()){auto.tick();telemetry.addData("Autonomous",auto.status());telemetry.addData("Measured / simulator distance",auto.distanceStatus());telemetry.update();idle();}
+                while(opModeIsActive()&&auto.isRunning()){auto.tick();telemetry.addData("Autonomous",auto.status());telemetry.update();idle();}
             }finally{auto.stop();}
         }catch(java.util.concurrent.CancellationException e){/* STOP is a normal exit. */}
     }

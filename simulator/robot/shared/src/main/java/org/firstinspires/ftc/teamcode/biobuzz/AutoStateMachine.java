@@ -9,14 +9,13 @@ public final class AutoStateMachine {
     public enum State { INIT, MOVING, SHOOTING, INTAKE, EXTRA_PICKUP, SAFETY_HOLD, ERROR, WAIT_TILT, WAITING, PARK, STOPPED }
     public enum Routine { FULL, SINGLE_TILT }
     private enum ShootStep { CHECK_BALLS, AIM, FIRE }
-    private enum Source { GARDEN, FLOWER, NEAR_FLOWER }
+    private enum Source { GARDEN, FLOWER }
     private final RobotIO io;
     private final FieldLayout field;
     private final Navigator navigator;
     private final boolean useVision;
     private final Routine routine;
     private final boolean movementOnly;
-    private final TravelDistanceGuard travel=new TravelDistanceGuard();
     /** Nominal measured-inventory simulator dwell times; not inferred ball counts. */
     public static final double DRY_GARDEN_SECONDS=.14,DRY_FLOWER_SECONDS=2.34;
     /** Timed attempts when inventory is unavailable; never manufacture a ball count. */
@@ -59,7 +58,6 @@ public final class AutoStateMachine {
     public void start(int alliance,double power) {
         if(alliance<0||alliance>1||!Double.isFinite(power)||power<0||power>1)throw new IllegalArgumentException("Invalid alliance or shooter power");
         this.alliance=alliance;this.power=power;startAt=lastNow=io.nowSeconds();running=true;retries=0;
-        travel.reset();
         hiveVision=useVision?new HiveVision(field,alliance):null;
         navigator.useScriptedRoute(!useVision,alliance);
         gardenDone=flowerDone=flipped=flowerTiltConfirmed=extraAttempted=routeFailed=false;finalShotHiveState=-1;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
@@ -70,10 +68,6 @@ public final class AutoStateMachine {
     public boolean isRunning() { return running; }
     public State getState() { return state; }
     public String lastError() { return error; }
-    public String distanceStatus() {
-        return String.format(java.util.Locale.ROOT,"%s: %.1f / %.1f in (limit %.1f); total %.1f in",
-            travel.leg(),travel.traveled(),travel.reference(),travel.limit(),travel.total());
-    }
     public Outputs getOutputs() { return last.copy(); }
     public Pose destination() { return running&&(state==State.MOVING||state==State.PARK)?destination:null; }
     public java.util.List<Pose> route() { return running&&(state==State.MOVING||state==State.PARK)?navigator.route():new java.util.ArrayList<Pose>(); }
@@ -81,21 +75,16 @@ public final class AutoStateMachine {
     public String status() {
         return state+(state==State.MOVING?" → "+destinationName:state==State.SHOOTING?" · "+shootStep:state==State.INTAKE?" · "+source:"")
             +String.format(java.util.Locale.ROOT," · %.1f / 30 s",elapsed())
-            +(routine==Routine.SINGLE_TILT?" · Single tilt: opening shots, nearest Flower pickup, then park":" · park starts at 26 s")
+            +(routine==Routine.SINGLE_TILT?" · Single tilt: opening shots, Garden pickup, then park":" · park starts at 26 s")
             +(extraAttempted?" · Extra pollen sweep attempted":"")
             +(movementOnly?" · MOVEMENT ONLY: mechanisms OFF, simulator dwell timing":"")
             +(!useVision?" · Camera-free: fixed route, no tag detection, Hive tilt unverified":"")
             +(navigator.isPlanning()?" · Planning route (STOP available)":"")
             +(flowerTiltConfirmed?" · Flower tilt confirmed":"")+(error.isEmpty()?"":" · "+error);
     }
-    private void enter(State state) {
-        this.state=state;stateAt=io.nowSeconds();navigator.reset();if(state==State.SHOOTING)shootStep=ShootStep.CHECK_BALLS;
-        if(movementOnly&&(state==State.INTAKE||state==State.EXTRA_PICKUP||state==State.PARK))
-            travel.begin(state==State.INTAKE?"INTAKE:"+source:state.toString(),routine,currentPose);
-    }
+    private void enter(State state) { this.state=state;stateAt=io.nowSeconds();navigator.reset();if(state==State.SHOOTING)shootStep=ShootStep.CHECK_BALLS; }
     private void moveThen(Pose target,String name,State after) {
         destination=target;destinationName=name;afterMove=after;enter(State.MOVING);
-        if(movementOnly)travel.begin("MOVING → "+name,routine,currentPose);
         if(movementOnly){fallbackActive=false;navigator.useScriptedRoute(true,alliance);}
         Pose current=currentPose;
         progressPose=current;progressAt=io.nowSeconds();
@@ -105,7 +94,6 @@ public final class AutoStateMachine {
     }
     private Pose hive() { return flipped?field.farHive[alliance]:field.hive[alliance]; }
     private void pickup() {
-        if(routine==Routine.SINGLE_TILT){source=Source.NEAR_FLOWER;moveThen(field.nearFlower[alliance],"Nearest Flower",State.INTAKE);return;}
         if(!gardenDone){source=Source.GARDEN;moveThen(field.garden[alliance],"Garden",State.INTAKE);}
         else if(!flowerDone){source=Source.FLOWER;moveThen(field.flower[alliance],"Flower",State.INTAKE);}
         else{finalShotHiveState=flipped?1:0;enter(useVision?State.WAIT_TILT:State.WAITING);}
@@ -183,18 +171,8 @@ public final class AutoStateMachine {
             double held=now-holdAt;state=resumeState;resumeState=null;stateAt=resumeStateAt+held;
             if(!Double.isNaN(shooterAt))shooterAt+=held;
             navigator.reset();progressPose=currentPose;progressAt=now;error="";
-            travel.resumeAt(currentPose);
         }
         if(state==State.PARK&&destination==null)destination=field.parkingTarget(currentPose,alliance);
-        if(movementOnly&&(state==State.MOVING||state==State.INTAKE||state==State.EXTRA_PICKUP||state==State.PARK)){
-            travel.update(currentPose);
-            boolean atTarget=(state==State.MOVING||state==State.PARK)&&destination!=null&&currentPose.distance(destination)<.65;
-            if(travel.exceeded()&&!atTarget){
-                error="Recorded distance limit reached; check odometry scale/direction. "+distanceStatus();
-                if(state==State.PARK)running=false;else fail(error,false);
-                last=out;io.apply(out);return;
-            }
-        }
         // The final four seconds belong exclusively to parking, regardless of
         // which scoring or pickup state was active before the transition.
         if(state!=State.PARK&&elapsed()>=PARK_START_SECONDS){
@@ -208,10 +186,6 @@ public final class AutoStateMachine {
             switch(state) {
                 case INIT:moveThen(hive(),"Hive",State.SHOOTING);break;
                 case MOVING:
-                    if(afterMove==State.INTAKE&&source==Source.NEAR_FLOWER&&sensors.pose.distance(destination)<.65
-                            &&Math.abs(Pose.angle(destination.heading-sensors.pose.heading))<Math.toRadians(2)){
-                        enter(State.INTAKE);break;
-                    }
                     // Pickup needs a usable approach, not sub-inch shooting
                     // accuracy. Stop before intaking; never loosen shot alignment.
                     if(!useVision&&afterMove==State.INTAKE&&source==Source.GARDEN&&sensors.pose.distance(destination)<=3
@@ -288,11 +262,11 @@ public final class AutoStateMachine {
                     // Touch at a corner, then strafe clear of the outlet. Allow
                     // staged releases to clear before sweeping them through the
                     // front intake; only the measured count completes pickup.
-                    if(source!=Source.GARDEN&&age<.12)out.forward=.3;
-                    else if(source!=Source.GARDEN&&age<.24)out.strafeRight=-.4;
-                    else if(source!=Source.GARDEN&&age<1.24)out.strafeRight=.2;
-                    else if(source!=Source.GARDEN&&age<2.24)out.forward=0;
-                    else if(source!=Source.GARDEN)out.forward=.65;
+                    if(source==Source.FLOWER&&age<.12)out.forward=.3;
+                    else if(source==Source.FLOWER&&age<.24)out.strafeRight=-.4;
+                    else if(source==Source.FLOWER&&age<1.24)out.strafeRight=.2;
+                    else if(source==Source.FLOWER&&age<2.24)out.forward=0;
+                    else if(source==Source.FLOWER)out.forward=.65;
                     else if(!useVision){
                         // Finish the short, collision-checked Garden approach
                         // while intaking, then leave on the bounded pickup timer.

@@ -12,8 +12,6 @@ public final class FieldLayout {
     // Heading points at the raised Cell's AprilTag center; same .395 / 66.5-degree arc.
     public final Pose[] farHive={fromBrowser(-53,40,-.9843162068450441),fromBrowser(53,-40,Math.PI-.9843162068450441)};
     public final Pose[] garden={fromBrowser(-58,60.8,Math.PI),fromBrowser(58,-60.8,0)};
-    // Closest Flower to the alliance start: rear Flower (-24,-69), mirrored for Blue.
-    public final Pose[] nearFlower={fromBrowser(-35.5,-58,-Math.PI/2),fromBrowser(35.5,58,Math.PI/2)};
     // Side Flowers are closer to the Garden/shot route than the opposite rear Flower.
     // Corner approach triggers release without putting the chassis across the outlet.
     public final Pose[] flower={fromBrowser(-58,35.5,0),fromBrowser(58,-35.5,Math.PI)};
