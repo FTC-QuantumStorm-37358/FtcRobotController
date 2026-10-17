@@ -9,7 +9,7 @@ public final class AutoStateMachine {
     public enum State { INIT, MOVING, SHOOTING, INTAKE, EXTRA_PICKUP, SAFETY_HOLD, ERROR, WAIT_TILT, WAITING, PARK, STOPPED }
     public enum Routine { FULL, SINGLE_TILT }
     private enum ShootStep { CHECK_BALLS, AIM, FIRE }
-    private enum Source { GARDEN, FLOWER }
+    private enum Source { GARDEN, FLOWER, NEAR_FLOWER }
     private final RobotIO io;
     private final FieldLayout field;
     private final Navigator navigator;
@@ -75,7 +75,7 @@ public final class AutoStateMachine {
     public String status() {
         return state+(state==State.MOVING?" → "+destinationName:state==State.SHOOTING?" · "+shootStep:state==State.INTAKE?" · "+source:"")
             +String.format(java.util.Locale.ROOT," · %.1f / 30 s",elapsed())
-            +(routine==Routine.SINGLE_TILT?" · Single tilt: opening shots, Garden pickup, then park":" · park starts at 26 s")
+            +(routine==Routine.SINGLE_TILT?" · Single tilt: opening shots, nearest Flower pickup, then park":" · park starts at 26 s")
             +(extraAttempted?" · Extra pollen sweep attempted":"")
             +(movementOnly?" · MOVEMENT ONLY: mechanisms OFF, simulator dwell timing":"")
             +(!useVision?" · Camera-free: fixed route, no tag detection, Hive tilt unverified":"")
@@ -94,6 +94,7 @@ public final class AutoStateMachine {
     }
     private Pose hive() { return flipped?field.farHive[alliance]:field.hive[alliance]; }
     private void pickup() {
+        if(routine==Routine.SINGLE_TILT){source=Source.NEAR_FLOWER;moveThen(field.nearFlower[alliance],"Nearest Flower",State.INTAKE);return;}
         if(!gardenDone){source=Source.GARDEN;moveThen(field.garden[alliance],"Garden",State.INTAKE);}
         else if(!flowerDone){source=Source.FLOWER;moveThen(field.flower[alliance],"Flower",State.INTAKE);}
         else{finalShotHiveState=flipped?1:0;enter(useVision?State.WAIT_TILT:State.WAITING);}
@@ -186,6 +187,10 @@ public final class AutoStateMachine {
             switch(state) {
                 case INIT:moveThen(hive(),"Hive",State.SHOOTING);break;
                 case MOVING:
+                    if(afterMove==State.INTAKE&&source==Source.NEAR_FLOWER&&sensors.pose.distance(destination)<.65
+                            &&Math.abs(Pose.angle(destination.heading-sensors.pose.heading))<Math.toRadians(2)){
+                        enter(State.INTAKE);break;
+                    }
                     // Pickup needs a usable approach, not sub-inch shooting
                     // accuracy. Stop before intaking; never loosen shot alignment.
                     if(!useVision&&afterMove==State.INTAKE&&source==Source.GARDEN&&sensors.pose.distance(destination)<=3
@@ -262,11 +267,11 @@ public final class AutoStateMachine {
                     // Touch at a corner, then strafe clear of the outlet. Allow
                     // staged releases to clear before sweeping them through the
                     // front intake; only the measured count completes pickup.
-                    if(source==Source.FLOWER&&age<.12)out.forward=.3;
-                    else if(source==Source.FLOWER&&age<.24)out.strafeRight=-.4;
-                    else if(source==Source.FLOWER&&age<1.24)out.strafeRight=.2;
-                    else if(source==Source.FLOWER&&age<2.24)out.forward=0;
-                    else if(source==Source.FLOWER)out.forward=.65;
+                    if(source!=Source.GARDEN&&age<.12)out.forward=.3;
+                    else if(source!=Source.GARDEN&&age<.24)out.strafeRight=-.4;
+                    else if(source!=Source.GARDEN&&age<1.24)out.strafeRight=.2;
+                    else if(source!=Source.GARDEN&&age<2.24)out.forward=0;
+                    else if(source!=Source.GARDEN)out.forward=.65;
                     else if(!useVision){
                         // Finish the short, collision-checked Garden approach
                         // while intaking, then leave on the bounded pickup timer.

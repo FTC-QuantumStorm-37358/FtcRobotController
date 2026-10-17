@@ -9,7 +9,7 @@ const ctx=new Proxy({},{get:()=>()=>{},set:()=>true});globalThis.document={creat
 const {buildField,buildRobot}=await import('../dist/model.js');
 const {GamePhysics,robotAllowed}=await import('../dist/game-physics.js');
 await compileJava();
-for(const alliance of [0,1])for(const singleTilt of [false,true])for(const reportedCount of [-1,4]){
+for(const alliance of [0,1])for(const singleTilt of [false,true])for(const reportedCount of [-1,0,4]){
  const child=launchJava(),lines=createInterface({input:child.stdout}),queue=[],waiters=[];
  lines.on('line',line=>{const m=JSON.parse(line);if(waiters.length)waiters.shift()(m);else queue.push(m);});
  const next=()=>queue.length?Promise.resolve(queue.shift()):new Promise(resolve=>waiters.push(resolve));
@@ -27,7 +27,7 @@ for(const alliance of [0,1])for(const singleTilt of [false,true])for(const repor
    const name=r.status.split(' · ')[0];if(name!==last){visits.push(name);if(r.state==='MOVING'&&name.includes('Garden'))assert(Math.abs(time-3)<.1,'Opening three-second pause is retained');last=name;}
    if(r.state==='INTAKE'){
     if(r.status.includes('INTAKE · GARDEN')&&gardenAt===null)gardenAt=time;
-    if(r.status.includes('INTAKE · FLOWER')&&flowerAt===null)flowerAt=time;
+    if((r.status.includes('INTAKE · FLOWER')||r.status.includes('INTAKE · NEAR_FLOWER'))&&flowerAt===null)flowerAt=time;
    }else{
     if(gardenAt!==null){pauses.push(['garden',time-gardenAt]);gardenAt=null;}
     if(flowerAt!==null){pauses.push(['flower',time-flowerAt]);flowerAt=null;}
@@ -37,9 +37,9 @@ for(const alliance of [0,1])for(const singleTilt of [false,true])for(const repor
    time=Number((time+.02).toFixed(8));seq++;r=await send({type:'step',runId:'dry',seq,time,sensors:read()});
   }
   assert.equal(r.state,'PARK');assert(!r.running);assert(time<30,r.status);
-  assert(pauses.some(([name,d])=>name==='garden'&&Math.abs(d-.14)<.03),'Simulator Garden dwell retained even with full/unknown count');
-  if(singleTilt){assert(parkAt<11);assert.equal(visits.filter(v=>v==='SHOOTING').length,1);assert(!visits.some(v=>v.includes('Flower')));}
+  if(singleTilt){assert(parkAt<15);assert.equal(visits.filter(v=>v==='SHOOTING').length,1);assert(visits.includes('MOVING → Nearest Flower'));assert(!visits.some(v=>v.includes('Garden')));assert(pauses.some(([name,d])=>name==='flower'&&Math.abs(d-2.34)<.03));}
   else{assert.equal(parkAt,26);assert(pauses.some(([name,d])=>name==='flower'&&Math.abs(d-2.34)<.03));assert(visits.includes('EXTRA_PICKUP'),'Dry run follows simulator optional sweep, regardless of unchanged inventory');}
+  if(!singleTilt)assert(pauses.some(([name,d])=>name==='garden'&&Math.abs(d-.14)<.03),'Full routine retains Garden dwell');
   assert(Math.hypot(game.pose.x-(alliance===0?-59:59),game.pose.z-(alliance===0?-30:30))<.7);
   for(const key of ['forward','strafeRight','turnClockwise','shooterPower','feederPower','intakePower'])assert.equal(r.outputs[key],0);
   console.log('DRIVE ONLY',{alliance,singleTilt,reportedCount,parkAt,finishedAt:time,pauses});

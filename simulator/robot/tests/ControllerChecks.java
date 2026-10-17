@@ -208,8 +208,8 @@ public final class ControllerChecks {
             for(int i=0;i<70;i++){step(io,auto);check(io.out.intakePower==0,"Single tilt shoots before pickup");}
             check(io.out.feederPower==1,"Single tilt executes the opening shot even if empty");
             while(io.time<3.2)step(io,auto);
-            check(auto.destination()==f.garden[team],"Single tilt collects Garden pollen after opening shots");
-            io.pose=f.garden[team];step(io,auto);step(io,auto);io.time+=3.1;auto.tick();
+            check(auto.destination()==f.nearFlower[team],"Single tilt visits the nearest Flower after opening shots");
+            io.pose=f.nearFlower[team];step(io,auto);step(io,auto);io.time+=3.1;auto.tick();
             check(auto.getState()==AutoStateMachine.State.PARK&&io.time<26,"Single tilt parks after bounded pickup, without another shot");
             check(io.out.feederPower==0&&io.out.shooterPower==0&&io.out.intakePower==0,"Single tilt parking cancels all mechanisms");
             check(io.count==inventory,"Single tilt does not manufacture inventory or a detected tilt");

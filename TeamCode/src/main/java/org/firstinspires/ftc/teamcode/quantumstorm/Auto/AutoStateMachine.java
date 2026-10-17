@@ -68,7 +68,7 @@ public final class AutoStateMachine {
         opMode.telemetry.addLine("Team One/Two use the SAME simulator start; not the old side-wall starts.");
         opMode.telemetry.addLine("Camera-free: Limelight and camera tilt servo are not used.");
         opMode.telemetry.addLine(selectedRoutine==Routine.SINGLE_TILT
-            ?"DRIVE ONLY: opening pause -> Garden pickup motion/pause -> park."
+            ?"DRIVE ONLY: opening pause -> nearest Flower motion/pause -> park (even with 0 balls)."
             :"DRIVE ONLY: Hive pause -> Garden -> Hive pause -> Flower -> Hive pause -> optional sweep -> park at 26 s.");
         opMode.telemetry.addLine("Shooter, feeder and intake remain OFF. No shots, collection or Hive tilt.");
         opMode.telemetry.addLine("Simulator dwell timers; inventory does not alter the dry-run route.");
