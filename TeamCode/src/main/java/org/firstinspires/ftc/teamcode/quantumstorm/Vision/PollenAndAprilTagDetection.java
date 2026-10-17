@@ -13,7 +13,7 @@ import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import java.util.List;
 
 /** Uses the Limelight 3A color pipeline to approach a visible blue or yellow target. */
-@Autonomous(name = "Approach Blue or Yellow", group = "Vision")
+@Autonomous(name = "Approach Blue or Yellow (Detection)", group = "Vision")
 public class PollenAndAprilTagDetection extends LinearOpMode {
 
     // This must match the Limelight device name in Robot Configuration.
