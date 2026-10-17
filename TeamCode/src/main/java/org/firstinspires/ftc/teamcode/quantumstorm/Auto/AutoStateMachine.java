@@ -101,6 +101,7 @@ public final class AutoStateMachine {
                 opMode.telemetry.addData("Routine",routine.status());
                 opMode.telemetry.addData("State",routine.getState());
                 opMode.telemetry.addData("Last error",routine.lastError().isEmpty()?"None":routine.lastError());
+                opMode.telemetry.addData("Measured / simulator distance",routine.distanceStatus());
                 opMode.telemetry.addData("AprilTags","Not required (camera-free routine)");
                 opMode.telemetry.addData("Navigation","Fixed simulator route; no route search");
                 opMode.telemetry.addData("Mechanisms","DISABLED: movement-only test");

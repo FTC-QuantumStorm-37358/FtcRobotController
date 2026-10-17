@@ -16,6 +16,7 @@ public final class AutoStateMachine {
     private final boolean useVision;
     private final Routine routine;
     private final boolean movementOnly;
+    private final TravelDistanceGuard travel=new TravelDistanceGuard();
     /** Nominal measured-inventory simulator dwell times; not inferred ball counts. */
     public static final double DRY_GARDEN_SECONDS=.14,DRY_FLOWER_SECONDS=2.34;
     /** Timed attempts when inventory is unavailable; never manufacture a ball count. */
@@ -58,6 +59,7 @@ public final class AutoStateMachine {
     public void start(int alliance,double power) {
         if(alliance<0||alliance>1||!Double.isFinite(power)||power<0||power>1)throw new IllegalArgumentException("Invalid alliance or shooter power");
         this.alliance=alliance;this.power=power;startAt=lastNow=io.nowSeconds();running=true;retries=0;
+        travel.reset();
         hiveVision=useVision?new HiveVision(field,alliance):null;
         navigator.useScriptedRoute(!useVision,alliance);
         gardenDone=flowerDone=flipped=flowerTiltConfirmed=extraAttempted=routeFailed=false;finalShotHiveState=-1;error="";destination=null;enter(State.INIT);io.apply(new Outputs());
@@ -68,6 +70,10 @@ public final class AutoStateMachine {
     public boolean isRunning() { return running; }
     public State getState() { return state; }
     public String lastError() { return error; }
+    public String distanceStatus() {
+        return String.format(java.util.Locale.ROOT,"%s: %.1f / %.1f in (limit %.1f); total %.1f in",
+            travel.leg(),travel.traveled(),travel.reference(),travel.limit(),travel.total());
+    }
     public Outputs getOutputs() { return last.copy(); }
     public Pose destination() { return running&&(state==State.MOVING||state==State.PARK)?destination:null; }
     public java.util.List<Pose> route() { return running&&(state==State.MOVING||state==State.PARK)?navigator.route():new java.util.ArrayList<Pose>(); }
@@ -82,9 +88,14 @@ public final class AutoStateMachine {
             +(navigator.isPlanning()?" · Planning route (STOP available)":"")
             +(flowerTiltConfirmed?" · Flower tilt confirmed":"")+(error.isEmpty()?"":" · "+error);
     }
-    private void enter(State state) { this.state=state;stateAt=io.nowSeconds();navigator.reset();if(state==State.SHOOTING)shootStep=ShootStep.CHECK_BALLS; }
+    private void enter(State state) {
+        this.state=state;stateAt=io.nowSeconds();navigator.reset();if(state==State.SHOOTING)shootStep=ShootStep.CHECK_BALLS;
+        if(movementOnly&&(state==State.INTAKE||state==State.EXTRA_PICKUP||state==State.PARK))
+            travel.begin(state==State.INTAKE?"INTAKE:"+source:state.toString(),routine,currentPose);
+    }
     private void moveThen(Pose target,String name,State after) {
         destination=target;destinationName=name;afterMove=after;enter(State.MOVING);
+        if(movementOnly)travel.begin("MOVING → "+name,routine,currentPose);
         if(movementOnly){fallbackActive=false;navigator.useScriptedRoute(true,alliance);}
         Pose current=currentPose;
         progressPose=current;progressAt=io.nowSeconds();
@@ -172,8 +183,18 @@ public final class AutoStateMachine {
             double held=now-holdAt;state=resumeState;resumeState=null;stateAt=resumeStateAt+held;
             if(!Double.isNaN(shooterAt))shooterAt+=held;
             navigator.reset();progressPose=currentPose;progressAt=now;error="";
+            travel.resumeAt(currentPose);
         }
         if(state==State.PARK&&destination==null)destination=field.parkingTarget(currentPose,alliance);
+        if(movementOnly&&(state==State.MOVING||state==State.INTAKE||state==State.EXTRA_PICKUP||state==State.PARK)){
+            travel.update(currentPose);
+            boolean atTarget=(state==State.MOVING||state==State.PARK)&&destination!=null&&currentPose.distance(destination)<.65;
+            if(travel.exceeded()&&!atTarget){
+                error="Recorded distance limit reached; check odometry scale/direction. "+distanceStatus();
+                if(state==State.PARK)running=false;else fail(error,false);
+                last=out;io.apply(out);return;
+            }
+        }
         // The final four seconds belong exclusively to parking, regardless of
         // which scoring or pickup state was active before the transition.
         if(state!=State.PARK&&elapsed()>=PARK_START_SECONDS){

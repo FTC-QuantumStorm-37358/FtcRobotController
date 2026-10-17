@@ -35,6 +35,16 @@ public final class ControllerChecks {
         return auto;
     }
     public static void main(String[] args){
+        TravelDistanceGuard distance=new TravelDistanceGuard();distance.reset();
+        distance.begin("MOVING → Nearest Flower",AutoStateMachine.Routine.SINGLE_TILT,new Pose(0,0,0));
+        check(Math.abs(distance.reference()-29.594)<.1,"Nearest Flower reference must come from measured simulator inches");
+        distance.update(new Pose(3,4,0));check(Math.abs(distance.traveled()-5)<1e-9,"Measure actual path distance, not X alone or motor time");
+        distance.update(new Pose(0,0,0));check(Math.abs(distance.traveled()-10)<1e-9,"Backtracking must count toward runaway protection");
+        distance.update(new Pose(40,0,0));check(distance.exceeded(),"Recorded-distance overshoot must trip even when odometry reports continuing motion");
+        double beforeHold=distance.traveled();distance.resumeAt(new Pose(50,0,0));distance.update(new Pose(50,0,0));check(distance.traveled()==beforeHold,"Do not fabricate travel across a sensor fault");
+        distance.begin("MOVING → Hive scripted far face",AutoStateMachine.Routine.FULL,new Pose(0,0,0));double firstReturn=distance.reference();
+        distance.begin("MOVING → Hive scripted far face",AutoStateMachine.Routine.FULL,new Pose(0,0,0));check(distance.reference()<firstReturn,"Repeated Hive returns need their own recorded distances");
+        distance.begin("unknown leg",AutoStateMachine.Routine.FULL,new Pose(0,0,0));check(distance.exceeded(),"Missing distance recordings must fail safe");
         IO io=new IO();io.readDuration=.001;AutoStateMachine auto=make(io);auto.start(0,.4);
         for(int i=0;i<70;i++){io.time+=.02;auto.tick();}
         check(auto.isRunning(),"Reading a real sensor advances wall time; fresh data must not be rejected as future data");
