@@ -26,7 +26,19 @@ Java uses simulation time in the browser and a monotonic clock on the robot. The
 
 ## FTC repository integration
 
-### Current hardware mode: movement-only rehearsal
+### Current QuantumStorm hardware mode: timed, odometry-free playback
+
+All eight **QuantumStorm Red/Blue Team One/Two Auto / Single Tilt** entries now use `TimedDriveReplay`: a recording of the simulator's robot-relative drive commands and their durations. They never initialize or read Pinpoint/`odometry_1`, Limelight, AprilTags or ball-count sensors. Shooter, feeder and intake remain OFF through an independent hardware interlock; their configured devices must still exist. TeleOp is unchanged. INIT and running telemetry explicitly say `TIMED REPLAY` / `NO ODOMETRY` so you can identify the newly deployed build.
+
+Full Auto records 28.48 seconds, starting its parking phase at 26 seconds. Single Tilt records 9.86 seconds: opening pretend-shot pause → nearest Flower approach/pickup movement → park, starting parking at 7.84 seconds. The simulator's original zero-drive shooting/intake pauses are retained. Both Team One/Two use their alliance's same start; Blue is the 180-degree field mirror of Red and uses the same robot-relative drive commands.
+
+This is **open-loop playback**, not measured-distance control: it repeats motor commands, but cannot guarantee the same physical inches, heading or parking result. It cannot detect slipping, obstacles or an incorrect starting pose. Place/align the robot at the displayed simulator start, test on a clear field and keep STOP ready. Battery voltage, wheel response and loading affect travel. Manual STOP, invalid/backward clock shutdown, a control-loop-gap shutdown (over 250 ms) and the 30-second hard deadline remain enabled. No watchdog warning is hidden or timeout increased.
+
+To regenerate after route changes, run `node scripts/record-timed-drive.mjs` from `simulator/`, then rebuild/upload the Robot Controller app. It runs the shared Java movement-only controller with simulated physics and writes `TimedDriveRecording.java`; no browser or laptop is required during robot playback. If feedback-mode routes changed, regenerate their distance references first as described below. Verify with `node checks/timed-replay-check.mjs`: it checks both alliances/routines with unavailable odometry, zero ball count and no vision, plus mechanism interlocks, STOP and deadlines. Desktop tests can select `timedReplay:true`; the normal webpage remains in its existing shared-controller scoring mode.
+
+### Alternative feedback mode and distance references
+
+The following feedback-mode details apply to the separate **BIOBUZZ Shared Java Red/Blue** adapter and desktop shared-controller tests, NOT the eight QuantumStorm timed-playback entries above. That adapter still requires configured, calibrated odometry; it does not silently fall back to timed driving.
 
 Simulator travel is recorded per movement/pickup/parking leg in `robot/reference-distances.csv` (inches and millimeters) and `RecordedDistances.java`. To regenerate after changing a route, run `node scripts/record-distances.mjs` from `simulator/`. The recorder runs the actual shared Java controller with physical simulation; it does not estimate distance from motor power or time. Red/Blue use mirrored geometry. Single Tilt currently records about 29.6 inches to the nearest Flower, 7.4 inches of pickup sweep and 34.5 inches to parking.
 
@@ -34,7 +46,7 @@ On the robot, Pinpoint already reports inches. Navigation still closes position 
 
 Before autonomous, use **Test: Distance Inches (motors OFF)**. After INIT/PLAY, press A to zero the measurement, then physically push the robot exactly 24 inches straight using a tape measure. The straight-line reading should be 24 inches. If it is not, correct the Pinpoint pod type/resolution, directions and wiring before driving autonomous. This test never powers the drive motors. No new encoder tick/wheel-size conversion is guessed.
 
-All eight QuantumStorm autonomous entries now run the shared controller with movement-only enabled. The SDK BIOBUZZ adapter also defaults `FtcHardwareConfig.movementOnly=true` (with `useVision=false`). The browser stays in normal scoring mode. Robot outputs suppress shooter, feeder, intake and camera-pipeline commands; both hardware adapters independently block scoring mechanisms as a second safeguard. Existing mechanism devices are still initialized and stopped, so their configured hardware names must remain valid. TeleOp is unchanged.
+The SDK BIOBUZZ adapter defaults `FtcHardwareConfig.movementOnly=true` (with `useVision=false`). The browser stays in normal scoring mode. Movement-only outputs suppress shooter, feeder, intake and camera-pipeline commands, and the adapter independently blocks scoring mechanisms as a second safeguard. Existing mechanism devices are still initialized and stopped, so their configured hardware names must remain valid. TeleOp is unchanged.
 
 The robot retains the simulator's pauses instead of skipping the shooting/pickup states: nominal one-second spin-up plus two-second feed dwell, 0.14-second Garden dwell and 2.34-second Flower release/sweep dwell. These are dry-run schedule constants, not invented ball counts. Full/unknown inventory cannot skip the route or prolong pickup in movement-only mode. Chassis movement during the Flower sweep and optional leftover sweep remains; no real collection or scoring is expected. Full routines still start parking at 26 seconds; Single Tilt rehearses opening pause → nearest Flower → park. STOP, odometry validation, stalled-motion checks and the 30-second hard deadline remain active.
 
@@ -44,9 +56,11 @@ In movement-only mode, a transient invalid/stale odometry sample or sensor-read 
 
 This folder is bundled inside the FTC repository at `simulator/`. `TeamCode/build.gradle` registers `robot/shared/src/main/java` and `robot/ftc/src/main/java` directly in its Android `sourceSets`. No separate checkout, machine-specific source link, or Java copy is needed. Open the whole repository root in Android Studio and sync Gradle after pulling changes. Opening only TeamCode, copying only AutoStateMachine.java, or an unsuccessful sync can leave `biobuzz` imports unresolved. Missing required shared files now produce a clear Gradle error rather than a cascade of missing symbols. The standalone `shared-sources.gradle` helper remains available for separate simulator checkouts.
 
-Android Studio and the desktop runner compile the same shared sources. Build/deploy the FTC project normally. **Red/Blue Team One/Two Auto** now wrap the shared controller in camera-free mode with the existing QuantumStorm hardware and simulator alliance start. **BIOBUZZ Shared Java Red/Blue** use the configurable FTC adapter; its calibration gate remains in place.
+Android Studio and the desktop runner compile the same shared sources. Build/deploy the FTC project normally. **Red/Blue Team One/Two Auto** use the timed recorder/player described above with the existing QuantumStorm drive hardware and simulator alliance start. **BIOBUZZ Shared Java Red/Blue** use the configurable feedback FTC adapter; its calibration gate remains in place.
 
 ## Camera-free routine
+
+This section describes shared-controller/browser behavior and the optional feedback adapter. QuantumStorm hardware now replays a drive-only recording of that sequence as described above; feedback sensor gates, scoring outputs and route planning below do not run in those eight playback OpModes.
 
 ### Additional Single Tilt OpModes
 

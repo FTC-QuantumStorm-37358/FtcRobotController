@@ -2,117 +2,74 @@ package org.firstinspires.ftc.teamcode.quantumstorm.Auto;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
-import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
-import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
-import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.biobuzz.FieldLayout;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.*;
 import org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine.Routine;
+import org.firstinspires.ftc.teamcode.biobuzz.TimedDriveReplay;
 import org.firstinspires.ftc.teamcode.biobuzz.ftc.SafeShutdown;
-import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Intake;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Shooter;
-import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
 
-/** Drive-only, camera-free rehearsal of the simulator's shared controller.
- * Calibrate start, Pinpoint offsets/directions, waypoints and drive speed.
- * Simulator dwell timers remain; scoring mechanisms are held OFF.
- */
+/** Odometry-free, drive-only playback of a simulator recording. No sensor hardware is mapped. */
 public final class AutoStateMachine {
     private final LinearOpMode opMode;
     private final AutoStartPosition position;
-    private final MecanumDrive drive;
-    private final PinpointOdometry odometry;
-    private final Shooter shooter;
-    private final Intake intake;
     private final ElapsedTime clock=new ElapsedTime();
-    private final org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine routine;
-
-    public AutoStateMachine(LinearOpMode opMode,AutoStartPosition position) {
-        this(opMode,position,Routine.FULL);
-    }
-    public AutoStateMachine(LinearOpMode opMode,AutoStartPosition position,Routine selectedRoutine) {
+    private final TimedDriveReplay replay;
+    public AutoStateMachine(LinearOpMode opMode,AutoStartPosition position){this(opMode,position,Routine.FULL);}
+    public AutoStateMachine(LinearOpMode opMode,AutoStartPosition position,Routine selectedRoutine){
         this.opMode=opMode;this.position=position;
-        int alliance=position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2?0:1;
-        FieldLayout field=new FieldLayout();Pose start=field.hive[alliance];
-        initStage("Initializing drive motors");
-        drive=new MecanumDrive(opMode.hardwareMap);
-        initStage("Initializing odometry_1: verify Pinpoint wiring/configuration");
-        odometry=new PinpointOdometry(opMode.hardwareMap,new Pose2D(DistanceUnit.INCH,start.x,start.y,AngleUnit.RADIANS,start.heading));
-        initStage("Initializing and disabling shooter and intake (movement-only)");
-        shooter=new Shooter(opMode.hardwareMap);intake=new Intake(opMode.hardwareMap);
+        initStage("Initializing drive motors; timed replay, no odometry");
+        final MecanumDrive drive=new MecanumDrive(opMode.hardwareMap);
+        initStage("Initializing and disabling shooter / feeder / intake");
+        final Shooter shooter=new Shooter(opMode.hardwareMap);final Intake intake=new Intake(opMode.hardwareMap);
         RobotIO io=new RobotIO(){
             private boolean stopped;
             public boolean stopRequested(){return opMode.isStopRequested()||Thread.currentThread().isInterrupted();}
             public double nowSeconds(){return clock.seconds();}
-            public Sensors readSensors(){
-                odometry.update();double now=clock.seconds();
-                Pose pose=new Pose(odometry.getX(),odometry.getY(),odometry.getPose().getHeading(AngleUnit.RADIANS));
-                return new Sensors(pose,now,odometry.isValid(),false,-1,Vision.empty(0,now));
-            }
+            public Sensors readSensors(){throw new UnsupportedOperationException("Timed playback must never read sensors");}
             public void apply(Outputs o){
-                if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.shooterPower==0&&o.feederPower==0&&o.intakePower==0){
+                if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0){
                     if(!stopped){stopped=true;SafeShutdown.run(drive::stop,shooter::stop,intake::stop);}return;
                 }
-                stopped=false;
-                double[] wheels=o.wheelPowers();drive.setPowers(wheels[0],wheels[1],wheels[2],wheels[3]);
-                // Hardware interlock: autonomous is drive-only even if an upstream output regresses.
+                stopped=false;double[] w=o.wheelPowers();drive.setPowers(w[0],w[1],w[2],w[3]);
+                // Independent hardware interlock: playback cannot activate scoring mechanisms.
                 shooter.stop();intake.stop();
             }
         };
-        routine=new org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine(io,field,false,selectedRoutine,true);
+        replay=new TimedDriveReplay(io,selectedRoutine);
+        int alliance=alliance();Pose start=new FieldLayout().hive[alliance];
         opMode.telemetry.addData("Autonomous",position.label);
-        opMode.telemetry.addData("Required simulator start","X %.3f, Y %.3f in, heading %.1f deg",start.x,start.y,Math.toDegrees(start.heading));
-        opMode.telemetry.addLine("Team One/Two use the SAME simulator start; not the old side-wall starts.");
-        opMode.telemetry.addLine("Camera-free: Limelight and camera tilt servo are not used.");
-        opMode.telemetry.addLine(selectedRoutine==Routine.SINGLE_TILT
-            ?"DRIVE ONLY: opening pause -> nearest Flower motion/pause -> park (even with 0 balls)."
-            :"DRIVE ONLY: Hive pause -> Garden -> Hive pause -> Flower -> Hive pause -> optional sweep -> park at 26 s.");
-        opMode.telemetry.addLine("Shooter, feeder and intake remain OFF. No shots, collection or Hive tilt.");
-        opMode.telemetry.addLine("Simulator dwell timers; inventory does not alter the dry-run route.");
-        opMode.telemetry.addLine("Calibrate start, odometry and drive speed; physical arrival times may differ.");
+        opMode.telemetry.addLine("TIMED REPLAY: odometry_1 is NOT required, initialized or read.");
+        opMode.telemetry.addLine("Limelight, AprilTags and ball count are NOT used. Mechanisms remain OFF.");
+        opMode.telemetry.addData("Required physical start","X %.3f, Y %.3f in, heading %.1f deg",start.x,start.y,Math.toDegrees(start.heading));
+        opMode.telemetry.addLine("Team One/Two share their alliance start. Place and align the robot manually.");
+        opMode.telemetry.addData("Recorded duration","%.2f seconds; original simulator pauses retained",replay.duration());
+        opMode.telemetry.addLine("OPEN LOOP: cannot correct slipping, wrong speed or obstacles. Clear field; keep STOP ready.");
         opMode.telemetry.update();
     }
-
+    private int alliance(){return position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2?0:1;}
     private void initStage(String message){
         if(opMode.isStopRequested()||Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException("INIT cancelled");
         opMode.telemetry.addData("Startup",message);opMode.telemetry.update();
-        com.qualcomm.robotcore.util.RobotLog.ii("BioBuzzInit",message);
     }
-
     public void run(){
-        int alliance=position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2?0:1;
-        if(opMode.isStopRequested())return;
-        clock.reset();
-        try {
-            routine.start(alliance,Constants.SHOOTER_POWER);
-            // Bounded, stationary wait; included in the match's 26/30-second clock.
-            while(opMode.opModeIsActive()&&clock.seconds()<2){
-                odometry.update();
-                opMode.telemetry.addData("Startup","Waiting for Pinpoint: %s",odometry.getStatus());opMode.telemetry.update();
-                if(odometry.getStatus().name().equals("READY")||odometry.getStatus().name().startsWith("FAULT"))break;
-                opMode.idle();
+        if(opMode.isStopRequested())return;clock.reset();
+        try{
+            replay.start(alliance());
+            while(opMode.opModeIsActive()&&replay.isRunning()){
+                replay.tick();opMode.telemetry.addData("Autonomous",position.label);
+                opMode.telemetry.addData("Routine",replay.status());opMode.telemetry.addData("State",replay.getState());
+                opMode.telemetry.addData("Last error",replay.lastError().isEmpty()?"None":replay.lastError());
+                opMode.telemetry.addData("Odometry / vision / inventory","NOT USED (timer playback)");
+                opMode.telemetry.addData("Mechanisms","DISABLED");opMode.telemetry.update();opMode.idle();
             }
-            while(opMode.opModeIsActive()&&routine.isRunning()){
-                routine.tick();
-                opMode.telemetry.addData("Autonomous",position.label);
-                opMode.telemetry.addData("Routine",routine.status());
-                opMode.telemetry.addData("State",routine.getState());
-                opMode.telemetry.addData("Last error",routine.lastError().isEmpty()?"None":routine.lastError());
-                opMode.telemetry.addData("Measured / simulator distance",routine.distanceStatus());
-                opMode.telemetry.addData("AprilTags","Not required (camera-free routine)");
-                opMode.telemetry.addData("Navigation","Fixed simulator route; no route search");
-                opMode.telemetry.addData("Mechanisms","DISABLED: movement-only test");
-                odometry.addTelemetry(opMode.telemetry);opMode.telemetry.update();
-                opMode.idle();
-            }
-        }catch(java.util.concurrent.CancellationException e){
-            // STOP is a normal exit, not an autonomous fault.
-        }catch(RuntimeException e){
-            com.qualcomm.robotcore.util.RobotLog.ee("BioBuzzAuto",e,"Autonomous hardware/controller fault");
+        }catch(java.util.concurrent.CancellationException ignored){/* STOP is normal. */}
+        catch(RuntimeException e){
+            com.qualcomm.robotcore.util.RobotLog.ee("BioBuzzReplay",e,"Timed autonomous hardware fault");
             opMode.telemetry.addData("Autonomous stopped",e.getMessage());opMode.telemetry.update();
-        }finally{routine.stop();}
+        }finally{replay.stop();}
     }
 }
