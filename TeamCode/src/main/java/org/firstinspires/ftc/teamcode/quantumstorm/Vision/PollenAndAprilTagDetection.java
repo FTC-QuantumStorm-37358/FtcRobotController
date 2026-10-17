@@ -1,234 +1,133 @@
 package org.firstinspires.ftc.teamcode.quantumstorm.Vision;
 
-import android.util.Size;
-
+import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.LLResultTypes;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.DcMotor;
 
-import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
-import org.firstinspires.ftc.vision.VisionPortal;
-import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
-import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
-import org.firstinspires.ftc.vision.opencv.ColorBlobLocatorProcessor;
-import org.firstinspires.ftc.vision.opencv.ColorRange;
-import org.opencv.core.RotatedRect;
 
-import java.util.Arrays;
 import java.util.List;
 
-/**
- * Searches for blue objects, approaches blue or yellow pollen, backs away and
- * turns away when red is seen, and reports AprilTags at the same time.
- * The approach/search behavior is intentionally slow; tune it on blocks before
- * running near field walls or other robots.
- */
-@Autonomous(name = "Auto: Find Blue/Yellow, Avoid Red", group = "Vision")
-public class PollenAndAprilTagAuto extends LinearOpMode {
+/** Uses the Limelight 3A color pipeline to approach a visible blue or yellow target. */
+@Autonomous(name = "Approach Blue or Yellow (Detection)", group = "Vision")
+public class PollenAndAprilTagDetection extends LinearOpMode {
 
-    private static final String WEBCAM_NAME = "limelight 3a";
-    // Standard FTC servo commands use 0.0..1.0. These thresholds assume
-    // the servo's full commanded travel represents 0..180 degrees.
-    private static final double APRILTAG_MODE_MIN_SERVO_DEGREES = 70.0;
-    private static final double APRILTAG_MODE_MAX_SERVO_DEGREES = 120.0;
-    private static final int FRAME_WIDTH = 320;
-    private static final int FRAME_HEIGHT = 240;
-    private static final int MIN_BLOB_AREA = 80;
-    private static final int MAX_BLOB_AREA = FRAME_WIDTH * FRAME_HEIGHT;
-
-    // Tune these after checking the camera preview and measured object areas.
-    private static final double MAX_FORWARD_POWER = 0.22;
-    private static final double MAX_STRAFE_POWER = 0.18;
-    private static final double SEARCH_TURN_POWER = 0.14;
-    private static final double RED_BACKUP_POWER = 0.16;
-    private static final double RED_TURN_POWER = 0.16;
-    private static final int TARGET_STOP_AREA = 3500;
-    private static final int CENTER_TOLERANCE_PIXELS = 18;
-    private static final double TAG_SEARCH_TURN_POWER = 0.10;
-    // A tag farther than this is treated as the distant fire spot. Tune on the field.
-    private static final double FIRE_SPOT_FAR_RANGE_IN = 24.0;
+    // This must match the Limelight device name in Robot Configuration.
+    private static final String LIMELIGHT_NAME = "limelight 3A";
+    private static final double APPROACH_POWER = 0.12;
+    private static final double STRAFE_GAIN = 0.008;
+    private static final double MAX_STRAFE_POWER = 0.12;
+    private static final double CENTER_TOLERANCE_DEGREES = 2.0;
+    private static final double STOP_TARGET_AREA_PERCENT = 12.0;
 
     @Override
     public void runOpMode() {
+        // Set up the drive motors and the intake motor.
         MecanumDrive drive = new MecanumDrive(hardwareMap);
-        Servo cameraServo = hardwareMap.get(Servo.class, Constants.LIMELIGHT_TILT_SERVO);
+        DcMotor intake = hardwareMap.get(DcMotor.class, Constants.INTAKE_MOTOR);
+        intake.setDirection(DcMotor.Direction.FORWARD);
+        intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        intake.setPower(0);
 
-        ColorBlobLocatorProcessor yellowLocator = createColorLocator(ColorRange.YELLOW);
-        ColorBlobLocatorProcessor blueLocator = createColorLocator(ColorRange.BLUE);
-        ColorBlobLocatorProcessor redLocator = createColorLocator(ColorRange.RED);
-        AprilTagProcessor aprilTagProcessor = new AprilTagProcessor.Builder().build();
-        VisionPortal portal = new VisionPortal.Builder()
-                .setCamera(hardwareMap.get(WebcamName.class, WEBCAM_NAME))
-                .setCameraResolution(new Size(FRAME_WIDTH, FRAME_HEIGHT))
-                .addProcessors(Arrays.asList(yellowLocator, blueLocator, redLocator, aprilTagProcessor))
-                .build();
+        // Limelight3A is the hardware type; it is not a WebcamName.
+        Limelight3A limelight = hardwareMap.get(Limelight3A.class, LIMELIGHT_NAME);
+        // Choose the color pipeline number from Constants, then start the camera.
+        limelight.pipelineSwitch(Constants.LIMELIGHT_COLOR_PIPELINE);
+        limelight.start();
 
-        telemetry.addLine("Ready: blue search, yellow/blue approach, red avoidance, AprilTags.");
-        telemetry.addLine("Use a clear test area; press Start to move.");
+        telemetry.addLine("Approaching the largest target from the Limelight color pipeline.");
+        telemetry.addLine("Set that pipeline to detect blue or yellow objects.");
+        telemetry.addLine("Press Start to begin; stop the OpMode from the Driver Station.");
         telemetry.update();
         waitForStart();
 
         try {
+            // Keep checking for a target until the OpMode is stopped.
             while (opModeIsActive()) {
-                double servoPosition = cameraServo.getPosition();
-                double servoDegrees = servoPosition * 180.0;
-                boolean aprilTagMode = servoDegrees >= APRILTAG_MODE_MIN_SERVO_DEGREES
-                        && servoDegrees <= APRILTAG_MODE_MAX_SERVO_DEGREES;
+                LLResult result = limelight.getLatestResult();
+                LLResultTypes.ColorResult target = findLargestColorTarget(result);
 
-                List<ColorBlobLocatorProcessor.Blob> yellow = filteredBlobs(yellowLocator);
-                List<ColorBlobLocatorProcessor.Blob> blue = filteredBlobs(blueLocator);
-                List<ColorBlobLocatorProcessor.Blob> red = filteredBlobs(redLocator);
-
-                if (aprilTagMode) {
-                    // In the tag servo range, ignore color blobs and search for tags.
-                    List<AprilTagDetection> tags = aprilTagProcessor.getDetections();
-                    AprilTagDetection farTag = null;
-                    for (AprilTagDetection tag : tags) {
-                        String tagAlliance = allianceForTag(tag.id);
-                        if (!"OTHER".equals(tagAlliance)
-                                && tag.ftcPose != null
-                                && tag.ftcPose.range > FIRE_SPOT_FAR_RANGE_IN) {
-                            farTag = tag;
-                            break;
-                        }
-                    }
-
-                    if (farTag != null) {
-                        drive.stop();
-                        telemetry.addData("Tag alliance", allianceForTag(farTag.id));
-                        telemetry.addData("Tag ID / range", "%d / %.1f in",
-                                farTag.id, farTag.ftcPose.range);
-                        telemetry.addLine("Under fire spot!");
-                        telemetry.addLine("Stopping OpMode.");
-                        telemetry.update();
-                        requestOpModeStop();
-                    } else if (tags.isEmpty()) {
-                        drive.drive(0, 0, TAG_SEARCH_TURN_POWER);
-                        telemetry.addData("Action", "Servo in tag range: searching for AprilTags");
-                    } else {
-                        drive.stop();
-                        telemetry.addData("Action", "AprilTag found; stopped");
-                    }
-                // Red avoidance has priority while the servo is in ball-search mode.
-                } else if (!red.isEmpty()) {
-                    ColorBlobLocatorProcessor.Blob hazard = largest(red);
-                    double redX = hazard.getBoxFit().center.x;
-                    // Turn away from the side where the red object appears.
-                    double turnAway = redX >= FRAME_WIDTH / 2.0
-                            ? -RED_TURN_POWER : RED_TURN_POWER;
-                    drive.drive(-RED_BACKUP_POWER, 0, turnAway);
-                    telemetry.addData("Action", "RED SEEN: backing up and turning away");
+                if (target == null) {
+                    // No target means stop the robot and intake.
+                    drive.stop();
+                    intake.setPower(0);
+                    telemetry.addLine("No color target visible; stopped.");
                 } else {
-                    // Blue is the search target. If it is not visible, approach yellow pollen.
-                    ColorBlobLocatorProcessor.Blob target = !blue.isEmpty()
-                            ? largest(blue)
-                            : (!yellow.isEmpty() ? largest(yellow) : null);
+                    // Limelight reports horizontal angle in degrees and target area in percent.
+                    double angle = target.getTargetXDegrees();
+                    double area = target.getTargetArea();
 
-                    if (target == null) {
-                        // Rotate in place to scan until a blue or yellow blob enters view.
-                        drive.drive(0, 0, SEARCH_TURN_POWER);
-                        telemetry.addData("Action", "Searching for blue / yellow");
+                    if (area >= STOP_TARGET_AREA_PERCENT) {
+                        // A large target is close enough, so stop driving.
+                        drive.stop();
+                        intake.setPower(Constants.INTAKE_POWER);
+                        telemetry.addLine("Target is close; stopped and intaking.");
                     } else {
-                        RotatedRect box = target.getBoxFit();
-                        double horizontalError = box.center.x - FRAME_WIDTH / 2.0;
-                        int area = largestArea(target);
-
-                        if (area >= TARGET_STOP_AREA) {
-                            drive.stop();
-                            telemetry.addData("Action", "Target close; stopped");
-                        } else {
-                            double strafe = Math.abs(horizontalError) <= CENTER_TOLERANCE_PIXELS
-                                    ? 0
-                                    : clamp(horizontalError / (FRAME_WIDTH / 2.0) * MAX_STRAFE_POWER,
-                                            -MAX_STRAFE_POWER, MAX_STRAFE_POWER);
-                            drive.drive(MAX_FORWARD_POWER, strafe, 0);
-                            telemetry.addData("Action", "Moving toward %s",
-                                    !blue.isEmpty() ? "blue" : "yellow pollen");
-                        }
-                        telemetry.addData("Target center", "x=%d y=%d area=%d px",
-                                (int) box.center.x, (int) box.center.y, area);
+                        // Move forward and steer toward the target's center.
+                        double strafe = Math.abs(angle) <= CENTER_TOLERANCE_DEGREES
+                                ? 0.0
+                                : clamp(angle * STRAFE_GAIN,
+                                        -MAX_STRAFE_POWER, MAX_STRAFE_POWER);
+                        drive.drive(APPROACH_POWER, strafe, 0);
+                        intake.setPower(Constants.INTAKE_POWER);
+                        telemetry.addData("Action", "Approaching target");
                     }
+
+                    telemetry.addData("Target angle", "%.1f degrees", angle);
+                    telemetry.addData("Target area", "%.1f%%", area);
                 }
 
-                telemetry.addData("Yellow pollen blobs", yellow.size());
-                telemetry.addData("Blue blobs", blue.size());
-                telemetry.addData("Red blobs", red.size());
-                List<AprilTagDetection> tags = aprilTagProcessor.getDetections();
-                telemetry.addData("Camera servo", "%.2f (about %.0f degrees)", servoPosition, servoDegrees);
-                telemetry.addData("Vision mode", aprilTagMode ? "AprilTags" : "balls/colors");
-                telemetry.addData("AprilTags", tags.size());
-                for (AprilTagDetection tag : tags) {
-                    boolean blueTag = tag.id >= 37 && tag.id <= 45;
-                    boolean redTag = tag.id >= 30 && tag.id <= 37;
-                    telemetry.addData("Tag " + tag.id + " alliance",
-                            blueTag && redTag ? "Blue/Red overlap" :
-                                    blueTag ? "Blue" : redTag ? "Red" : "Other");
-                    if (tag.ftcPose != null) {
-                        telemetry.addData("Tag " + tag.id, "range %.1f in, bearing %.1f deg",
-                                tag.ftcPose.range, tag.ftcPose.bearing);
-                    } else {
-                        telemetry.addData("Tag " + tag.id, "visible; pose unavailable");
-                    }
-                }
                 telemetry.update();
                 sleep(50);
             }
         } finally {
+            // Stop everything when this OpMode ends.
+            intake.setPower(0);
             drive.stop();
-            portal.close();
+            limelight.stop();
         }
     }
 
-    private ColorBlobLocatorProcessor createColorLocator(ColorRange range) {
-        return new ColorBlobLocatorProcessor.Builder()
-                .setTargetColorRange(range)
-                .setContourMode(ColorBlobLocatorProcessor.ContourMode.EXTERNAL_ONLY)
-                .setDrawContours(true)
-                .setBlurSize(5)
-                .build();
-    }
+    private LLResultTypes.ColorResult findLargestColorTarget(LLResult result) {
+        // Invalid camera data means no target was found.
+        if (result == null || !result.isValid()) {
+            return null;
+        }
 
-    private List<ColorBlobLocatorProcessor.Blob> filteredBlobs(ColorBlobLocatorProcessor processor) {
-        List<ColorBlobLocatorProcessor.Blob> blobs = processor.getBlobs();
-        ColorBlobLocatorProcessor.Util.filterByCriteria(
-                ColorBlobLocatorProcessor.BlobCriteria.BY_CONTOUR_AREA,
-                MIN_BLOB_AREA, MAX_BLOB_AREA, blobs);
-        return blobs;
-    }
+        List<LLResultTypes.ColorResult> colorTargets = result.getColorResults();
+        if (colorTargets == null || colorTargets.isEmpty()) {
+            return null;
+        }
 
-    private ColorBlobLocatorProcessor.Blob largest(List<ColorBlobLocatorProcessor.Blob> blobs) {
-        ColorBlobLocatorProcessor.Blob best = blobs.get(0);
-        for (ColorBlobLocatorProcessor.Blob blob : blobs) {
-            if (blob.getContourArea() > best.getContourArea()) {
-                best = blob;
+        LLResultTypes.ColorResult largest = null;
+        // Keep the target that takes up the most camera view.
+        for (LLResultTypes.ColorResult target : colorTargets) {
+            if (largest == null || target.getTargetArea() > largest.getTargetArea()) {
+                largest = target;
             }
         }
-        return best;
-    }
-
-    private int largestArea(ColorBlobLocatorProcessor.Blob blob) {
-        return blob.getContourArea();
-    }
-
-    /** Blue IDs are 37-45; red IDs are 30-37, so ID 37 belongs to both ranges. */
-    private String allianceForTag(int id) {
-        boolean blueTag = id >= 37 && id <= 45;
-        boolean redTag = id >= 30 && id <= 37;
-        if (blueTag && redTag) {
-            return "BLUE/RED OVERLAP";
-        }
-        if (blueTag) {
-            return "BLUE";
-        }
-        if (redTag) {
-            return "RED";
-        }
-        return "OTHER";
+        return largest;
     }
 
     private double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
+
+    /*
+     * Coding Translations
+     *
+     * LIMELIGHT_NAME = the Limelight's name in the Robot Configuration.
+     * pipelineSwitch(...) = tells the Limelight which saved pipeline to use.
+     * getLatestResult() = gets the newest information from the camera.
+     * getColorResults() = gets the color targets found by that pipeline.
+     * getTargetXDegrees() = tells how far the target is left or right.
+     * getTargetArea() = tells how much of the camera view the target fills.
+     * drive(...) = moves the robot; intake.setPower(...) runs the intake motor.
+     * findLargestColorTarget(...) = returns the biggest visible color target.
+     * clamp(...) = keeps the steering power within the allowed range.
+     */
 }
