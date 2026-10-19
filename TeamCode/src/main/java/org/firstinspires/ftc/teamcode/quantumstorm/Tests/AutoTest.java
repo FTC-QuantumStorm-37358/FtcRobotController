@@ -1,48 +1,52 @@
 package org.firstinspires.ftc.teamcode.quantumstorm.Tests;
 
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
-@Autonomous
+import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
+
+@Autonomous(name = "Auto Test", group = "Tests")
 public class AutoTest extends LinearOpMode {
 
-    private DcMotor leftDrive = null;
-    private DcMotor rightDrive = null;
+    private static final double DRIVE_POWER = 0.5;
+    private static final long DRIVE_DURATION_MS = 2000;
+    private static final long STOP_DURATION_MS = 500;
 
     @Override
     public void runOpMode() {
-        // Initialize motors based on your robot configuration
-        leftDrive  = hardwareMap.get(DcMotor.class, "left_front_drive");
-        rightDrive = hardwareMap.get(DcMotor.class, "right_front_drive");
+        MecanumDrive drive = new MecanumDrive(hardwareMap);
 
-        // Reverse one side so both wheels spin forward together
-        leftDrive.setDirection(DcMotor.Direction.REVERSE);
-        rightDrive.setDirection(DcMotor.Direction.FORWARD);
+        try {
+            telemetry.addData("Status", "Initialized");
+            telemetry.update();
+            waitForStart();
 
-        telemetry.addData("Status", "Initialized");
-        telemetry.update();
+            if (!opModeIsActive()) {
+                return;
+            }
 
-        // Wait for the DS press start
-        waitForStart();
+            telemetry.addData("Action", "Driving forward");
+            telemetry.update();
+            drive.drive(DRIVE_POWER, 0, 0);
+            sleep(DRIVE_DURATION_MS);
+            if (!opModeIsActive()) {
+                return;
+            }
 
-        // 1. Drive Forward at 0.5 power for 2 seconds
-        leftDrive.setPower(0.5);
-        rightDrive.setPower(0.5);
-        sleep(1000);
+            telemetry.addData("Action", "Stopping briefly");
+            telemetry.update();
+            drive.stop();
+            sleep(STOP_DURATION_MS);
+            if (!opModeIsActive()) {
+                return;
+            }
 
-        // 2. Stop for 0.5 seconds
-        leftDrive.setPower(0.0);
-        rightDrive.setPower(0.0);
-        sleep(500);
-
-        // 3. Drive Backward at 0.5 power for 2 seconds
-        leftDrive.setPower(-0.5);
-        rightDrive.setPower(-0.5);
-        sleep(2000);
-
-        // 4. Stop the robot
-        leftDrive.setPower(0.0);
-        rightDrive.setPower(0.0);
+            telemetry.addData("Action", "Driving backward");
+            telemetry.update();
+            drive.drive(-DRIVE_POWER, 0, 0);
+            sleep(DRIVE_DURATION_MS);
+        } finally {
+            drive.stop();
+        }
     }
 }
