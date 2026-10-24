@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import java.util.List;
 
-/** Scans three single-color pipelines and displays the last color actually detected. */
+/** Searches the blue Limelight color pipeline and displays when blue is detected. */
 @Autonomous(name = "Search for Nectar and Pollen", group = "Vision")
 public class Colordetection extends LinearOpMode {
 
@@ -17,9 +17,7 @@ public class Colordetection extends LinearOpMode {
     private static final int BLUE_PIPELINE = 1;
     private static final int RED_PIPELINE = 2;
     private static final int YELLOW_PIPELINE = 3;
-    private static final int[] COLOR_PIPELINES = {
-            BLUE_PIPELINE, RED_PIPELINE, YELLOW_PIPELINE
-    };
+    private static final int[] COLOR_PIPELINES = { BLUE_PIPELINE };
     private static final long PIPELINE_SCAN_INTERVAL_MS = 750;
 
     @Override
@@ -33,13 +31,13 @@ public class Colordetection extends LinearOpMode {
             return;
         }
 
-        limelight.pipelineSwitch(BLUE_PIPELINE);
+        limelight.pipelineSwitch(COLOR_PIPELINES[0]);
         limelight.start();
 
         telemetry.addData("Limelight", limelight.isConnected()
                 ? "Connected" : "Waiting for connection");
-        telemetry.addLine("Configure pipeline 1 for blue, 2 for red, and 3 for yellow only.");
-        telemetry.addLine("Shows the last detected color, even while scanning other pipelines.");
+        telemetry.addLine("Configure pipeline 1 to detect blue only.");
+        telemetry.addLine("The OpMode searches pipeline 1 for blue targets.");
         telemetry.update();
         waitForStart();
 
