@@ -73,7 +73,9 @@ public class Constants {
 
     // Pipeline numbers as set up in the Limelight web UI
     public final static int LIMELIGHT_APRILTAG_PIPELINE = 0;
-    public final static int LIMELIGHT_BALL_PIPELINE = 1;
+    public final static int LIMELIGHT_COLOR_PIPELINE = 1;
+    // Keep the old name available for existing ball-search code.
+    public final static int LIMELIGHT_BALL_PIPELINE = LIMELIGHT_COLOR_PIPELINE;
 
     // =========================================================
     // PINPOINT ODOMETRY

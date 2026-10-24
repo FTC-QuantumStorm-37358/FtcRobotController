@@ -370,9 +370,9 @@ public class AutoStateMachine {
             shootStep = ShootStep.CHECK_BALLS;
         } else if (newState == State.INTAKE) {
             intake.start();
-            if (pickupSource == PickupSource.GROUND) {
-                camera.tiltDown();
-            }
+            // Intake searches for color targets from every pickup source.
+            // The Limelight helper sets false/color mode when the servo moves down.
+            camera.tiltDown();
         } else if (newState == State.PARK) {
             stopEverything();
             parked = false;
