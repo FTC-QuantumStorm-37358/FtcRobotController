@@ -8,13 +8,19 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import java.util.List;
 
-/** Reports targets returned by Limelight color-threshold pipeline 1. */
+/** Scans three single-color pipelines and displays the last color actually detected. */
 @Autonomous(name = "Search for Nectar and Pollen", group = "Vision")
 public class Colordetection extends LinearOpMode {
 
     private static final String LIMELIGHT_NAME = "limelight 3a";
-    private static final int COLOR_PIPELINE = 1;
-    private static final boolean BLUE = true;
+    //pipeline 1 = blue, 2 = red, 3 = yellow choose between these to change code for auto
+    private static final int BLUE_PIPELINE = 1;
+    private static final int RED_PIPELINE = 2;
+    private static final int YELLOW_PIPELINE = 3;
+    private static final int[] COLOR_PIPELINES = {
+            BLUE_PIPELINE, RED_PIPELINE, YELLOW_PIPELINE
+    };
+    private static final long PIPELINE_SCAN_INTERVAL_MS = 750;
 
     @Override
     public void runOpMode() {
@@ -27,39 +33,44 @@ public class Colordetection extends LinearOpMode {
             return;
         }
 
-        limelight.pipelineSwitch(COLOR_PIPELINE);
+        limelight.pipelineSwitch(BLUE_PIPELINE);
         limelight.start();
 
-        telemetry.addData("Limelight", "Waiting for %s color-threshold pipeline %d",
-                limelight.isConnected() ? "connected" : "connection", COLOR_PIPELINE);
-        telemetry.addData("Selected nectar color", BLUE ? "Blue" : "Red");
-        telemetry.addLine("Pipeline 1 must be configured for the selected color.");
-        telemetry.addLine("A single color-threshold pipeline cannot distinguish yellow pollen.");
+        telemetry.addData("Limelight", limelight.isConnected()
+                ? "Connected" : "Waiting for connection");
+        telemetry.addLine("Configure pipeline 1 for blue, 2 for red, and 3 for yellow only.");
+        telemetry.addLine("Shows the last detected color, even while scanning other pipelines.");
         telemetry.update();
         waitForStart();
 
         try {
-            while (opModeIsActive()) {
-                LLResult result = limelight.getLatestResult();
-                List<LLResultTypes.ColorResult> colorTargets = null;
+            int pipelinePosition = 0;
+            int activePipeline = COLOR_PIPELINES[pipelinePosition];
+            String detectedColor = null;
+            long nextPipelineSwitch = System.currentTimeMillis() + PIPELINE_SCAN_INTERVAL_MS;
 
-                telemetry.addData("Limelight connection", limelight.isConnected()
-                        ? "Connected" : "Not connected");
-                if (result == null) {
-                    telemetry.addLine("Waiting for camera results.");
-                } else if (result.getPipelineIndex() != COLOR_PIPELINE) {
-                    telemetry.addData("Pipeline", "Waiting for pipeline %d",
-                            COLOR_PIPELINE);
-                } else if (!result.isValid()) {
-                    telemetry.addLine("No valid camera result yet.");
-                } else {
-                    colorTargets = result.getColorResults();
-                    int targetCount = colorTargets == null ? 0 : colorTargets.size();
-                    telemetry.addData("Configured color target", targetCount > 0
-                            ? "Nectar seen" : "Searching for " + (BLUE ? "blue" : "red"));
-                    telemetry.addData("Color targets", targetCount);
+            while (opModeIsActive()) {
+                long now = System.currentTimeMillis();
+                if (now >= nextPipelineSwitch) {
+                    pipelinePosition = (pipelinePosition + 1) % COLOR_PIPELINES.length;
+                    activePipeline = COLOR_PIPELINES[pipelinePosition];
+                    limelight.pipelineSwitch(activePipeline);
+                    nextPipelineSwitch = now + PIPELINE_SCAN_INTERVAL_MS;
                 }
-                telemetry.addData("Pollen", "Not separately detectable with this pipeline");
+
+                LLResult result = limelight.getLatestResult();
+                if (limelight.isConnected() && result != null && result.isValid()
+                        && result.getPipelineIndex() == activePipeline) {
+                    List<LLResultTypes.ColorResult> colorTargets = result.getColorResults();
+                    if (colorTargets != null && !colorTargets.isEmpty()) {
+                        detectedColor = colorNameForPipeline(activePipeline);
+                    }
+                }
+
+                telemetry.clearAll();
+                if (detectedColor != null) {
+                    telemetry.addLine(detectedColor);
+                }
                 telemetry.update();
                 sleep(50);
             }
@@ -67,6 +78,17 @@ public class Colordetection extends LinearOpMode {
             limelight.stop();
         }
     }
+
+    private String colorNameForPipeline(int pipeline) {
+        if (pipeline == BLUE_PIPELINE) {
+            return "Blue";
+        }
+        if (pipeline == RED_PIPELINE) {
+            return "Red";
+        }
+        return "Yellow";
+    }
+
 }
 
 
