@@ -37,7 +37,8 @@ public class Intake {
         setPower(0);
     }
 
-    private void setPower(double power) {
+    public void setPower(double power) {
+        power=Math.max(-1,Math.min(1,power));
         intake.setPower(power);
         rightServo.setPower(power);
         leftServo.setPower(power);

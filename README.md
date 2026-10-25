@@ -1782,3 +1782,7 @@ Changes include:
  * The API for the Legacy Module and Core Device Interface Module have been updated.
    - Support for encoders with the Legacy Module is now working.
  * The hardware loop has been updated for better performance.
+
+## BIOBUZZ robot control
+
+The autonomous controller, field layout, navigation, sensor/output interfaces and FTC hardware adapters live entirely in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/biobuzz/`. TeamCode uses its normal Java source folder and has no simulator build dependency. See [robot control setup](TeamCode/ROBOT_CONTROL.md) for modes, calibration and safety limits.
