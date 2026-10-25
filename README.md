@@ -1782,3 +1782,14 @@ Changes include:
  * The API for the Legacy Module and Core Device Interface Module have been updated.
    - Support for encoders with the Legacy Module is now working.
  * The hardware loop has been updated for better performance.
+
+## BIOBUZZ local simulator and shared autonomous controller
+
+The `simulator/` folder contains the local 3D practice webpage, physics, Java desktop bridge, shared autonomous controller and FTC hardware adapter. See [simulator instructions](simulator/README.md) and [robot configuration](simulator/robot/README.md).
+
+```sh
+cd simulator
+npm start
+```
+
+Open http://localhost:8000/. No package installation or hosted webpage is required. TeamCode automatically includes the shared controller and FTC adapter from this checkout. Configure measured hardware and inventory sensors before enabling the new OpModes.

@@ -1,19 +1,16 @@
 package org.firstinspires.ftc.teamcode.quantumstorm.Vision;
 
 import com.qualcomm.hardware.limelightvision.LLResult;
-import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 
-import java.util.List;
-
 /**
  * Limelight 3A on a tilt servo. One pipeline runs at a time:
- *  - false / tiltDown(): color pipeline, used to find game pieces
- *  - true / tiltUp(): AprilTag pipeline, used to find the Hive
+ *  - tiltUp():   AprilTag pipeline, used before shooting at the Hive
+ *  - tiltDown(): ball pipeline, used to find balls on the floor
  *
  * If the camera or servo is missing from the Robot Configuration, this does not
  * crash INIT: isConnected() returns false and every query reports "nothing seen",
@@ -23,19 +20,14 @@ public class LimelightCamera {
 
     private final Limelight3A limelight;   // null if not in the configuration
     private final Servo tiltServo;         // null if not in the configuration
-    private boolean aprilTagMode = false;  // Start in color-search mode.
 
     public LimelightCamera(HardwareMap hardwareMap) {
         limelight = hardwareMap.tryGet(Limelight3A.class, Constants.LIMELIGHT);
         tiltServo = hardwareMap.tryGet(Servo.class, Constants.LIMELIGHT_TILT_SERVO);
-        // Initialize in false/color mode without toggling the mode flag.
-        if (tiltServo != null) {
-            tiltServo.setPosition(Constants.LIMELIGHT_TILT_DOWN);
-        }
         if (limelight != null) {
-            limelight.pipelineSwitch(Constants.LIMELIGHT_COLOR_PIPELINE);
             limelight.start();
         }
+        tiltUp();
     }
 
     public boolean isConnected() {
@@ -43,21 +35,11 @@ public class LimelightCamera {
     }
 
     public void tiltUp() {
-        setMode(true);
+        setTiltAndPipeline(Constants.LIMELIGHT_TILT_UP, Constants.LIMELIGHT_APRILTAG_PIPELINE);
     }
 
     public void tiltDown() {
-        setMode(false);
-    }
-
-    /** Toggle modes whenever the Limelight tilt servo should move. */
-    public void toggleMode() {
-        setMode(!aprilTagMode);
-    }
-
-    /** True means AprilTag mode; false means color-search mode. */
-    public boolean isAprilTagMode() {
-        return aprilTagMode;
+        setTiltAndPipeline(Constants.LIMELIGHT_TILT_DOWN, Constants.LIMELIGHT_BALL_PIPELINE);
     }
 
     // ---- AprilTag pipeline ----
@@ -87,32 +69,13 @@ public class LimelightCamera {
 
     /** True if the ball pipeline currently sees a ball. */
     public boolean isBallVisible() {
-        return isColorVisible();
+        return resultFor(Constants.LIMELIGHT_BALL_PIPELINE) != null;
     }
 
     /** Horizontal angle to the seen ball in degrees (right = positive), or 0 if none. */
     public double getBallAngle() {
-        LLResult result = resultFor(Constants.LIMELIGHT_COLOR_PIPELINE);
+        LLResult result = resultFor(Constants.LIMELIGHT_BALL_PIPELINE);
         return result != null ? result.getTx() : 0;
-    }
-
-    /** True when the color pipeline reports an actual color or detector target. */
-    public boolean isColorVisible() {
-        LLResult result = resultFor(Constants.LIMELIGHT_COLOR_PIPELINE);
-        if (result == null) {
-            return false;
-        }
-
-        List<LLResultTypes.ColorResult> colors = result.getColorResults();
-        List<LLResultTypes.DetectorResult> objects = result.getDetectorResults();
-        return (colors != null && !colors.isEmpty())
-                || (objects != null && !objects.isEmpty());
-    }
-
-    /** Horizontal angle to the target in the color pipeline, or 0 if none. */
-    public double getColorAngle() {
-        LLResult result = resultFor(Constants.LIMELIGHT_COLOR_PIPELINE);
-        return result != null && isColorVisible() ? result.getTx() : 0;
     }
 
     public void stop() {
@@ -123,17 +86,7 @@ public class LimelightCamera {
 
     // ---- helpers ----
 
-    private void setMode(boolean useAprilTags) {
-        if (aprilTagMode == useAprilTags) {
-            return; // No servo movement, so do not toggle the mode.
-        }
-
-        aprilTagMode = useAprilTags;
-        double tilt = useAprilTags ? Constants.LIMELIGHT_TILT_UP : Constants.LIMELIGHT_TILT_DOWN;
-        int pipeline = useAprilTags
-                ? Constants.LIMELIGHT_APRILTAG_PIPELINE
-                : Constants.LIMELIGHT_COLOR_PIPELINE;
-
+    private void setTiltAndPipeline(double tilt, int pipeline) {
         if (tiltServo != null) {
             tiltServo.setPosition(tilt);
         }
@@ -142,7 +95,7 @@ public class LimelightCamera {
         }
     }
 
-    /** Latest valid result from the given pipeline, or null after a pipeline switch. */
+    /** Latest valid result from the given pipeline, or null (right after a switch results are from the old one). */
     private LLResult resultFor(int pipeline) {
         if (limelight == null) {
             return null;
