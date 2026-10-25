@@ -5,9 +5,10 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
+import org.firstinspires.ftc.teamcode.biobuzz.ftc.SafeShutdown;
 
 /**
- * Shooter flywheel motor + the CR servo that feeds balls into it.
+ * Single shooter flywheel motor + the CR servo that feeds balls into it.
  * Same hardware and directions as QuantumStormTeleOp.
  */
 public class Shooter {
@@ -27,7 +28,14 @@ public class Shooter {
     }
 
     public void spinUp() {
-        shooter.setPower(Constants.SHOOTER_POWER);
+        apply(Constants.SHOOTER_POWER,0);
+    }
+
+    /** Shared positive demand scaled to the current signed TeleOp flywheel calibration. */
+    public void apply(double power,double feedPower) {
+        double scale=Constants.SHOOTER_POWER>0?Math.max(0,Math.min(1,power/Constants.SHOOTER_POWER)):0;
+        shooter.setPower(Constants.SHOOTER_1_POWER*scale);
+        feeder.setPower(scale>0?Math.max(-1,Math.min(1,feedPower))*Constants.SHOOTER_SERVO_POWER:0);
     }
 
     public void feed() {
@@ -39,7 +47,6 @@ public class Shooter {
     }
 
     public void stop() {
-        shooter.setPower(0);
-        feeder.setPower(0);
+        SafeShutdown.run(()->shooter.setPower(0),()->feeder.setPower(0));
     }
 }
