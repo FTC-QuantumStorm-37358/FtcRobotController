@@ -1,0 +1,12 @@
+{
+  "name": "ftc-biobuzz-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node run-checks.mjs",
+    "java:build": "node bridge/java-runtime.mjs",
+    "link:ftc": "node scripts/link-ftc.mjs"
+  }
+}

@@ -8,13 +8,17 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * Starting position: red hive facing the robot is tilted up.
  * Select this on the Driver Hub when our team is Red Team One.
  */
-@Autonomous(name = "Red Team One Auto", group = "Quantum Storm", preselectTeleOp = "Quantum Storm Two Driver")
+@Autonomous(name = "Red Team One Auto", group = "Quantum Storm", preselectTeleOp = "Quantum Storm Two Driver1")
 public class RedTeamOneAutonomous extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.RED_1);
-        waitForStart();
-        auto.run();
+        try {
+            AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.RED_1);
+            waitForStart();
+            if (!isStopRequested()) auto.run();
+        } catch (java.util.concurrent.CancellationException ignored) {
+            // STOP during INIT is a normal exit.
+        }
     }
 }

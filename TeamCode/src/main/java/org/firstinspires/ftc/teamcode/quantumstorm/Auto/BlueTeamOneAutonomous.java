@@ -7,13 +7,17 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * Autonomous for Blue Team One.
  * Select this on the Driver Hub when our team is Blue Team One.
  */
-@Autonomous(name = "Blue Team One Auto", group = "Quantum Storm", preselectTeleOp = "Quantum Storm Two Driver")
+@Autonomous(name = "Blue Team One Auto", group = "Quantum Storm", preselectTeleOp = "Quantum Storm Two Driver1")
 public class BlueTeamOneAutonomous extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.BLUE_1);
-        waitForStart();
-        auto.run();
+        try {
+            AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.BLUE_1);
+            waitForStart();
+            if (!isStopRequested()) auto.run();
+        } catch (java.util.concurrent.CancellationException ignored) {
+            // STOP during INIT is a normal exit.
+        }
     }
 }

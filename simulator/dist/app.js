@@ -1,0 +1,47 @@
+import './touch-controls.js';
+import * as T from 'three';
+import {OrbitControls} from './vendor/OrbitControls.js';
+import {buildField,buildRobot} from './model.js';
+import {START,step,allowed} from './motion.js';
+const $=id=>document.getElementById(id);const host=$('scene');
+let renderer;
+function fail(e){$('loading').style.display='none';$('error').hidden=false;$('error-message').textContent='This view needs WebGL. Try enabling hardware acceleration or opening it in a recent desktop browser.';console.error(e);}
+try{renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});}catch(e){fail(e);}
+if(renderer){try{init();}catch(e){fail(e);}}
+function init(){
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;host.append(renderer.domElement);
+const scene=new T.Scene();scene.background=new T.Color('#202d35');scene.fog=new T.Fog('#202d35',650,1400);
+const camera=new T.PerspectiveCamera(43,1,.4,2000);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.09;controls.minDistance=23;controls.maxDistance=900;controls.maxPolarAngle=Math.PI/2-.03;controls.minPolarAngle=.035;controls.zoomSpeed=.85;controls.panSpeed=.75;controls.target.set(0,16,0);
+scene.add(new T.HemisphereLight('#e6f1ff','#4b5543',2.4));const sun=new T.DirectionalLight('#ffeed8',3.2);sun.position.set(-75,190,100);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-125;sun.shadow.camera.right=125;sun.shadow.camera.top=125;sun.shadow.camera.bottom=-125;sun.shadow.camera.near=10;sun.shadow.camera.far=400;sun.shadow.normalBias=.12;sun.shadow.bias=-.00008;scene.add(sun);const fill=new T.DirectionalLight('#abc9ed',1.3);fill.position.set(110,95,-110);scene.add(fill);
+const ground=new T.Mesh(new T.PlaneGeometry(1400,1400),new T.MeshStandardMaterial({color:'#202d35',roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-1.98;ground.receiveShadow=true;scene.add(ground);
+const field=buildField();scene.add(field);const robot=buildRobot();scene.add(robot);
+const ring=new T.Mesh(new T.RingGeometry(12.2,12.45,72),new T.MeshBasicMaterial({color:'#d9f269',transparent:true,opacity:.7,side:T.DoubleSide,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.08;scene.add(ring);
+let pose={...START},pressed=new Set(),follow=false,tween=null,last=performance.now(),lastHUD=0,activeView='field',hasDriven=false;
+const viewButtons={field:$('field-view'),robot:$('robot-view'),top:$('top-view')};
+function syncRobot(){robot.position.set(pose.x,0,pose.z);robot.rotation.y=pose.theta;ring.position.x=pose.x;ring.position.z=pose.z;}
+function markView(name){activeView=name;for(const [n,b]of Object.entries(viewButtons)){b.classList.toggle('active',n===name);b.setAttribute('aria-pressed',String(n===name));}}
+function view(name,instant=false){markView(name);let pos,target;if(name==='robot'){target=new T.Vector3(pose.x,7,pose.z);pos=target.clone().add(new T.Vector3(-29,25,-34).applyAxisAngle(new T.Vector3(0,1,0),pose.theta));}else if(name==='top'){target=new T.Vector3(0,0,0);pos=new T.Vector3(0,260*Math.max(1,1.1/camera.aspect),.2);}else{target=new T.Vector3(0,13,0);pos=new T.Vector3(165,165,205).multiplyScalar(Math.max(1,1.1/camera.aspect));}
+if(instant||matchMedia('(prefers-reduced-motion: reduce)').matches){camera.position.copy(pos);controls.target.copy(target);controls.update();tween=null;}else tween={start:performance.now(),from:camera.position.clone(),to:pos,fromTarget:controls.target.clone(),target};}
+function resetRobot(){hasDriven=false;pose={...START};pressed.clear();syncRobot();if(follow||activeView==='robot')view('robot');updateHUD(false);}
+function updateHUD(blocked){$('pos-x').textContent=pose.x.toFixed(1);$('pos-z').textContent=(-pose.z).toFixed(1);$('heading').textContent=String(Math.round(((-pose.theta*180/Math.PI)%360+360)%360));$('collision').hidden=!blocked;const driving=['w','a','s','d','q','e'].some(k=>pressed.has(k));$('drive-state').textContent=blocked?'BLOCKED':driving?'DRIVING':'READY';document.querySelectorAll('[data-key]').forEach(k=>k.classList.toggle('pressed',pressed.has(k.dataset.key)));document.querySelectorAll('[data-drive]').forEach(k=>k.classList.toggle('pressed',pressed.has(k.dataset.drive)));}
+function clearKeys(){pressed.clear();updateHUD(false);}
+for(const [name,b]of Object.entries(viewButtons))b.addEventListener('click',()=>{view(name);b.blur();});$('focus').onclick=()=>view('robot');$('reset-view').onclick=()=>view('field');$('reset-robot').onclick=resetRobot;$('follow').onchange=e=>{follow=e.target.checked;};
+$('open-notes').onclick=()=>{clearKeys();$('notes').showModal();};$('close-notes').onclick=()=>$('notes').close();$('notes').addEventListener('click',e=>{if(e.target===$('notes')){const r=$('notes').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$('notes').close();}});
+window.addEventListener('keydown',e=>{if($('notes').open||['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)||e.ctrlKey||e.metaKey||e.altKey)return;const k=e.key.toLowerCase();if(['w','a','s','d','q','e','shift'].includes(k)){e.preventDefault();pressed.add(k);}if(!e.repeat&&k==='r')resetRobot();if(!e.repeat&&k==='f')view('robot');});window.addEventListener('keyup',e=>pressed.delete(e.key.toLowerCase()));window.addEventListener('blur',clearKeys);document.addEventListener('visibilitychange',()=>{if(document.hidden)clearKeys();});
+for(const b of document.querySelectorAll('[data-drive]')){b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);pressed.add(b.dataset.drive);});const up=()=>pressed.delete(b.dataset.drive);b.addEventListener('pointerup',up);b.addEventListener('pointercancel',up);b.addEventListener('lostpointercapture',up);}
+controls.addEventListener('start',()=>{tween=null;});renderer.domElement.addEventListener('pointerdown',()=>host.focus({preventScroll:true}));renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();fail(new Error('WebGL context lost'));});
+function resize(){const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(host);resize();syncRobot();view('field',true);updateHUD(false);
+const projected=new T.Vector3();
+function frame(now){requestAnimationFrame(frame);const dt=Math.min((now-last)/1000,.04);last=now;const f=Number(pressed.has('w'))-Number(pressed.has('s')),strafe=Number(pressed.has('d'))-Number(pressed.has('a')),turn=Number(pressed.has('q'))-Number(pressed.has('e'));const prev={...pose};pose=step(pose,f,strafe,turn,dt,pressed.has('shift'));syncRobot();
+const delta=new T.Vector3(pose.x-prev.x,0,pose.z-prev.z);if(delta.lengthSq()>1e-12||Math.abs(pose.theta-prev.theta)>1e-7)hasDriven=true;if(follow&&!tween){camera.position.add(delta);controls.target.add(delta);}
+const traveled=Math.hypot(delta.x,delta.z)*Math.sign(f);const yaw=pose.theta-prev.theta;robot.userData.wheels.forEach(w=>{w.rotation.x-=(traveled+(w.position.x<0?-1:1)*yaw*7.8)/1.89;});if(traveled)robot.userData.intake.rotation.x-=traveled/1.1;
+if(tween){let t=Math.min((now-tween.start)/650,1);t=t*t*(3-2*t);camera.position.lerpVectors(tween.from,tween.to,t);controls.target.lerpVectors(tween.fromTarget,tween.target,t);if(t===1)tween=null;}controls.update();renderer.render(scene,camera);
+projected.set(pose.x,20,pose.z).project(camera);const label=$('robot-label');const visible=!hasDriven&&projected.z<1&&projected.z>-1&&Math.abs(projected.x)<.93&&Math.abs(projected.y)<.9;label.style.visibility=visible?'visible':'hidden';label.style.left=`${(projected.x*.5+.5)*host.clientWidth}px`;label.style.top=`${(-projected.y*.5+.5)*host.clientHeight}px`;
+if(now-lastHUD>80){updateHUD(pose.blocked);lastHUD=now;}}
+requestAnimationFrame(frame);$('loading').style.display='none';
+// Share the UI's camera/reset actions with browsers that support WebMCP.
+const context=document.modelContext;if(context?.registerTool){const lifecycle=new AbortController();const register=tool=>{try{Promise.resolve(context.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}};
+register({name:'get_field_state',description:'Read the robot position in inches, heading in degrees and active camera preset.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:()=>({x:pose.x,y:-pose.z,heading:((-pose.theta*180/Math.PI)%360+360)%360,view:activeView,manual:'V1'})});
+register({name:'set_camera_view',description:'Select the field, robot close-up or overhead camera view.',inputSchema:{type:'object',properties:{view:{type:'string',enum:['field','robot','top']}},required:['view'],additionalProperties:false},execute:input=>{if(!input||!['field','robot','top'].includes(input.view))throw new Error('Choose field, robot or top');view(input.view,true);renderer.render(scene,camera);return{view:activeView};}});
+register({name:'reset_robot',description:'Return the robot to its initial field position.',inputSchema:{type:'object',properties:{},additionalProperties:false},execute:()=>{resetRobot();return{x:pose.x,y:-pose.z};}});window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});}
+}

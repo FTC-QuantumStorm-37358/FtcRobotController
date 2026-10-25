@@ -22,9 +22,8 @@ public class Constants {
     // Mechanism motors
     public final static String INTAKE_MOTOR = "intake";
 
-    // Shooter 1 keeps the original "shooter" port name; shooter 2 is new
+    // Single shooter motor
     public final static String SHOOTER_MOTOR = "shooter";
-    public final static String SHOOTER_2_MOTOR = "shooter2";
 
     // CR servos
     public final static String RIGHT_INTAKE_SERVO = "right_intake_servo";
@@ -42,12 +41,10 @@ public class Constants {
     public final static double INTAKE_POWER = 1.0;
 
     // Used by the autonomous Shooter mechanism
-    public final static double SHOOTER_POWER = 0.60;
+    public final static double SHOOTER_POWER = 0.55;
 
-    // TeleOp starting powers. Shooter 1 runs negative because its motor
-    // is mounted facing the opposite way from shooter 2.
-    public final static double SHOOTER_1_POWER = -0.60;
-    public final static double SHOOTER_2_POWER = 0.60;
+    // Signed starting power matching the remaining shooter's mounting direction.
+    public final static double SHOOTER_1_POWER = 0.55;
 
     public final static double SHOOTER_POWER_INCREMENT = 0.05;
 
@@ -87,8 +84,8 @@ public class Constants {
     // X pod (forward-counting): sideways distance, LEFT of center = positive.
     // Y pod (strafe-counting):  forward distance, FORWARD of center = positive.
     // TODO: measure on the robot
-    public final static double PINPOINT_X_POD_OFFSET_MM = 0;
-    public final static double PINPOINT_Y_POD_OFFSET_MM = 0;
+    public final static double PINPOINT_X_POD_OFFSET_MM = -170;
+    public final static double PINPOINT_Y_POD_OFFSET_MM = - 150;
 
     // Robot uses the goBILDA 4-Bar Odometry Pack (2 pods + 1 Pinpoint computer)
     public final static GoBildaPinpointDriver.GoBildaOdometryPods PINPOINT_POD_TYPE =

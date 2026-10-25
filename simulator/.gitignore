@@ -1,0 +1,23 @@
+# Dependencies, operating-system files and logs
+node_modules/
+.DS_Store
+*.log
+
+# Local credentials and model-provider settings
+.env
+.env.*
+!.env.example
+.codex/
+
+# Local hosting configuration, export metadata and one-time setup files
+.openai/
+.sites-runtime/
+HANDOFF.md
+SNAPSHOT.json
+push-github.sh
+source-history.bundle
+references/
+
+# Compiled Java output and local hardware calibration
+robot/build/
+*.class
