@@ -42,12 +42,12 @@ public class Constants {
     public final static double INTAKE_POWER = 1.0;
 
     // Used by the autonomous Shooter mechanism
-    public final static double SHOOTER_POWER = 0.60;
+    public final static double SHOOTER_POWER = -0.55;
 
     // TeleOp starting powers. Shooter 1 runs negative because its motor
     // is mounted facing the opposite way from shooter 2.
-    public final static double SHOOTER_1_POWER = -0.60;
-    public final static double SHOOTER_2_POWER = 0.60;
+    public final static double SHOOTER_1_POWER = -0.55;
+    public final static double SHOOTER_2_POWER = 0.55;
 
     public final static double SHOOTER_POWER_INCREMENT = 0.05;
 
