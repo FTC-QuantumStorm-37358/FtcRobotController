@@ -4,7 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 /**
- * Autonomous for Red Team One.
+ * Red Team One: shoot preloads, collect Garden pollen with Limelight, park by 26 s.
  * Starting position: red hive facing the robot is tilted up.
  * Select this on the Driver Hub when our team is Red Team One.
  */
@@ -13,8 +13,7 @@ public class RedTeamOneAutonomous extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        try {
-            AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.RED_1);
+        try (AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.RED_1)) {
             waitForStart();
             if (!isStopRequested()) auto.run();
         } catch (java.util.concurrent.CancellationException ignored) {

@@ -7,7 +7,7 @@ import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.Pose;
 
 /** Shared geometry and waypoints. Defaults match this simulator, not measured robot calibration. */
 public final class FieldLayout {
-    public final Pose[] hive={fromBrowser(-12.75,-62.9,0),fromBrowser(12.75,62.9,Math.PI)};
+    public final Pose[] hive={fromBrowser(-12.75,62.9,Math.PI),fromBrowser(12.75,-62.9,0)};
     // Oblique return shot keeps the Garden/Flower loop on the alliance wall side.
     // Heading points at the raised Cell's AprilTag center; same .395 / 66.5-degree arc.
     public final Pose[] farHive={fromBrowser(-53,40,Math.PI-.9843162068450441),fromBrowser(53,-40,2*Math.PI-.9843162068450441)};
@@ -16,8 +16,21 @@ public final class FieldLayout {
     // Corner approach triggers release without putting the chassis across the outlet.
     public final Pose[] flower={fromBrowser(-58,35.5,0),fromBrowser(58,-35.5,Math.PI)};
     public final Pose[] nearFlower={fromBrowser(-35.5,-58,-Math.PI/2),fromBrowser(35.5,58,Math.PI/2)};
+    // Nearest Flower to Team Two's corrected wall shot is the end-wall Flower.
+    // Trigger with a corner, clear the post, then face its inward pollen outlet.
+    public final Pose[] teamTwoFlowerTouch={new Pose(-35.5,57.5,0),new Pose(35.5,-57.5,Math.PI)};
+    public final Pose[] teamTwoFlowerClear={new Pose(-42,55,0),new Pose(42,-55,Math.PI)};
+    public final Pose[] teamTwoFlowerLane={new Pose(-42,30,Math.PI/2),new Pose(42,-30,-Math.PI/2)};
+    public final Pose[] teamTwoFlowerPickup={new Pose(-24,30,Math.PI/2),new Pose(24,-30,-Math.PI/2)};
     // Inset enough to fit the chassis at any heading while overlapping the Loading Zone.
     public final Pose[] loadingPark={new Pose(-59,30,0),new Pose(59,-30,Math.PI)};
+    // Team One takes the half nearest its starting wall, not globally smaller Y.
+    // Team Two takes the remaining half; modeled chassis stay separated at all headings.
+    public final Pose[] teamOneStartSidePark={new Pose(-59,21,0),new Pose(59,-21,Math.PI)};
+    public final Pose[] teamTwoGardenSidePark={new Pose(-59,51,0),new Pose(59,-51,Math.PI)};
+    // Opposite Team One's starting wall, same Hive X. Front faces the wall;
+    // rear-facing shooter points into the Hive. 62.9 matches Team One's wall inset.
+    public final Pose[] teamTwoWallHive={new Pose(-12.75,62.9,Math.PI/2),new Pose(12.75,-62.9,-Math.PI/2)};
     /** Same placements as autonomous-modes.js; Java coordinates are X, -browser Z. */
     public Pose roleStart(int alliance,boolean teamTwo) {
         if(alliance<0||alliance>1)throw new IllegalArgumentException("Invalid alliance");
@@ -29,8 +42,8 @@ public final class FieldLayout {
     }
     public double drivePower=1.0,turnPower=1.0;
     // BIOBUZZ TU03 p76: Red rear 30..33 / audience 34..37;
-    // Blue audience 38..41 / rear 42..45. Near follows the simulator's initial Cell.
-    public final int[][] nearTags={{30,31,32,33},{38,39,40,41}}, farTags={{34,35,36,37},{42,43,44,45}};
+    // Blue audience 38..41 / rear 42..45. Near is the corrected initial raised Cell (audience for Red, rear for Blue).
+    public final int[][] nearTags={{34,35,36,37},{42,43,44,45}}, farTags={{30,31,32,33},{38,39,40,41}};
     // Nominal tag-plane heights at the two stable Hive positions. Measure on hardware.
     public double upperTagHeight=52.02,lowerTagHeight=36.57,tagHeightTolerance=1.5;
     public double tagHeightMotionTolerance=.20; // inches of drift allowed during confirmation

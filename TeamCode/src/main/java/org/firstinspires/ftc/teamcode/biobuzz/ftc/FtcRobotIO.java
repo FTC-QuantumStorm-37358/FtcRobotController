@@ -20,6 +20,7 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
     private final Servo cameraTilt;
     private final FtcHardwareConfig.BallCounter counter;
     private final long epoch=System.nanoTime();
+    private final org.firstinspires.ftc.teamcode.biobuzz.FeedCadence cadence=new org.firstinspires.ftc.teamcode.biobuzz.FeedCadence();
     private int pipeline=-1;
     private double frameTimestamp=Double.NaN,frameCapturedAt,pipelineChangedAt;
     private final java.util.function.BooleanSupplier stopRequested;
@@ -84,12 +85,12 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
     }
     public void apply(Outputs o) {
         o=o.copy();if(config.movementOnly){o.intakePower=o.shooterPower=o.feederPower=0;o.pipeline=0;}
-        if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.intakePower==0&&o.shooterPower==0&&o.feederPower==0){stopActuators();return;}
+        if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.intakePower==0&&o.shooterPower==0&&o.feederPower==0){cadence.apply(0,nowSeconds());stopActuators();return;}
         actuatorsStopped=false;
         double[] w=o.wheelPowers();
         fl.setPower(w[0]);fr.setPower(w[1]);bl.setPower(w[2]);br.setPower(w[3]);
         intake.setPower(o.intakePower);leftIntake.setPower(o.intakePower);rightIntake.setPower(o.intakePower);
-        shooter.setPower(o.shooterPower);feeder.setPower(o.feederPower);
+        shooter.setPower(o.shooterPower);feeder.setPower(cadence.apply(o.shooterPower>0?o.feederPower:0,nowSeconds()));
         if(pipeline!=o.pipeline){
             pipeline=o.pipeline;pipelineChangedAt=nowSeconds();frameTimestamp=Double.NaN;
             if(cameraTilt!=null)cameraTilt.setPosition(pipeline==0?config.tiltUp:config.tiltDown);

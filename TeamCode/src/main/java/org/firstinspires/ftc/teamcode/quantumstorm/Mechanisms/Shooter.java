@@ -15,6 +15,8 @@ public class Shooter {
 
     private final DcMotor shooter;
     private final CRServo feeder;
+    private final org.firstinspires.ftc.teamcode.biobuzz.FeedCadence cadence=new org.firstinspires.ftc.teamcode.biobuzz.FeedCadence(Constants.SPINDEXER_FEED_PULSE_SEC,Constants.SPINDEXER_SHOT_GAP_SEC);
+    private double now(){return System.nanoTime()/1e9;}
 
     public Shooter(HardwareMap hardwareMap) {
         shooter = hardwareMap.get(DcMotor.class, Constants.SHOOTER_MOTOR);
@@ -35,18 +37,20 @@ public class Shooter {
     public void apply(double power,double feedPower) {
         double scale=Constants.SHOOTER_POWER>0?Math.max(0,Math.min(1,power/Constants.SHOOTER_POWER)):0;
         shooter.setPower(Constants.SHOOTER_1_POWER*scale);
-        feeder.setPower(scale>0?Math.max(-1,Math.min(1,feedPower))*Constants.SHOOTER_SERVO_POWER:0);
+        feeder.setPower(cadence.apply(scale>0?feedPower:0,now())*Constants.SHOOTER_SERVO_POWER);
     }
 
     public void feed() {
-        feeder.setPower(Constants.SHOOTER_SERVO_POWER);
+        feeder.setPower(cadence.apply(1,now())*Constants.SHOOTER_SERVO_POWER);
     }
 
     public void stopFeed() {
+        cadence.apply(0,now());
         feeder.setPower(0);
     }
 
     public void stop() {
+        cadence.apply(0,now());
         SafeShutdown.run(()->shooter.setPower(0),()->feeder.setPower(0));
     }
 }

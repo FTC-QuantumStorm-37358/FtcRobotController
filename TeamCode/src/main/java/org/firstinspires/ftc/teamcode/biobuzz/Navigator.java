@@ -61,7 +61,7 @@ public final class Navigator {
             if(field.canRotate(p,target.heading))turnPose=p;
             else{
                 double best=Double.POSITIVE_INFINITY;
-                double[][] clearance={{-12.75,56},{-32,56},{-36,52},{-40,52},{-56,-56},{-52,-32},{-56,-40},{-52,-36},{-52,-40},{-48,-36},{-52,-24},{-52,-28},{-48,-24}};
+                double[][] clearance={{-12.75,-56},{-32,-56},{-40,-52},{-52,52},{-52,-52},{-12.75,56},{-32,56},{-36,52},{-40,52},{-56,-56},{-52,-32},{-56,-40},{-52,-36},{-52,-40},{-48,-36},{-52,-24},{-52,-28},{-48,-24}};
                 for(double[] xy:clearance){
                     checkStop();Pose q=fixedPoint(xy[0],xy[1],p.heading);double distance=p.distance(q);
                     if(distance<best&&field.canRotate(q,target.heading)&&field.clear(p,q,p.heading)){best=distance;turnPose=q;}
@@ -87,18 +87,22 @@ public final class Navigator {
     /** A handful of validated, alliance-mirrored corridor templates; no graph search. */
     private List<Pose> fixedPath(Pose start,Pose goal,double heading){
         Pose rear=fixedPoint(-12.75,56,heading),upper=fixedPoint(-40,36,heading),lower=fixedPoint(-46,-44,heading),bypass=fixedPoint(-52,-8,heading);
-        Pose[][] templates={{goal},{bypass,goal},{rear,upper,goal},{lower,upper,goal},{upper,lower,goal},{upper,goal},{lower,goal},{rear,upper,lower,goal}};
+        Pose highCorner=fixedPoint(-52,52,heading),lowCorner=fixedPoint(-52,-52,heading),highCenter=fixedPoint(-12.75,52,heading),lowCenter=fixedPoint(-12.75,-52,heading);
+        Pose[][] templates={{highCenter,goal},{lowCenter,goal},{highCorner,highCenter,goal},{lowCorner,lowCenter,goal},{highCorner,lowCorner,lowCenter,goal},{lowCorner,highCorner,highCenter,goal},{goal},{bypass,goal},{rear,upper,goal},{lower,upper,goal},{upper,lower,goal},{upper,goal},{lower,goal},{rear,upper,lower,goal}};
+        List<Pose> bestPath=null;double bestLength=Double.POSITIVE_INFINITY;
         for(Pose[] template:templates){
-            checkStop();Pose previous=start;boolean clear=true;
-            for(Pose waypoint:template){checkStop();if(!field.clear(previous,waypoint,heading)){clear=false;break;}previous=waypoint;}
-            if(clear)return new ArrayList<Pose>(Arrays.asList(template));
+            checkStop();Pose previous=start;boolean clear=true;double length=0;
+            for(Pose waypoint:template){checkStop();if(!field.clear(previous,waypoint,heading)){clear=false;break;}length+=previous.distance(waypoint);previous=waypoint;}
+            if(clear&&length<bestLength){bestLength=length;bestPath=new ArrayList<Pose>(Arrays.asList(template));}
         }
+        if(bestPath!=null)return bestPath;
         throw new IllegalStateException("Fixed corridor blocked: verify start/odometry/field calibration");
     }
     private Outputs driveRoute(Pose p,Pose target,double heading){
-        while(route.size()>1&&(p.distance(route.get(0))<.6||field.clear(p,route.get(1),heading))){checkStop();route.remove(0);}
+        while(route.size()>1&&(p.distance(route.get(0))<(scripted?.05:.6)||!scripted&&field.clear(p,route.get(1),heading))){checkStop();route.remove(0);}
         Pose q=route.get(0);double dx=q.x-p.x,dy=q.y-p.y,c=Math.cos(p.heading),s=Math.sin(p.heading);
-        Outputs o=new Outputs();o.forward=(dx*c+dy*s)*.35;o.strafeRight=(dx*s-dy*c)*.35;
+        double gain=scripted?.45:.35;
+        Outputs o=new Outputs();o.forward=(dx*c+dy*s)*gain;o.strafeRight=(dx*s-dy*c)*gain;
         double mag=Math.hypot(o.forward,o.strafeRight);if(mag>field.drivePower){o.forward*=field.drivePower/mag;o.strafeRight*=field.drivePower/mag;}
         o.turnClockwise=-FieldLayout.clip(Math.toDegrees(Pose.angle(heading-p.heading))*.08,field.turnPower);return o;
     }

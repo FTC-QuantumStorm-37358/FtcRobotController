@@ -59,10 +59,15 @@ public interface RobotIO {
         public final boolean odometryValid, cameraConnected;
         /** -1 means unavailable; never manufacture a full/empty count. */
         public final int ballCount;
+        /** Type-verified occupied pollen slots, -1 if unavailable; never inferred from time. */
+        public final int pollenCount;
         public final Vision vision;
         public Sensors(Pose pose,double sampledAt,boolean odometryValid,boolean cameraConnected,int ballCount,Vision vision) {
+            this(pose,sampledAt,odometryValid,cameraConnected,ballCount,-1,vision);
+        }
+        public Sensors(Pose pose,double sampledAt,boolean odometryValid,boolean cameraConnected,int ballCount,int pollenCount,Vision vision) {
             this.pose=pose; this.sampledAt=sampledAt; this.odometryValid=odometryValid;
-            this.cameraConnected=cameraConnected; this.ballCount=ballCount; this.vision=vision;
+            this.cameraConnected=cameraConnected; this.ballCount=ballCount;this.pollenCount=pollenCount; this.vision=vision;
         }
     }
     final class Outputs {

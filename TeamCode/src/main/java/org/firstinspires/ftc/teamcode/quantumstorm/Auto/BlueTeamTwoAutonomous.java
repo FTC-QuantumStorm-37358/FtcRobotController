@@ -4,7 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 /**
- * Autonomous for Blue Team Two.
+ * Blue Team Two: opposite-wall shots gated by fresh raised own-Hive far-Cell tags.
  * Select this on the Driver Hub when our team is Blue Team Two.
  */
 @Autonomous(name = "Blue Team Two Auto", group = "Quantum Storm", preselectTeleOp = "Quantum Storm Two Driver1")
@@ -12,8 +12,7 @@ public class BlueTeamTwoAutonomous extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        try {
-            AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.BLUE_2);
+        try (AutoStateMachine auto = new AutoStateMachine(this, AutoStartPosition.BLUE_2)) {
             waitForStart();
             if (!isStopRequested()) auto.run();
         } catch (java.util.concurrent.CancellationException ignored) {

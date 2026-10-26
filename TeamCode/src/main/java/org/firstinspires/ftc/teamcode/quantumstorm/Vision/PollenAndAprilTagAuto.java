@@ -92,7 +92,8 @@ public class PollenAndAprilTagAuto extends LinearOpMode {
         }
     }
 
-    private LLResultTypes.ColorResult findLargestColorTarget(LLResult result) {
+    /** Shared by Team One's real-camera adapter; configure its pipeline for yellow only. */
+    public static LLResultTypes.ColorResult findLargestColorTarget(LLResult result) {
         // Invalid camera data means no target was found.
         if (result == null || !result.isValid()) {
             return null;

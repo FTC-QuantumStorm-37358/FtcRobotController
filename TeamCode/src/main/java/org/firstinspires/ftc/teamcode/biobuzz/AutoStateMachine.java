@@ -20,7 +20,7 @@ public final class AutoStateMachine implements RobotController {
     /** Nominal measured-inventory simulator dwell times; not inferred ball counts. */
     public static final double DRY_GARDEN_SECONDS=.14,DRY_FLOWER_SECONDS=2.34;
     /** Timed attempts when inventory is unavailable; never manufacture a ball count. */
-    public double timedFeedSeconds=2.0,timedPickupSeconds=3.0;
+    public double timedFeedSeconds=3.0,timedPickupSeconds=3.0;
     /** Position-only parking acceptance; hardware may allow more odometry noise. */
     public double parkingToleranceInches=.65;
     /** Finish scoring early, but hold all outputs OFF until the 26-second park trigger. */
