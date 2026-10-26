@@ -68,13 +68,18 @@ public class Constants {
     // =========================================================
 
     // Tilt servo positions (0..1). TODO: find with "Servo Position Helper"
-    public final static double LIMELIGHT_TILT_UP = 0.3;     // look at the hive AprilTag
-    public final static double LIMELIGHT_TILT_DOWN = 0.7;   // look at balls on the floor
+    public final static double LIMELIGHT_TILT_UP = 0.3;     // legacy position for existing camera code
+    public final static double LIMELIGHT_TILT_DOWN = 0.7;   // position for color pipelines
+    // Standard 180-degree servo mapping: 30 degrees / 180 degrees = 0.167 position.
+    public final static double LIMELIGHT_APRILTAG_TILT_POSITION = 30.0 / 180.0;
 
-    // Pipeline numbers as set up in the Limelight web UI
+    // Pipeline indices must match the pipelines configured in the Limelight web UI.
     public final static int LIMELIGHT_APRILTAG_PIPELINE = 0;
-    public final static int LIMELIGHT_COLOR_PIPELINE = 1;
-    // Keep the old name available for existing ball-search code.
+    public final static int LIMELIGHT_BLUE_PIPELINE = 1;
+    public final static int LIMELIGHT_YELLOW_PIPELINE = 2;
+    public final static int LIMELIGHT_RED_PIPELINE = 3;
+    // Existing ball-search code uses the blue color pipeline until its target is specified.
+    public final static int LIMELIGHT_COLOR_PIPELINE = LIMELIGHT_BLUE_PIPELINE;
     public final static int LIMELIGHT_BALL_PIPELINE = LIMELIGHT_COLOR_PIPELINE;
 
     // =========================================================

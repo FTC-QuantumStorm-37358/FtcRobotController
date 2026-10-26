@@ -13,12 +13,7 @@ import java.util.List;
 public class Colordetection extends LinearOpMode {
 
     private static final String LIMELIGHT_NAME = "limelight 3a";
-    //pipeline 1 = blue, 2 = red, 3 = yellow choose between these to change code for auto
     private static final int BLUE_PIPELINE = 1;
-    private static final int RED_PIPELINE = 2;
-    private static final int YELLOW_PIPELINE = 3;
-    private static final int[] COLOR_PIPELINES = { BLUE_PIPELINE };
-    private static final long PIPELINE_SCAN_INTERVAL_MS = 750;
 
     @Override
     public void runOpMode() {
@@ -31,7 +26,7 @@ public class Colordetection extends LinearOpMode {
             return;
         }
 
-        limelight.pipelineSwitch(COLOR_PIPELINES[0]);
+        limelight.pipelineSwitch(BLUE_PIPELINE);
         limelight.start();
 
         telemetry.addData("Limelight", limelight.isConnected()
@@ -42,32 +37,17 @@ public class Colordetection extends LinearOpMode {
         waitForStart();
 
         try {
-            int pipelinePosition = 0;
-            int activePipeline = COLOR_PIPELINES[pipelinePosition];
-            String detectedColor = null;
-            long nextPipelineSwitch = System.currentTimeMillis() + PIPELINE_SCAN_INTERVAL_MS;
-
+            boolean blueSeen = false;
             while (opModeIsActive()) {
-                long now = System.currentTimeMillis();
-                if (now >= nextPipelineSwitch) {
-                    pipelinePosition = (pipelinePosition + 1) % COLOR_PIPELINES.length;
-                    activePipeline = COLOR_PIPELINES[pipelinePosition];
-                    limelight.pipelineSwitch(activePipeline);
-                    nextPipelineSwitch = now + PIPELINE_SCAN_INTERVAL_MS;
-                }
-
                 LLResult result = limelight.getLatestResult();
-                if (limelight.isConnected() && result != null && result.isValid()
-                        && result.getPipelineIndex() == activePipeline) {
+                if (result != null && result.getPipelineIndex() == BLUE_PIPELINE) {
                     List<LLResultTypes.ColorResult> colorTargets = result.getColorResults();
-                    if (colorTargets != null && !colorTargets.isEmpty()) {
-                        detectedColor = colorNameForPipeline(activePipeline);
-                    }
+                    blueSeen = colorTargets != null && !colorTargets.isEmpty();
                 }
 
                 telemetry.clearAll();
-                if (detectedColor != null) {
-                    telemetry.addLine(detectedColor);
+                if (blueSeen) {
+                    telemetry.addLine("Blue");
                 }
                 telemetry.update();
                 sleep(50);
@@ -75,16 +55,6 @@ public class Colordetection extends LinearOpMode {
         } finally {
             limelight.stop();
         }
-    }
-
-    private String colorNameForPipeline(int pipeline) {
-        if (pipeline == BLUE_PIPELINE) {
-            return "Blue";
-        }
-        if (pipeline == RED_PIPELINE) {
-            return "Red";
-        }
-        return "Yellow";
     }
 
 }

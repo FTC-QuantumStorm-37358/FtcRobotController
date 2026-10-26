@@ -5,6 +5,58 @@ This repository contains the public FTC SDK for the BIOBUZZ (2026-2027) competit
 ## Welcome!
 This GitHub repository contains the source code that is used to build an Android app to control a *FIRST* Tech Challenge competition robot.  To use this SDK, download/clone the entire project to your local computer.
 
+## Quantum Storm mecanum test TeleOp
+
+Select **Test: Mecanum Intake Shooter** ([TeleOPtest.java](TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/Tests/TeleOPtest.java)). It uses four drive motors, one DC intake motor, one DC shooter motor, one continuous-rotation indexer servo, and an optional Limelight 3A. No intake/shooter servos, second shooter, or camera tilt servo are required.
+
+Gamepad 1 controls:
+- Left stick: robot-centric drive/strafe; right stick X: turn.
+- Hold left bumper: slow drive (35%).
+- Hold **Y**: halve drivetrain output, including forward/backward, strafe, turning, and heading correction. This also halves LB slow-mode output; intake, shooter, and indexer speeds are unchanged.
+- Hold right bumper: intake forward; hold left trigger: reverse intake (takes priority).
+- Hold right trigger past the 5% deadband: manual shooter at **fixed 60%**; release to stop. This TeleOp has its own power setting and does not change other OpModes.
+- Press **A** to toggle the `indexer_servo` CRServo on/off. It runs with direction set to `REVERSE` and stops when the OpMode ends.
+
+Driver Hub telemetry displays the operating instructions during INIT and throughout the run, plus each drive motor, intake, shooter, and indexer output as a percentage. Percentages are commanded power, not measured motor speed/RPM; negative values indicate reverse commands.
+
+Robot Configuration must include a **CRServo** named exactly `indexer_servo` on the port to which it is wired, and the Control Hub **IMU** named `imu`. IMU mounting is configured for the **REV logo facing Left and USB ports facing Forward**; update those directions if the physical mounting changes. IMU initialization failure prevents this TeleOp from starting.
+
+### Straight-line heading hold
+
+IMU yaw holds the current heading while driving or strafing with the right stick released. Manual turning overrides correction and updates the target; stopping also updates the target and never commands automatic rotation. Correction has a 1° deadband, proportional gain of 0.02 power/degree, and a maximum of 20% turn power before slow-mode scaling. These starting values are in [HeadingHold.java](TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/DriveChain/HeadingHold.java); tune on the robot if it oscillates or still veers. Non-finite yaw disables correction until a valid reading recaptures the heading.
+
+Telemetry shows yaw, heading-hold state, error, and turn output. Limelight remains informational and is not used for drive correction: hive tags can move or leave view. Heading hold corrects rotational veering, not sideways drift at a constant heading; inspect wheel alignment, friction, and matching motor gearing if lateral drift remains. Verify yaw increases when rotating the robot counterclockwise, and test at low speed in a clear area before normal driving.
+
+Dependency-free heading regression test (requires a JDK):
+
+```bash
+classes=$(mktemp -d)
+javac -d "$classes" TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/DriveChain/HeadingHold.java TeamCode/src/test/java/org/firstinspires/ftc/teamcode/quantumstorm/HeadingHoldTest.java
+java -cp "$classes" org.firstinspires.ftc.teamcode.quantumstorm.HeadingHoldTest
+rm -rf "$classes"
+```
+
+### Limelight and hive AprilTags
+
+The TeleOp starts the Limelight 3A at 50 Hz, selects `Constants.LIMELIGHT_APRILTAG_PIPELINE`, and reads `LLResult.getFiducialResults()` each loop. It filters hive IDs **30–45** and reads each tag's **3D camera-space orientation** using `getTargetPoseCameraSpace()`. It does not use image offsets `tx`/`ty` to infer tag tilt.
+
+The camera is physically tilted **30° up**, matching the raised hive tag's **30° tilt**. Under this matched-tilt assumption, expected camera-relative pitch is approximately **0°**, not +30°; the camera-space pose already accounts for camera tilt. No camera movement or tilt servo command is needed. Any fresh hive tag whose pitch is **−10° to +10° inclusive** reports `RAISED`. When multiple hive tags are visible, the tag closest to 0° is reported. A usable hive pose outside that range reports `OUTSIDE_RAISED_RANGE`, not proof that the hive is lowered. Missing/disconnected/stale vision, a wrong pipeline, or no usable hive pose reports `UNKNOWN`. Results older than 250 ms are rejected. Hive detection remains **telemetry only** and never blocks the shooter.
+
+Driver Hub displays **Shoot recommended** when at least one fresh hive tag (ID 30–45) has both raised pitch (−10° to +10°) and a horizontal image angle within ±5° of center. Both checks use the same tag; the most centered qualifying tag ID/angle is shown. Otherwise it displays **Shoot not recommended**, including on tag loss, stale data, or wrong pipeline. This is advice only: no automatic firing, range, projectile trajectory, or vertical aim check is performed.
+
+Driver Hub telemetry shows connection, expected/actual pipeline, validity/freshness, result age, all fresh visible tag IDs, hive tag count, selected tag yaw/pitch/roll, pitch error, primary-target image offsets, and the reason for the vision decision. Primary-target `tx`/`ty` may refer to a different tag than the selected hive tag.
+
+This is a pitch heuristic, not a field-height measurement. Confirm near-zero pitch with the actual raised hive; physical tilt references, yaw, roll, robot tilt, and pose ambiguity can affect classification. Physical degrees are not servo positions. Configure the Limelight AprilTag pipeline with the correct tag family/size and 3D target poses before relying on detection. Hardware names and pipeline index reuse [Constants.java](TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/Constants.java); check motor directions with wheels lifted before driving.
+
+Dependency-free detector regression test (requires a JDK):
+
+```bash
+classes=$(mktemp -d)
+javac -d "$classes" TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/Vision/HiveRaisedDetector.java TeamCode/src/test/java/org/firstinspires/ftc/teamcode/quantumstorm/Vision/HiveRaisedDetectorTest.java
+java -cp "$classes" org.firstinspires.ftc.teamcode.quantumstorm.Vision.HiveRaisedDetectorTest
+rm -rf "$classes"
+```
+
 ## Requirements
 To use this Android Studio project, you will need Android Studio Narwhal 3 Feature Drop or later.
 
