@@ -38,7 +38,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
     // Adjustable shooter power
     private double shooterSpeed = Constants.SHOOTER_1_POWER;
 
-    // For the shooter on/off toggles
+    // Track even during controller assignment so releasing Start cannot start a shooter.
     private boolean previousGamepad2A = false;
 
     // For the shoulder buttons and triggers used as speed steps
@@ -117,9 +117,10 @@ public class QuantumStormTeleOp extends LinearOpMode {
         telemetry.addLine("");
 
         telemetry.addLine("GAMEPAD 2 - SHOOTER");
-        telemetry.addLine("A = Shooter 1 ON/OFF");
-        telemetry.addLine("LB = Shooter 1 Power Up");
-        telemetry.addLine("LT = Shooter 1 Power Down");
+        telemetry.addLine("A = Shooter 1 START, B = Shooter 1 STOP");
+        telemetry.addLine("Hold START + tap LB = Shooter 1 Power Up");
+        telemetry.addLine("Hold START + tap LT = Shooter 1 Power Down");
+        telemetry.addLine("Release START before using shooter START/STOP buttons");
         telemetry.addLine("D-Pad UP = Shooter Forward");
         telemetry.addLine("D-Pad DOWN = Shooter Reverse");
 
@@ -202,36 +203,38 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // GAMEPAD 2 - SHOOTER MOTOR
             // =====================================================
 
-            boolean currentGamepad2A = gamepad2.a;
-
             // Triggers are analog, so treat them as pressed past a threshold
             boolean currentLeftBumper = gamepad2.left_bumper;
             boolean currentLeftTrigger =
                     gamepad2.left_trigger > Constants.TRIGGER_THRESHOLD;
 
 
-            // A = shooter 1 on/off toggle
-            if (currentGamepad2A && !previousGamepad2A) {
-                shooterRunning = !shooterRunning;
+            // Start+A/B assigns controllers in the Driver Station, not shooter commands.
+            // Require a fresh A press after assignment; STOP wins if both are pressed.
+            if (!gamepad2.start) {
+                if (gamepad2.a && !previousGamepad2A) shooterRunning = true;
+                if (gamepad2.b) shooterRunning = false;
             }
 
 
-            // LB = shooter 1 power up
-            if (currentLeftBumper && !previousLeftBumper) {
+            // Require Start already held when a shoulder button is freshly pressed.
+            // Track raw buttons below even while locked: holding LB then pressing Start
+            // must not accidentally adjust power. Opposite requests cancel each other.
+            if (gamepad2.start && currentLeftBumper && !previousLeftBumper && !currentLeftTrigger) {
                 previousShooterSpeed = shooterSpeed;
                 shooterSpeed = clampShooterPower(
                         shooterSpeed + Constants.SHOOTER_POWER_INCREMENT);
             }
 
-            // LT = shooter 1 power down
-            if (currentLeftTrigger && !previousLeftTrigger) {
+            // Start + LT = shooter 1 power down
+            if (gamepad2.start && currentLeftTrigger && !previousLeftTrigger && !currentLeftBumper) {
                 previousShooterSpeed = shooterSpeed;
                 shooterSpeed = clampShooterPower(
                         shooterSpeed - Constants.SHOOTER_POWER_INCREMENT);
             }
 
 
-            previousGamepad2A = currentGamepad2A;
+            previousGamepad2A = gamepad2.a;
             previousLeftBumper = currentLeftBumper;
             previousLeftTrigger = currentLeftTrigger;
 
@@ -302,6 +305,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             telemetry.addLine("");
             telemetry.addLine("=== DRIVER 2 ===");
+            telemetry.addData("Power adjustment", gamepad2.start ? "UNLOCKED: tap LB/LT" : "LOCKED: hold START");
 
 
             telemetry.addData(

@@ -22,6 +22,14 @@ Normal QuantumStorm entries initialize live shooter/feed/intake hardware. Clear 
 
 The separate Red/Blue shared diagnostic entries use `ftc/FtcHardwareConfig.java`, which defaults to `calibrated=false`. Measure and configure all required hardware/field values before enabling it. Optional vision needs correct pipeline/tag/camera calibration; the four normal camera-free modes do not confirm Hive tilts.
 
+## TeleOp shooter controls
+
+On gamepad 2, tap **A** to start the single shooter and **B** to stop it. A second A press does not toggle it off; B wins when both are pressed.
+
+Hold **Start**, then tap **LB** to increase signed power or **LT** to decrease it by `SHOOTER_POWER_INCREMENT` (0.05). Each press changes power once; holding a shoulder button does not repeat. Pressing Start after a shoulder button is already held does not change power: release and press the shoulder again. Simultaneous LB/LT requests cancel. Telemetry shows whether adjustment is locked and the previous/current power.
+
+Release Start before using A/B for the shooter. Start+A/B is reserved for Driver Station controller assignment, and a fresh A press is required afterward. The Logitech F310 Mode button changes controller behavior internally and is not used as the modifier. Shooter 2 remains removed, so X/Y and RB/RT do not control a second shooter. D-pad up/down retains the existing feeder controls.
+
 ## Build
 
 Open the repository root in Android Studio, sync Gradle and build TeamCode normally. From a terminal with an appropriate JDK/Android SDK:
