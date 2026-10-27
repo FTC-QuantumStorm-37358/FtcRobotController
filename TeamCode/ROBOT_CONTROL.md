@@ -1,6 +1,16 @@
 # Standalone BIOBUZZ robot control
 
-The robot app builds entirely from TeamCode. SDK-free controllers, field geometry, navigation and sensor/output contracts are in `src/main/java/org/firstinspires/ftc/teamcode/biobuzz/`; the `ftc/` subpackage contains SDK adapters. The four normal Red/Blue OpModes are under `quantumstorm/Auto/`. No simulator directory, browser or laptop connection is required to build or run the robot app.
+The robot app builds entirely from TeamCode. SDK-free controllers, field geometry, navigation and sensor/output contracts are in `src/main/java/org/firstinspires/ftc/teamcode/biobuzz/`; the `ftc/` subpackage contains SDK adapters. Only **Team 1 Auto** and **Team 2 Auto** are enabled under `quantumstorm/Auto/`. No simulator directory, browser or laptop connection is required to build or run the robot app.
+
+## Two modes, no alliance setup
+
+Select **Team 1 Auto** or **Team 2 Auto**, place the robot at the matching physical role start on either alliance, press INIT, keep it still for odometry setup, then START. There is no gamepad input, color picker or confirmation step. Legacy Red/Blue entries and autonomous diagnostics retain their source but are `@Disabled`; TeleOp is unchanged.
+
+Both halves use one canonical route frame anchored by the role start, not absolute field-color coordinates. Rotating the physical setup 180 degrees produces the same body-relative driving commands, Garden/Flower pickup, wall clearance and parking half. Do not point the robot the opposite way to compensate: preserve the existing role's physical front/rear orientation. The numeric local route reference shown on Blue is not the absolute Blue field pose.
+
+Team Two recognizes a single visible Hive tag family automatically at its wall shooting pose. It must see at least two distinct raised far-Cell tags with calibrated heights, centered within 10 degrees of the camera axis at the shot pose. Off-axis tags from the adjacent Hive do not identify the target. If both families have centered raised pairs, the view is ambiguous and it does not lock/shoot. The rearward camera aim must be calibrated to center the intended Hive. Once locked for the run, the other family is ignored; Blue tag IDs are aliased to the same canonical role geometry without changing measured angles, heights or frame timestamps. Existing fresh/stable tag, four-pollen, odometry and parking checks remain enforced. This is not a general guarantee of Hive identity: correct physical start and camera aiming are still required. No calibration flag is enabled automatically.
+
+The simulator may retain Red/Blue test cases to verify symmetry; they are not additional enabled robot OpModes.
 
 ## Current autonomous roles
 
@@ -41,7 +51,7 @@ Corrected initial raised clusters are Red 34-37 and Blue 42-45. After the partne
 
 This is **open-loop timing**, not confirmed-shot or angle feedback. Calibrate `SPINDEXER_FEED_PULSE_SEC` to advance exactly one pocket on the physical mechanism. A pulse that advances two pockets cannot be fixed by its subsequent pause. The configured CR servo cannot guarantee a 90-degree maximum without suitable position feedback or different hardware; no such guarantee is implemented.
 
-Only the TeleOp joystick Y mapping is inverted to correct the reported forward/backward reversal. Strafing, turning and autonomous motor directions are unchanged. Current local shooter settings are +0.50 (previous master +0.55); verify actual launch direction, power and hood angle before running. Pinpoint offsets remain -170 / -150 mm; verify wiring, configuration, pod directions and odometry axes before field use.
+TeleOp joystick Y is inverted to correct the reported forward/backward reversal. Normal QuantumStorm autonomous now applies the same physical correction with AUTO_FORWARD_POWER_SIGN=-1 at the hardware wheel-output boundary. Only forward/backward is corrected; strafing, turning, field coordinates, measured odometry and motor direction configuration are unchanged. Keep the wall-facing start heading: navigation first backs straight approximately six inches into a collision-checked corridor, holding that heading with no sideways command, before routing/turning toward pickup. The same wall-departure clearance is used when leaving a wall shot to park. An already-reached wall shooting target is not backed away from before verification. Do not flip the initial heading 180 degrees to compensate for a motor-power sign error. The simulator retains its ideal forward-positive mixer. Verify the hardware sign with wheels raised, then at low power; this assumes the robot still matches the earlier TeleOp observation. Current local shooter settings are +0.50 (previous master +0.55); verify actual launch direction, power and hood angle before running. Pinpoint offsets remain -170 / -150 mm; verify wiring, configuration, pod directions and odometry axes before field use.
 
 ## Verification and build
 

@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.quantumstorm.Auto;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 /**
@@ -8,6 +9,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * Starting position: red hive facing the robot is tilted up.
  * Select this on the Driver Hub when our team is Red Team One.
  */
+@Disabled
 @Autonomous(name = "Red Team One Auto", group = "Quantum Storm", preselectTeleOp = "Quantum Storm Two Driver1")
 public class RedTeamOneAutonomous extends LinearOpMode {
 

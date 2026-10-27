@@ -19,6 +19,10 @@ public class Constants {
     public final static String BACK_LEFT_DRIVE = "left_back_drive";
     public final static String BACK_RIGHT_DRIVE = "right_back_drive";
 
+    // Match the reported forward/backward reversal already corrected in TeleOp.
+    // Hardware-only sign: keep strafe, turn, field coordinates and headings unchanged.
+    public final static double AUTO_FORWARD_POWER_SIGN = -1.0;
+
     // Mechanism motors
     public final static String INTAKE_MOTOR = "intake";
 

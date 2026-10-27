@@ -48,7 +48,7 @@ public final class TeamOneLimelight implements AutoCloseable {
         if(!connected())return teamTwo?"Limelight unavailable: shooting disabled; timed parking still active":"Limelight unavailable: collection disabled; timed parking still active";
         if(!problem.isEmpty())return problem;
         if(teamTwo)return calibrated()?"Live own-Hive far Cell tags required before and during feeding":"TEAM TWO HIVE HEIGHT NOT CALIBRATED: shooting disabled";
-        return calibrated()?"Live tags / yellow-only pollen pipeline":"HIVE HEIGHT NOT CALIBRATED: no tilt confirmation / pickup";
+        return calibrated()?"Live tags / yellow-only pollen pipeline":"Optional tilt-test heights uncalibrated; yellow Garden pickup uses color pipeline";
     }
     public Vision read(double now){
         Vision empty=Vision.empty(pipeline,now);

@@ -77,9 +77,13 @@ public interface RobotIO {
         /** 0 = hive AprilTags / camera up, 1 = balls / camera down. */
         public int pipeline;
         /** Front-left, front-right, back-left, back-right, after mecanum normalization. */
-        public double[] wheelPowers() {
-            double fl=forward+strafeRight+turnClockwise,fr=forward-strafeRight-turnClockwise,
-                bl=forward-strafeRight+turnClockwise,br=forward+strafeRight-turnClockwise;
+        public double[] wheelPowers() { return wheelPowers(1); }
+        /** Hardware-only longitudinal calibration. Never invert strafe/turn or field poses. */
+        public double[] wheelPowers(double forwardPowerSign) {
+            if(forwardPowerSign!=1&&forwardPowerSign!=-1)throw new IllegalArgumentException("Forward power sign must be +1 or -1");
+            double y=forward*forwardPowerSign;
+            double fl=y+strafeRight+turnClockwise,fr=y-strafeRight-turnClockwise,
+                bl=y-strafeRight+turnClockwise,br=y+strafeRight-turnClockwise;
             double scale=Math.max(1,Math.max(Math.max(Math.abs(fl),Math.abs(fr)),Math.max(Math.abs(bl),Math.abs(br))));
             return new double[]{fl/scale,fr/scale,bl/scale,br/scale};
         }

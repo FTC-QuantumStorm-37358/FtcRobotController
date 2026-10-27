@@ -14,7 +14,8 @@ public final class Navigator {
     private final LongSupplier clock;
     private int stage;
     private List<Pose> route;
-    private Pose turnPose;
+    private Pose turnPose,wallRetreat;
+    private boolean wallDepartureChecked;
     private TurnSearch turning;
     private PathSearch path;
     private boolean planning;
@@ -29,12 +30,15 @@ public final class Navigator {
         int units;
         boolean more(){checkStop();return ++units<=4096&&clock.getAsLong()<end;}
     }
-    public void reset(){stage=0;route=null;turnPose=null;turning=null;path=null;planning=false;}
+    public void reset(){stage=0;route=null;wallRetreat=null;wallDepartureChecked=false;turnPose=null;turning=null;path=null;planning=false;}
     public boolean isPlanning(){return planning;}
     public void useScriptedRoute(boolean enabled,int alliance){this.scripted=enabled;this.alliance=alliance;reset();}
     public List<Pose> route(){return route==null?new ArrayList<Pose>():new ArrayList<Pose>(route);}
     /** Pending searches return zero drive, not an exception or false arrival. */
     public Outputs move(Pose p,Pose target){
+        checkStop();
+        Outputs retreat=retreatFromFrontWall(p,target);
+        if(retreat!=null)return retreat;
         if(scripted)return moveScripted(p,target);
         checkStop();planning=false;Slice slice=new Slice();
         if(stage==0){
@@ -53,6 +57,26 @@ public final class Navigator {
         }
         if(p.distance(target)<.65&&Math.abs(Pose.angle(target.heading-p.heading))<Math.toRadians(2))return null;
         return follow(p,target,target.heading,slice);
+    }
+    /** Leave a wall-facing shot straight backwards before strafing or turning. */
+    private Outputs retreatFromFrontWall(Pose p,Pose target){
+        if(!wallDepartureChecked){
+            wallDepartureChecked=true;
+            if(p.distance(target)<.65&&Math.abs(Pose.angle(target.heading-p.heading))<Math.toRadians(2))return null;
+            boolean frontAtWall=Math.abs(p.x)>58&&Math.cos(p.heading)*Math.signum(p.x)>.9
+                    ||Math.abs(p.y)>58&&Math.sin(p.heading)*Math.signum(p.y)>.9;
+            if(frontAtWall){
+                wallRetreat=new Pose(p.x-6*Math.cos(p.heading),p.y-6*Math.sin(p.heading),p.heading);
+                if(!field.clear(p,wallRetreat,p.heading))throw new IllegalStateException("No safe backward wall-departure corridor");
+            }
+        }
+        if(wallRetreat==null)return null;
+        if(p.distance(wallRetreat)<.5){wallRetreat=null;return null;}
+        Outputs out=new Outputs();
+        out.forward=-Math.min(field.drivePower,Math.min(.65,Math.max(.15,p.distance(wallRetreat)*.45)));
+        double error=Pose.angle(wallRetreat.heading-p.heading);
+        if(field.canRotate(p,wallRetreat.heading))out.turnClockwise=-FieldLayout.clip(Math.toDegrees(error)*.08,.2);
+        return out;
     }
     private Pose fixedPoint(double x,double y,double heading){return new Pose(alliance==0?x:-x,alliance==0?y:-y,heading);}
     private Outputs moveScripted(Pose p,Pose target){

@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.quantumstorm.Vision;
 import android.util.Size;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.Servo;
@@ -29,6 +30,7 @@ import java.util.List;
  * and automatically tilts the camera UP once close to a ball.
  * When aimed UP: Searches for alliance AprilTags and centers the robot to fire at the Hive.
  */
+@Disabled
 @Autonomous(name = "Auto Vision Test", group = "Vision")
 public class AutoVisionTest extends LinearOpMode {
 

@@ -4,6 +4,7 @@ import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
@@ -13,6 +14,7 @@ import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import java.util.List;
 
 /** Uses the Limelight 3A color pipeline to approach a visible blue or yellow target. */
+@Disabled
 @Autonomous(name = "Approach Blue or Yellow", group = "Vision")
 public class PollenAndAprilTagAuto extends LinearOpMode {
 

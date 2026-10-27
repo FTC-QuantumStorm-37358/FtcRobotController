@@ -37,14 +37,26 @@ public final class AutoStateMachine implements AutoCloseable {
     private final TeamOneLimelight camera;
     private final PollenInventory inventory;
     private boolean closed;
+    private final boolean robotRelative;
+    private final org.firstinspires.ftc.teamcode.biobuzz.MirroredHiveTags mirroredTags;
+
+    /** Canonical frame is re-anchored at the same physical role start on either alliance. */
+    public AutoStateMachine(LinearOpMode opMode,boolean teamTwo){
+        this(opMode,teamTwo?AutoStartPosition.RED_2:AutoStartPosition.RED_1,teamTwo?Routine.TEAM_TWO:Routine.TEAM_ONE,true);
+    }
+    private String label(){return robotRelative?(position==AutoStartPosition.RED_2?"Team 2 Auto":"Team 1 Auto")+" (robot-relative)":position.label;}
 
     public AutoStateMachine(LinearOpMode opMode,AutoStartPosition position) {
         this(opMode,position,position==AutoStartPosition.RED_2||position==AutoStartPosition.BLUE_2?Routine.TEAM_TWO:Routine.TEAM_ONE);
     }
     public AutoStateMachine(LinearOpMode opMode,AutoStartPosition position,Routine selectedRoutine) {
-        this.opMode=opMode;this.position=position;
+        this(opMode,position,selectedRoutine,false);
+    }
+    private AutoStateMachine(LinearOpMode opMode,AutoStartPosition position,Routine selectedRoutine,boolean robotRelative) {
+        this.opMode=opMode;this.position=position;this.robotRelative=robotRelative;
         int alliance=position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2?0:1;
         FieldLayout field=new FieldLayout();Pose start=field.roleStart(alliance,selectedRoutine==Routine.TEAM_TWO);
+        mirroredTags=robotRelative&&selectedRoutine==Routine.TEAM_TWO?new org.firstinspires.ftc.teamcode.biobuzz.MirroredHiveTags(field):null;
         initStage("Initializing drive motors");
         drive=new MecanumDrive(opMode.hardwareMap);
         initStage("Initializing odometry_1: verify Pinpoint wiring/configuration");
@@ -64,6 +76,11 @@ public final class AutoStateMachine implements AutoCloseable {
                 odometry.update();double now=clock.seconds();
                 Pose pose=new Pose(odometry.getX(),odometry.getY(),odometry.getPose().getHeading(AngleUnit.RADIANS));
                 Vision vision=camera==null?Vision.empty(0,now):camera.read(now);
+                if(mirroredTags!=null){
+                    Pose shot=field.teamTwoWallHive[0];
+                    boolean atShot=pose.distance(shot)<=1&&Math.abs(Pose.angle(pose.heading-shot.heading))<=Math.toRadians(2);
+                    vision=mirroredTags.normalize(vision,now,atShot);
+                }
                 PollenInventory.Sample count=inventory==null?null:inventory.read();
                 return new Sensors(pose,now,odometry.isValid(),camera!=null&&camera.connected(),count==null?-1:count.total,count==null?-1:count.pollen,vision);
             }
@@ -75,7 +92,7 @@ public final class AutoStateMachine implements AutoCloseable {
                     return;
                 }
                 stopped=false;
-                double[] wheels=o.wheelPowers();drive.setPowers(wheels[0],wheels[1],wheels[2],wheels[3]);
+                double[] wheels=o.wheelPowers(Constants.AUTO_FORWARD_POWER_SIGN);drive.setPowers(wheels[0],wheels[1],wheels[2],wheels[3]);
                 shooter.apply(o.shooterPower,o.feederPower);intake.setPower(o.intakePower*Constants.INTAKE_POWER);
                 if(camera!=null&&!stopRequested())camera.select(o.pipeline);
             }
@@ -93,9 +110,12 @@ public final class AutoStateMachine implements AutoCloseable {
             org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine two=new org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine(io,field,false,selectedRoutine,false,false);
             two.parkingToleranceInches=2.0;two.waitUntilParkTime=true;routine=two;
         }
-        opMode.telemetry.addData("Autonomous",position.label);
-        opMode.telemetry.addData("Required start","X %.3f, Y %.3f in, heading %.1f deg",start.x,start.y,Math.toDegrees(start.heading));
+        opMode.telemetry.addData("Autonomous",label());
+        if(robotRelative)opMode.telemetry.addLine("No alliance selection: place at the matching Team 1/2 start on either side. Coordinates use a local route reference, not absolute field color.");
+        opMode.telemetry.addData(robotRelative?"Local route reference":"Required start","X %.3f, Y %.3f in, heading %.1f deg",start.x,start.y,Math.toDegrees(start.heading));
         opMode.telemetry.addData("Autonomous role",selectedRoutine);
+        opMode.telemetry.addData("Drive forward power sign",Constants.AUTO_FORWARD_POWER_SIGN);
+        opMode.telemetry.addLine("Start FRONT toward wall, rear shooter toward Hive. Retreat BACKWARD into the field after shooting.");
         opMode.telemetry.addLine(camera==null?"Legacy camera-free mode":camera.status());
         opMode.telemetry.addLine(selectedRoutine==Routine.TEAM_TWO?"Team 2: opposite wall -> VERIFY raised far Cell -> feed -> nearest Flower -> wall -> VERIFY -> feed -> park by 26 s.":"Team 1: preloads -> Garden pollen intake -> start-side-half park by 26 s.");
         opMode.telemetry.addLine("LIVE shooter/feed/intake after START. Load four pollen; clear the robot and firing path.");
@@ -126,6 +146,7 @@ public final class AutoStateMachine implements AutoCloseable {
         clock.reset();
         try {
             if(camera!=null)camera.reset();
+            if(mirroredTags!=null)mirroredTags.reset();
             routine.start(alliance,Constants.SHOOTER_POWER);
             // Bounded, stationary wait; included in the match's 26/30-second clock.
             while(opMode.opModeIsActive()&&clock.seconds()<2){
@@ -136,8 +157,9 @@ public final class AutoStateMachine implements AutoCloseable {
             }
             while(opMode.opModeIsActive()&&routine.isRunning()){
                 routine.tick();
-                opMode.telemetry.addData("Autonomous",position.label);
+                opMode.telemetry.addData("Autonomous",label());
                 opMode.telemetry.addData("Routine",routine.status());
+                if(mirroredTags!=null)opMode.telemetry.addData("Hive tag family",mirroredTags.observedFamily()<0?"Waiting for one unambiguous raised Hive at shot pose":mirroredTags.observedFamily()==0?"Red family observed automatically":"Blue family observed automatically");
                 opMode.telemetry.addData("State",routine.getState());
                 opMode.telemetry.addData("Last error",lastError().isEmpty()?"None":lastError());
                 opMode.telemetry.addData("AprilTags",camera==null?"Not required (legacy mode)":camera.status());
