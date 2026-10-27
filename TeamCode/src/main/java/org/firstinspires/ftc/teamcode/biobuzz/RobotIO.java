@@ -59,10 +59,15 @@ public interface RobotIO {
         public final boolean odometryValid, cameraConnected;
         /** -1 means unavailable; never manufacture a full/empty count. */
         public final int ballCount;
+        /** Type-verified occupied pollen slots, -1 if unavailable; never inferred from time. */
+        public final int pollenCount;
         public final Vision vision;
         public Sensors(Pose pose,double sampledAt,boolean odometryValid,boolean cameraConnected,int ballCount,Vision vision) {
+            this(pose,sampledAt,odometryValid,cameraConnected,ballCount,-1,vision);
+        }
+        public Sensors(Pose pose,double sampledAt,boolean odometryValid,boolean cameraConnected,int ballCount,int pollenCount,Vision vision) {
             this.pose=pose; this.sampledAt=sampledAt; this.odometryValid=odometryValid;
-            this.cameraConnected=cameraConnected; this.ballCount=ballCount; this.vision=vision;
+            this.cameraConnected=cameraConnected; this.ballCount=ballCount;this.pollenCount=pollenCount; this.vision=vision;
         }
     }
     final class Outputs {
@@ -72,9 +77,13 @@ public interface RobotIO {
         /** 0 = hive AprilTags / camera up, 1 = balls / camera down. */
         public int pipeline;
         /** Front-left, front-right, back-left, back-right, after mecanum normalization. */
-        public double[] wheelPowers() {
-            double fl=forward+strafeRight+turnClockwise,fr=forward-strafeRight-turnClockwise,
-                bl=forward-strafeRight+turnClockwise,br=forward+strafeRight-turnClockwise;
+        public double[] wheelPowers() { return wheelPowers(1); }
+        /** Hardware-only longitudinal calibration. Never invert strafe/turn or field poses. */
+        public double[] wheelPowers(double forwardPowerSign) {
+            if(forwardPowerSign!=1&&forwardPowerSign!=-1)throw new IllegalArgumentException("Forward power sign must be +1 or -1");
+            double y=forward*forwardPowerSign;
+            double fl=y+strafeRight+turnClockwise,fr=y-strafeRight-turnClockwise,
+                bl=y-strafeRight+turnClockwise,br=y+strafeRight-turnClockwise;
             double scale=Math.max(1,Math.max(Math.max(Math.abs(fl),Math.abs(fr)),Math.max(Math.abs(bl),Math.abs(br))));
             return new double[]{fl/scale,fr/scale,bl/scale,br/scale};
         }

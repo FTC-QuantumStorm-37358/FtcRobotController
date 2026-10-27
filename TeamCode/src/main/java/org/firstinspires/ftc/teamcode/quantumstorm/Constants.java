@@ -19,6 +19,10 @@ public class Constants {
     public final static String BACK_LEFT_DRIVE = "left_back_drive";
     public final static String BACK_RIGHT_DRIVE = "right_back_drive";
 
+    // Match the reported forward/backward reversal already corrected in TeleOp.
+    // Hardware-only sign: keep strafe, turn, field coordinates and headings unchanged.
+    public final static double AUTO_FORWARD_POWER_SIGN = -1.0;
+
     // Mechanism motors
     public final static String INTAKE_MOTOR = "intake";
 
@@ -41,10 +45,10 @@ public class Constants {
     public final static double INTAKE_POWER = 1.0;
 
     // Used by the autonomous Shooter mechanism
-    public final static double SHOOTER_POWER = 0.55;
+    public final static double SHOOTER_POWER = 0.50;
 
     // Signed starting power matching the remaining shooter's mounting direction.
-    public final static double SHOOTER_1_POWER = 0.55;
+    public final static double SHOOTER_1_POWER = 0.50;
 
     public final static double SHOOTER_POWER_INCREMENT = 0.05;
 
@@ -73,6 +77,34 @@ public class Constants {
     public final static int LIMELIGHT_COLOR_PIPELINE = 1;
     // Keep the old name available for existing ball-search code.
     public final static int LIMELIGHT_BALL_PIPELINE = LIMELIGHT_COLOR_PIPELINE;
+
+    // Optional Team One spilled-pollen recovery test requires calibrated tag heights.
+    // Normal Garden pickup uses yellow targets and does not wait for Hive tilt evidence.
+    public final static boolean TEAM_ONE_HIVE_HEIGHT_CALIBRATED = false;
+    public final static int TEAM_ONE_TAG_HEIGHT_AXIS = 2; // robot-space Z, verify on hardware
+    public final static double TEAM_ONE_ROBOT_ORIGIN_HEIGHT_IN = 0;
+    public final static double TEAM_ONE_UPPER_TAG_HEIGHT_IN = 52.02;
+    public final static double TEAM_ONE_LOWER_TAG_HEIGHT_IN = 36.57;
+    // Front-mounted camera/intake must face the Hive after rear-facing preload shots.
+    public final static double TEAM_ONE_TAG_VIEW_TURN_DEG = 180;
+
+    // Team Two must see raised far-Cell tags WHILE at the opposite-wall shot pose.
+    // A rear-facing/aimable camera and measured robot-space heights are required.
+    // False deliberately prevents shooting, but does not prevent timed parking.
+    public final static boolean TEAM_TWO_HIVE_HEIGHT_CALIBRATED = false;
+    public final static int TEAM_TWO_TAG_HEIGHT_AXIS = 2;
+    public final static double TEAM_TWO_ROBOT_ORIGIN_HEIGHT_IN = 0;
+    public final static double TEAM_TWO_UPPER_TAG_HEIGHT_IN = 52.02;
+    public final static double TEAM_TWO_LOWER_TAG_HEIGHT_IN = 36.57;
+    // These optional slots must provide BOTH normalized color and distance readings.
+    // No device names are guessed, and no ball counts are inferred from intake time.
+    public final static String[] TEAM_TWO_POLLEN_SLOT_SENSOR_NAMES = {};
+    public final static boolean TEAM_TWO_INVENTORY_CALIBRATED = false;
+    public final static double TEAM_TWO_SLOT_OCCUPIED_MAX_CM = 4.0;
+    public final static double TEAM_TWO_SLOT_MIN_ALPHA = .02;
+    public final static double TEAM_TWO_SLOT_YELLOW_BLUE_RATIO = 1.5;
+    public final static double TEAM_TWO_SLOT_YELLOW_RG_MIN = .65;
+    public final static double TEAM_TWO_SLOT_YELLOW_RG_MAX = 1.65;
 
     // =========================================================
     // PINPOINT ODOMETRY
@@ -151,13 +183,17 @@ public class Constants {
     // AUTONOMOUS ROUTINE
     // =========================================================
 
+    // Feed pulse must be calibrated to advance ONE pocket, not two balls.
+    public final static double SPINDEXER_FEED_PULSE_SEC = org.firstinspires.ftc.teamcode.biobuzz.FeedCadence.PULSE_SECONDS;
+    public final static double SPINDEXER_SHOT_GAP_SEC = org.firstinspires.ftc.teamcode.biobuzz.FeedCadence.GAP_SECONDS;
+
     public final static int AUTO_PRELOAD_BALLS = 4;                // Pollen loaded before the match
     public final static int AUTO_BALLS_TO_SHOOT = 4;               // shoot only when holding this many
     public final static double AUTO_PARK_TIME_SEC = 26.0;          // after this, go park (30 s auto, leaves time to drive)
     public final static int AUTO_MAX_RETRIES = 3;                  // recoverable errors before giving up and parking
     public final static double AUTO_APRILTAG_TIMEOUT_SEC = 3.0;    // no tag / not aligned -> ERROR
     public final static double AUTO_SHOOTER_SPINUP_SEC = 1.0;      // flywheel spin-up before feeding
-    public final static double AUTO_FEED_TIME_SEC = 2.0;           // feed time to empty the indexer
+    public final static double AUTO_FEED_TIME_SEC = 3.0;           // feed time to empty the indexer
     public final static double AUTO_AIM_TOLERANCE_DEG = 2.0;       // AprilTag tx within this = aligned
     public final static double AUTO_AIM_TURN_KP = 0.02;            // turn power per degree of tag offset
     public final static double AUTO_PICKUP_TIMEOUT_SEC = 3.0;      // time spent intaking at garden/flower

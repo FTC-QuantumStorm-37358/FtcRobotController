@@ -4,11 +4,13 @@ import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import java.util.List;
 
 /** Reports every AprilTag detected by the Limelight's 36h11 pipeline. */
+@Disabled
 @Autonomous(name = "Search AprilTags (36h11)", group = "Vision")
 public class SearchAprilTag1 extends LinearOpMode {
 

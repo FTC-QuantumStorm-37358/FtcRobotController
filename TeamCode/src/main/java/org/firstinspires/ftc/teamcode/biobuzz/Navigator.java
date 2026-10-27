@@ -14,7 +14,8 @@ public final class Navigator {
     private final LongSupplier clock;
     private int stage;
     private List<Pose> route;
-    private Pose turnPose;
+    private Pose turnPose,wallRetreat;
+    private boolean wallDepartureChecked;
     private TurnSearch turning;
     private PathSearch path;
     private boolean planning;
@@ -29,12 +30,15 @@ public final class Navigator {
         int units;
         boolean more(){checkStop();return ++units<=4096&&clock.getAsLong()<end;}
     }
-    public void reset(){stage=0;route=null;turnPose=null;turning=null;path=null;planning=false;}
+    public void reset(){stage=0;route=null;wallRetreat=null;wallDepartureChecked=false;turnPose=null;turning=null;path=null;planning=false;}
     public boolean isPlanning(){return planning;}
     public void useScriptedRoute(boolean enabled,int alliance){this.scripted=enabled;this.alliance=alliance;reset();}
     public List<Pose> route(){return route==null?new ArrayList<Pose>():new ArrayList<Pose>(route);}
     /** Pending searches return zero drive, not an exception or false arrival. */
     public Outputs move(Pose p,Pose target){
+        checkStop();
+        Outputs retreat=retreatFromFrontWall(p,target);
+        if(retreat!=null)return retreat;
         if(scripted)return moveScripted(p,target);
         checkStop();planning=false;Slice slice=new Slice();
         if(stage==0){
@@ -54,6 +58,26 @@ public final class Navigator {
         if(p.distance(target)<.65&&Math.abs(Pose.angle(target.heading-p.heading))<Math.toRadians(2))return null;
         return follow(p,target,target.heading,slice);
     }
+    /** Leave a wall-facing shot straight backwards before strafing or turning. */
+    private Outputs retreatFromFrontWall(Pose p,Pose target){
+        if(!wallDepartureChecked){
+            wallDepartureChecked=true;
+            if(p.distance(target)<.65&&Math.abs(Pose.angle(target.heading-p.heading))<Math.toRadians(2))return null;
+            boolean frontAtWall=Math.abs(p.x)>58&&Math.cos(p.heading)*Math.signum(p.x)>.9
+                    ||Math.abs(p.y)>58&&Math.sin(p.heading)*Math.signum(p.y)>.9;
+            if(frontAtWall){
+                wallRetreat=new Pose(p.x-6*Math.cos(p.heading),p.y-6*Math.sin(p.heading),p.heading);
+                if(!field.clear(p,wallRetreat,p.heading))throw new IllegalStateException("No safe backward wall-departure corridor");
+            }
+        }
+        if(wallRetreat==null)return null;
+        if(p.distance(wallRetreat)<.5){wallRetreat=null;return null;}
+        Outputs out=new Outputs();
+        out.forward=-Math.min(field.drivePower,Math.min(.65,Math.max(.15,p.distance(wallRetreat)*.45)));
+        double error=Pose.angle(wallRetreat.heading-p.heading);
+        if(field.canRotate(p,wallRetreat.heading))out.turnClockwise=-FieldLayout.clip(Math.toDegrees(error)*.08,.2);
+        return out;
+    }
     private Pose fixedPoint(double x,double y,double heading){return new Pose(alliance==0?x:-x,alliance==0?y:-y,heading);}
     private Outputs moveScripted(Pose p,Pose target){
         checkStop();planning=false;
@@ -61,7 +85,7 @@ public final class Navigator {
             if(field.canRotate(p,target.heading))turnPose=p;
             else{
                 double best=Double.POSITIVE_INFINITY;
-                double[][] clearance={{-12.75,56},{-32,56},{-36,52},{-40,52},{-56,-56},{-52,-32},{-56,-40},{-52,-36},{-52,-40},{-48,-36},{-52,-24},{-52,-28},{-48,-24}};
+                double[][] clearance={{-12.75,-56},{-32,-56},{-40,-52},{-52,52},{-52,-52},{-12.75,56},{-32,56},{-36,52},{-40,52},{-56,-56},{-52,-32},{-56,-40},{-52,-36},{-52,-40},{-48,-36},{-52,-24},{-52,-28},{-48,-24}};
                 for(double[] xy:clearance){
                     checkStop();Pose q=fixedPoint(xy[0],xy[1],p.heading);double distance=p.distance(q);
                     if(distance<best&&field.canRotate(q,target.heading)&&field.clear(p,q,p.heading)){best=distance;turnPose=q;}
@@ -87,18 +111,22 @@ public final class Navigator {
     /** A handful of validated, alliance-mirrored corridor templates; no graph search. */
     private List<Pose> fixedPath(Pose start,Pose goal,double heading){
         Pose rear=fixedPoint(-12.75,56,heading),upper=fixedPoint(-40,36,heading),lower=fixedPoint(-46,-44,heading),bypass=fixedPoint(-52,-8,heading);
-        Pose[][] templates={{goal},{bypass,goal},{rear,upper,goal},{lower,upper,goal},{upper,lower,goal},{upper,goal},{lower,goal},{rear,upper,lower,goal}};
+        Pose highCorner=fixedPoint(-52,52,heading),lowCorner=fixedPoint(-52,-52,heading),highCenter=fixedPoint(-12.75,52,heading),lowCenter=fixedPoint(-12.75,-52,heading);
+        Pose[][] templates={{highCenter,goal},{lowCenter,goal},{highCorner,highCenter,goal},{lowCorner,lowCenter,goal},{highCorner,lowCorner,lowCenter,goal},{lowCorner,highCorner,highCenter,goal},{goal},{bypass,goal},{rear,upper,goal},{lower,upper,goal},{upper,lower,goal},{upper,goal},{lower,goal},{rear,upper,lower,goal}};
+        List<Pose> bestPath=null;double bestLength=Double.POSITIVE_INFINITY;
         for(Pose[] template:templates){
-            checkStop();Pose previous=start;boolean clear=true;
-            for(Pose waypoint:template){checkStop();if(!field.clear(previous,waypoint,heading)){clear=false;break;}previous=waypoint;}
-            if(clear)return new ArrayList<Pose>(Arrays.asList(template));
+            checkStop();Pose previous=start;boolean clear=true;double length=0;
+            for(Pose waypoint:template){checkStop();if(!field.clear(previous,waypoint,heading)){clear=false;break;}length+=previous.distance(waypoint);previous=waypoint;}
+            if(clear&&length<bestLength){bestLength=length;bestPath=new ArrayList<Pose>(Arrays.asList(template));}
         }
+        if(bestPath!=null)return bestPath;
         throw new IllegalStateException("Fixed corridor blocked: verify start/odometry/field calibration");
     }
     private Outputs driveRoute(Pose p,Pose target,double heading){
-        while(route.size()>1&&(p.distance(route.get(0))<.6||field.clear(p,route.get(1),heading))){checkStop();route.remove(0);}
+        while(route.size()>1&&(p.distance(route.get(0))<(scripted?.05:.6)||!scripted&&field.clear(p,route.get(1),heading))){checkStop();route.remove(0);}
         Pose q=route.get(0);double dx=q.x-p.x,dy=q.y-p.y,c=Math.cos(p.heading),s=Math.sin(p.heading);
-        Outputs o=new Outputs();o.forward=(dx*c+dy*s)*.35;o.strafeRight=(dx*s-dy*c)*.35;
+        double gain=scripted?.45:.35;
+        Outputs o=new Outputs();o.forward=(dx*c+dy*s)*gain;o.strafeRight=(dx*s-dy*c)*gain;
         double mag=Math.hypot(o.forward,o.strafeRight);if(mag>field.drivePower){o.forward*=field.drivePower/mag;o.strafeRight*=field.drivePower/mag;}
         o.turnClockwise=-FieldLayout.clip(Math.toDegrees(Pose.angle(heading-p.heading))*.08,field.turnPower);return o;
     }
