@@ -22,6 +22,15 @@ The Flower trigger is deliberate contact: at its clearance pose, Team Two applie
 
 ## Corrected field setup
 
+## TeleOp shooter controls
+
+On gamepad 2, tap **A** to start the single shooter and **B** to stop it. A second A press does not toggle it off; B wins when both are pressed.
+
+Hold **Start**, then tap **LB** to increase signed power or **LT** to decrease it by `SHOOTER_POWER_INCREMENT` (0.05). Each press changes power once; holding a shoulder button does not repeat. Pressing Start after a shoulder button is already held does not change power: release and press the shoulder again. Simultaneous LB/LT requests cancel. Telemetry shows whether adjustment is locked and the previous/current power.
+
+Release Start before using A/B for the shooter. Start+A/B is reserved for Driver Station controller assignment, and a fresh A press is required afterward. The Logitech F310 Mode button changes controller behavior internally and is not used as the modifier. Shooter 2 remains removed, so X/Y and RB/RT do not control a second shooter. D-pad up/down retains the existing feeder controls.
+
+## Build
 All positions below are robot-center coordinates in inches, origin at field center, with counterclockwise headings in degrees. The corrected initial Hive tilt places Team One on the opposite wall from the earlier layout. Its front faces the wall and its rear-facing shooter points toward the Hive.
 
 | Pose | Red | Blue |
