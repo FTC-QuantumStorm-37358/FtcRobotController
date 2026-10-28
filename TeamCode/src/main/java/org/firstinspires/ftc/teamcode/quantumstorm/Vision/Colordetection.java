@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.quantumstorm.Vision;
 import android.util.Size;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
@@ -13,6 +14,7 @@ import org.firstinspires.ftc.vision.opencv.ColorRange;
 import java.util.List;
 
 /** Searches for the selected nectar color and yellow pollen. */
+@Disabled
 @Autonomous(name = "Search for Nectar and Pollen", group = "Vision")
 public class Colordetection extends LinearOpMode {
 

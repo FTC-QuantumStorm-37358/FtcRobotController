@@ -22,6 +22,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
     private CRServo rightIntakeServo;
     private CRServo leftIntakeServo;
     private CRServo shooterServo;
+    private final org.firstinspires.ftc.teamcode.biobuzz.FeedCadence feedCadence=new org.firstinspires.ftc.teamcode.biobuzz.FeedCadence(Constants.SPINDEXER_FEED_PULSE_SEC,Constants.SPINDEXER_SHOT_GAP_SEC);
 
     // Intake:
     //  1 = forward
@@ -140,8 +141,10 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // GAMEPAD 1 - MECANUM DRIVE
             // =====================================================
 
+            // This robot's tested forward/backward convention is inverted.
+            // Correct only TeleOp's Y input; keep strafe, turn and autonomous unchanged.
             drive.drive(
-                    -gamepad1.left_stick_y,
+                    gamepad1.left_stick_y,
                     gamepad1.left_stick_x,
                     gamepad1.right_stick_x);
 
@@ -262,14 +265,15 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             if (gamepad2.dpad_up) {
 
-                shooterServo.setPower(Constants.SHOOTER_SERVO_POWER);
+                shooterServo.setPower(feedCadence.apply(1,System.nanoTime()/1e9)*Constants.SHOOTER_SERVO_POWER);
 
             } else if (gamepad2.dpad_down) {
 
-                shooterServo.setPower(-Constants.SHOOTER_SERVO_POWER);
+                shooterServo.setPower(feedCadence.apply(-1,System.nanoTime()/1e9)*Constants.SHOOTER_SERVO_POWER);
 
             } else {
 
+                feedCadence.apply(0,System.nanoTime()/1e9);
                 shooterServo.setPower(0);
             }
 
@@ -362,6 +366,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         rightIntakeServo.setPower(0);
         leftIntakeServo.setPower(0);
+        feedCadence.apply(0,System.nanoTime()/1e9);
         shooterServo.setPower(0);
     }
 
