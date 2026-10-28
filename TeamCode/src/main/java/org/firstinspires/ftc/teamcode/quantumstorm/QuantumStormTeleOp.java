@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 
-@TeleOp(name = "Biobuzz-Quantum Storm Tele-Op", group = "Quantum Storm")
+@TeleOp(name = Constants.TELEOP_NAME, group = "Quantum Storm")
 public class QuantumStormTeleOp extends LinearOpMode {
 
     // Drive chain
