@@ -4,7 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 /** Same robot-relative routine on either alliance; no color or gamepad setup. */
-@Autonomous(name = "Team 2 Auto", group = "Quantum Storm", preselectTeleOp = "Quantum Storm Two Driver1")
+@Autonomous(name = "Biobuzz-Team 2 Auto", group = "Quantum Storm", preselectTeleOp = "Quantum Storm Two Driver1")
 public final class TeamTwoAutonomous extends LinearOpMode {
     @Override public void runOpMode(){
         try(AutoStateMachine auto=new AutoStateMachine(this,true)){

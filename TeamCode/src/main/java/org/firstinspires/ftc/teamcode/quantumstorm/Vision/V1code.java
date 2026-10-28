@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.quantumstorm.Vision;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
@@ -25,6 +26,7 @@ import java.util.List;
  * No visible tag means STOPPED; permission is not latched when a tag disappears.
  * Calibration uses camera-space pose; do not add another 30-degree correction.
  */
+@Disabled
 @TeleOp(name = "V1 AprilTag Fire Permission", group = "Vision")
 public class V1code extends LinearOpMode {
     private static final String LIMELIGHT_NAME = "limelight 3a";
