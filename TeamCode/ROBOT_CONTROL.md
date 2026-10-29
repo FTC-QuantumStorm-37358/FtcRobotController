@@ -4,7 +4,7 @@ The robot app builds entirely from TeamCode. SDK-free controllers, field geometr
 
 ## Two modes, no alliance setup
 
-Select **Biobuzz-Team 1 Auto** or **Biobuzz-Team 2 Auto**, place the robot at the matching physical role start on either alliance, press INIT, keep it still for odometry setup, then START. There is no gamepad input, color picker or confirmation step. The legacy Red/Blue autonomous entries have been removed; remaining diagnostics are `@Disabled`. TeleOp is unchanged.
+Select **Biobuzz-Team 1 Auto** or **Biobuzz-Team 2 Auto**, place the robot at the matching physical role start on either alliance, press INIT, keep it still for odometry setup, then START. There is no gamepad input, color picker or confirmation step. The legacy Red/Blue autonomous entries have been removed; remaining diagnostics are `@Disabled`.
 
 Both halves use one canonical route frame anchored by the role start, not absolute field-color coordinates. Rotating the physical setup 180 degrees produces the same body-relative driving commands, Garden/Flower pickup, wall clearance and parking half. Do not point the robot the opposite way to compensate: preserve the existing role's physical front/rear orientation. The numeric local route reference shown on Blue is not the absolute Blue field pose.
 
@@ -56,7 +56,32 @@ Corrected initial raised clusters are Red 34-37 and Blue 42-45. After the partne
 
 ## Spindexer and TeleOp
 
-`FeedCadence` applies a 0.18-second feed pulse followed by at least 0.5 seconds OFF in QuantumStorm TeleOp, normal autonomous Shooter and the generic FTC adapter. Held controls and rapid taps cannot skip the gap; TeleOp reverse unjamming stays immediate. The autonomous feed window is extended from two to three seconds for paced preloads. No sleep blocks steering, sensing, parking or STOP.
+Select **Biobuzz-Quantum Storm Tele-Op** on the Driver Station.
+
+| Gamepad 1 control | Assignment |
+| --- | --- |
+| Left stick up/down | Forward/backward, with the robot's corrected longitudinal mapping |
+| Left stick left/right | Strafe left/right |
+| Right stick left/right | Turn left/right |
+| Tap A without Start | Intake forward ON; stays on until another command |
+| B | Intake OFF; overrides A and Start+A |
+| Hold Start, then tap A | Intake reverse ON; stays on after releasing the buttons |
+
+A is no longer a toggle. Tapping A again leaves forward intake on. Changing Start while A remains held does not change direction; release A before issuing a new direction command. B always stops the intake, including while Start is held. Start+A also assigns gamepad 1 in the Driver Station: assign the controller before starting TeleOp, then release A. An A held across the TeleOp start is ignored until released and pressed again.
+
+| Gamepad 2 control | Assignment |
+| --- | --- |
+| Tap A, with Start released | Shooter ON |
+| B, with Start released | Shooter OFF; overrides A |
+| Hold Start, then tap LB | Increase signed shooter power by 0.05 |
+| Hold Start, then tap LT past halfway | Decrease signed shooter power by 0.05 |
+| Hold D-pad Up | Spindexer forward, using timed pulses |
+| Hold D-pad Down | Spindexer reverse continuously for unjamming |
+| Release D-pad Up/Down | Spindexer STOP |
+
+Gamepad 2 A/B are ignored while Start is held for controller assignment. Power changes happen once per new shoulder press; holding a shoulder or pressing Start after it is held does not repeat/change power. LB and LT together cancel. Shooter power starts at +0.50, with bounds -1.0 to +1.0; adjustment does not start a stopped shooter. Shooter 2 remains removed. Other buttons/stick axes have no robot action in this TeleOp; the F310 Mode button changes the controller's stick/D-pad behavior internally.
+
+`FeedCadence` applies a 0.18-second spindexer pulse followed by at least 0.5 seconds OFF in QuantumStorm TeleOp, normal autonomous Shooter and the generic FTC adapter. Held controls and rapid taps cannot skip the gap; TeleOp reverse unjamming stays immediate. The autonomous feed window is extended from two to three seconds for paced preloads. No sleep blocks steering, sensing, parking or STOP.
 
 This is **open-loop timing**, not confirmed-shot or angle feedback. Calibrate `SPINDEXER_FEED_PULSE_SEC` to advance exactly one pocket on the physical mechanism. A pulse that advances two pockets cannot be fixed by its subsequent pause. The configured CR servo cannot guarantee a 90-degree maximum without suitable position feedback or different hardware; no such guarantee is implemented.
 
