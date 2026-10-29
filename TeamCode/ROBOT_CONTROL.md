@@ -1,10 +1,10 @@
 # Standalone BIOBUZZ robot control
 
-The robot app builds entirely from TeamCode. SDK-free controllers, field geometry, navigation and sensor/output contracts are in `src/main/java/org/firstinspires/ftc/teamcode/biobuzz/`; the `ftc/` subpackage contains SDK adapters. Only **Team 1 Auto** and **Team 2 Auto** are enabled under `quantumstorm/Auto/`. No simulator directory, browser or laptop connection is required to build or run the robot app.
+The robot app builds entirely from TeamCode. SDK-free controllers, field geometry, navigation and sensor/output contracts are in `src/main/java/org/firstinspires/ftc/teamcode/biobuzz/`; the `ftc/` subpackage contains SDK adapters. Only **Biobuzz-Team 1 Auto** and **Biobuzz-Team 2 Auto** are enabled under `quantumstorm/Auto/`; the only enabled TeleOp is **Biobuzz-Quantum Storm Tele-Op** (`Constants.TELEOP_NAME`, which both autos preselect). No simulator directory, browser or laptop connection is required to build or run the robot app.
 
 ## Two modes, no alliance setup
 
-Select **Team 1 Auto** or **Team 2 Auto**, place the robot at the matching physical role start on either alliance, press INIT, keep it still for odometry setup, then START. There is no gamepad input, color picker or confirmation step. Legacy Red/Blue entries and autonomous diagnostics retain their source but are `@Disabled`; TeleOp is unchanged.
+Select **Biobuzz-Team 1 Auto** or **Biobuzz-Team 2 Auto**, place the robot at the matching physical role start on either alliance, press INIT, keep it still for odometry setup, then START. There is no gamepad input, color picker or confirmation step. The legacy Red/Blue autonomous entries have been removed; remaining diagnostics are `@Disabled`. TeleOp is unchanged.
 
 Both halves use one canonical route frame anchored by the role start, not absolute field-color coordinates. Rotating the physical setup 180 degrees produces the same body-relative driving commands, Garden/Flower pickup, wall clearance and parking half. Do not point the robot the opposite way to compensate: preserve the existing role's physical front/rear orientation. The numeric local route reference shown on Blue is not the absolute Blue field pose.
 

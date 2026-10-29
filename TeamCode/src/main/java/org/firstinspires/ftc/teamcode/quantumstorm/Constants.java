@@ -9,6 +9,13 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 public class Constants {
 
     // =========================================================
+    // OPMODE NAMES
+    // Autonomous preselectTeleOp must match the TeleOp name exactly
+    // =========================================================
+
+    public final static String TELEOP_NAME = "Biobuzz-Quantum Storm Tele-Op";
+
+    // =========================================================
     // DEVICE NAMES
     // Must match the active Robot Configuration exactly (case-sensitive)
     // =========================================================

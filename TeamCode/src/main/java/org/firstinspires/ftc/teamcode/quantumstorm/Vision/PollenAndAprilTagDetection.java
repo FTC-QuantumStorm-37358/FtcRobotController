@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.quantumstorm.Vision;
 import android.util.Size;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
@@ -20,6 +21,7 @@ import java.util.List;
  * Finds yellow pollen, blue and red objects, and AprilTags at the same time.
  * Configure a webcam in the Robot Configuration with the name "Webcam 1".
  */
+@Disabled
 @TeleOp(name = "Vision: Pollen, Colors & AprilTags", group = "Vision")
 public class PollenAndAprilTagDetection extends LinearOpMode {
 

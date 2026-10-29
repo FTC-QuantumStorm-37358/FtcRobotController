@@ -1,10 +1,10 @@
-package org.firstinspires.ftc.teamcode.quantumstorm.Tests;
+package org.firstinspires.ftc.teamcode.quantumstorm.DriveChain;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
-import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
 
 /**
@@ -13,6 +13,7 @@ import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
  * 2. Drive or push the robot to a location and read X / Y / Heading.
  * Also checks pod directions: forward should increase X, strafing left should increase Y.
  */
+@Disabled
 @TeleOp(name = "Test: Pinpoint Pose", group = "Quantum Storm Test")
 public class PinpointPoseTest extends LinearOpMode {
 

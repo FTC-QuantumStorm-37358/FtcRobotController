@@ -7,14 +7,16 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
+import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
+
 import java.util.List;
 
 /** Reports every AprilTag detected by the Limelight's 36h11 pipeline. */
 @Disabled
 @Autonomous(name = "Search AprilTags (36h11)", group = "Vision")
-public class SearchAprilTag1 extends LinearOpMode {
+public class SearchAprilTag extends LinearOpMode {
 
-    private static final String LIMELIGHT_NAME = "limelight 3a";
+    private static final String LIMELIGHT_NAME = Constants.LIMELIGHT;
     private static final int APRILTAG_PIPELINE = 0;
     private static final int REQUIRED_STABLE_FRAMES = 3;
     private static final long MAX_RESULT_AGE_MS = 250;

@@ -68,13 +68,20 @@ public final class TeamOneLimelight implements AutoCloseable {
                 if(tags!=null)for(LLResultTypes.FiducialResult tag:tags)targets.add(new Target(tag.getFiducialId(),tag.getTargetXDegrees(),tag.getTargetYDegrees(),height(tag)));
             }else{
                 // ColorResult has no color label: this pipeline MUST detect yellow pollen only.
-                LLResultTypes.ColorResult target=PollenAndAprilTagAuto.findLargestColorTarget(result);
+                LLResultTypes.ColorResult target=largestColorTarget(result);
                 if(target!=null)targets.add(new Target(-1,target.getTargetXDegrees(),target.getTargetYDegrees(),Double.NaN,target.getTargetArea(),"yellow"));
             }
             problem="";
             return new Vision(!targets.isEmpty(),pipeline,capturedAt,targets.toArray(new Target[0]));
         }catch(java.util.concurrent.CancellationException e){throw e;}
         catch(RuntimeException e){problem="Camera read failed: "+e.getMessage();return empty;}
+    }
+    /** Biggest color blob in view, or null when none. */
+    private static LLResultTypes.ColorResult largestColorTarget(LLResult result){
+        List<LLResultTypes.ColorResult> blobs=result.getColorResults();
+        LLResultTypes.ColorResult largest=null;
+        if(blobs!=null)for(LLResultTypes.ColorResult blob:blobs)if(largest==null||blob.getTargetArea()>largest.getTargetArea())largest=blob;
+        return largest;
     }
     private double height(LLResultTypes.FiducialResult tag){
         if(!calibrated()||tag.getTargetPoseRobotSpace()==null)return Double.NaN;
