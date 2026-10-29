@@ -32,9 +32,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
     private boolean shooterRunning = false;
 
-    // For intake toggle buttons
+    // Require a fresh A press for each intake direction command.
     private boolean previousA = false;
-    private boolean previousB = false;
 
     // Adjustable shooter power
     private double shooterSpeed = Constants.SHOOTER_1_POWER;
@@ -84,7 +83,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
         rightIntakeServo.setDirection(CRServo.Direction.FORWARD);
         leftIntakeServo.setDirection(CRServo.Direction.REVERSE);
 
-        // D-pad UP = feed; DOWN = reverse feed, matching autonomous.
+        // D-pad UP = spindexer forward; DOWN = spindexer reverse, matching autonomous.
         shooterServo.setDirection(CRServo.Direction.REVERSE);
 
 
@@ -112,23 +111,29 @@ public class QuantumStormTeleOp extends LinearOpMode {
         telemetry.addLine("GAMEPAD 1 - DRIVE + INTAKE");
         telemetry.addLine("Left Stick = Drive / Strafe");
         telemetry.addLine("Right Stick X = Turn");
-        telemetry.addLine("A = Intake Forward Toggle");
-        telemetry.addLine("B = Intake Reverse Toggle");
+        telemetry.addLine("A = Intake Forward ON");
+        telemetry.addLine("B = Intake OFF (also with START held)");
+        telemetry.addLine("Hold START + tap A = Intake Reverse ON");
 
         telemetry.addLine("");
 
-        telemetry.addLine("GAMEPAD 2 - SHOOTER");
+        telemetry.addLine("GAMEPAD 2 - SHOOTER + SPINDEXER");
         telemetry.addLine("A = Shooter 1 START, B = Shooter 1 STOP");
         telemetry.addLine("Hold START + tap LB = Shooter 1 Power Up");
         telemetry.addLine("Hold START + tap LT = Shooter 1 Power Down");
         telemetry.addLine("Release START before using shooter START/STOP buttons");
-        telemetry.addLine("D-Pad UP = Shooter Forward");
-        telemetry.addLine("D-Pad DOWN = Shooter Reverse");
+        telemetry.addLine("Hold D-Pad UP = Spindexer Forward (pulsed)");
+        telemetry.addLine("Hold D-Pad DOWN = Spindexer Reverse");
+        telemetry.addLine("Release D-Pad = Spindexer STOP");
 
         telemetry.update();
 
 
         waitForStart();
+
+        // Start+A assigns gamepad 1 in the Driver Station. A held through INIT/START
+        // must be released before it can command the intake during TeleOp.
+        previousA = gamepad1.a;
 
 
         // =========================================================
@@ -150,43 +155,22 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
 
             // =====================================================
-            // GAMEPAD 1 - INTAKE TOGGLE
+            // GAMEPAD 1 - INTAKE START / STOP
             // =====================================================
 
             boolean currentA = gamepad1.a;
             boolean currentB = gamepad1.b;
 
 
-            // A = forward toggle
+            // Fresh A selects forward; holding Start at that press selects reverse.
+            // Repeated A presses do not toggle off. Releasing Start while A is held
+            // does not change direction; holding A then pressing Start does not reverse.
             if (currentA && !previousA) {
-
-                if (intakeState == 1) {
-
-                    intakeState = 0;
-
-                } else {
-
-                    intakeState = 1;
-                }
+                intakeState = gamepad1.start ? -1 : 1;
             }
-
-
-            // B = reverse toggle
-            if (currentB && !previousB) {
-
-                if (intakeState == -1) {
-
-                    intakeState = 0;
-
-                } else {
-
-                    intakeState = -1;
-                }
-            }
-
-
+            // STOP always wins, including A+B and Start+A+B.
+            if (currentB) intakeState = 0;
             previousA = currentA;
-            previousB = currentB;
 
 
             // =====================================================
@@ -253,7 +237,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
 
             // =====================================================
-            // GAMEPAD 2 - SHOOTER CR SERVO
+            // GAMEPAD 2 - SPINDEXER CR SERVO
             // =====================================================
             //
             // UP = FORWARD
@@ -329,19 +313,19 @@ public class QuantumStormTeleOp extends LinearOpMode {
             if (gamepad2.dpad_up) {
 
                 telemetry.addData(
-                        "Shooter Servo",
+                        "Spindexer",
                         "FORWARD");
 
             } else if (gamepad2.dpad_down) {
 
                 telemetry.addData(
-                        "Shooter Servo",
+                        "Spindexer",
                         "REVERSE");
 
             } else {
 
                 telemetry.addData(
-                        "Shooter Servo",
+                        "Spindexer",
                         "STOPPED");
             }
 
