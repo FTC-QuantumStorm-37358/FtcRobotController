@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.Gamepad;
@@ -11,7 +12,9 @@ import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
  * active Robot Configuration, so it runs on a spare Control Hub with no drive motors.
  * Same buttons as QuantumStormTeleOp, so tuned values carry straight over, plus
  * bench-only A = DROP / Y = LIFT and a live gamepad readout for troubleshooting.
+ * Hidden from the Driver Hub list; remove @Disabled to bench-test again.
  */
+@Disabled
 @TeleOp(name = "Test: Flower Intake Servo", group = "Quantum Storm Test")
 public class FlowerIntakeTest extends LinearOpMode {
 
