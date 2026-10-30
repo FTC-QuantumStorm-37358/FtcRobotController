@@ -17,7 +17,7 @@ import java.util.List;
 public class SearchAprilTag extends LinearOpMode {
 
     private static final String LIMELIGHT_NAME = Constants.LIMELIGHT;
-    private static final int APRILTAG_PIPELINE = 0;
+    private static final int APRILTAG_PIPELINE = Constants.LIMELIGHT_APRILTAG_PIPELINE;
     private static final int REQUIRED_STABLE_FRAMES = 3;
     private static final long MAX_RESULT_AGE_MS = 250;
     private static final String SHOOT_ALLOWED = "SHOOT ALLOWED";
@@ -37,7 +37,7 @@ public class SearchAprilTag extends LinearOpMode {
         limelight.pipelineSwitch(APRILTAG_PIPELINE);
         limelight.start();
 
-        telemetry.addLine("Pipeline 0 must be configured for AprilTag family 36h11.");
+        telemetry.addLine("Pipeline 1 must be configured for AprilTag family 36h11.");
         telemetry.addLine("Press Start to report visible tag IDs.");
         telemetry.update();
         waitForStart();
@@ -65,7 +65,7 @@ public class SearchAprilTag extends LinearOpMode {
                     telemetry.addData("Result valid", result.isValid());
 
                     if (activePipeline != APRILTAG_PIPELINE) {
-                        telemetry.addLine("Waiting for pipeline 0; set it to AprilTag 36h11.");
+                        telemetry.addLine("Waiting for pipeline 1; set it to AprilTag 36h11.");
                     } else if (!result.isValid()) {
                         telemetry.addLine("No valid camera result yet.");
                     } else {

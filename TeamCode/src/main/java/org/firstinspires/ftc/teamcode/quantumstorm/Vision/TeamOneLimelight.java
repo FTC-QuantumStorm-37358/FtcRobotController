@@ -19,6 +19,8 @@ public final class TeamOneLimelight implements AutoCloseable {
     private final Servo tilt;
     private final DoubleSupplier clock;
     private final boolean teamTwo;
+    private final String hardwareName;
+    private boolean lastConnected;
     private int pipeline=-1;
     private double changedAt,frameTimestamp=Double.NaN,capturedAt;
     private String problem="";
@@ -27,8 +29,10 @@ public final class TeamOneLimelight implements AutoCloseable {
     public TeamOneLimelight(HardwareMap map,DoubleSupplier clock,boolean teamTwo){
         this.clock=clock;this.teamTwo=teamTwo;
         Limelight3A found=map.tryGet(Limelight3A.class,Constants.LIMELIGHT);
+        String name=Constants.LIMELIGHT;
         // Preserve support for the hardware name used by the current approach OpMode.
-        if(found==null)found=map.tryGet(Limelight3A.class,"limelight 3A");
+        if(found==null){found=map.tryGet(Limelight3A.class,"limelight 3A");name="limelight 3A";}
+        hardwareName=found==null?"Not found (tried "+Constants.LIMELIGHT+", limelight 3A)":name;
         camera=found;tilt=map.tryGet(Servo.class,Constants.LIMELIGHT_TILT_SERVO);
         if(camera!=null){try{camera.start();reset();}catch(RuntimeException e){problem=e.getMessage();}}
     }
@@ -43,12 +47,19 @@ public final class TeamOneLimelight implements AutoCloseable {
             camera.pipelineSwitch(mode==0?Constants.LIMELIGHT_APRILTAG_PIPELINE:Constants.LIMELIGHT_COLOR_PIPELINE);
         }catch(RuntimeException e){problem=e.getMessage();}
     }
-    public boolean connected(){try{return camera!=null&&camera.isConnected();}catch(RuntimeException e){problem=e.getMessage();return false;}}
+    public boolean mapped(){return camera!=null;}
+    public String hardwareName(){return hardwareName;}
+    public int selectedPipeline(){return pipeline==0?Constants.LIMELIGHT_APRILTAG_PIPELINE:Constants.LIMELIGHT_COLOR_PIPELINE;}
+    public boolean connected(){try{lastConnected=camera!=null&&camera.isConnected();}catch(RuntimeException e){problem=e.getMessage();lastConnected=false;}return lastConnected;}
+    public String cachedStatus(){return status(lastConnected);}
     public String status(){
-        if(!connected())return teamTwo?"Limelight unavailable: shooting disabled; timed parking still active":"Limelight unavailable: collection disabled; timed parking still active";
+        return status(connected());
+    }
+    private String status(boolean connected){
+        if(!connected)return "Limelight unavailable: shooting disabled; timed parking still active";
         if(!problem.isEmpty())return problem;
         if(teamTwo)return calibrated()?"Live own-Hive far Cell tags required before and during feeding":"TEAM TWO HIVE HEIGHT NOT CALIBRATED: shooting disabled";
-        return calibrated()?"Live tags / yellow-only pollen pipeline":"Optional tilt-test heights uncalibrated; yellow Garden pickup uses color pipeline";
+        return calibrated()?"Live near-Cell tags required for Team One shots / yellow pollen pickup":"TEAM ONE HIVE HEIGHT NOT CALIBRATED: shooting disabled";
     }
     public Vision read(double now){
         Vision empty=Vision.empty(pipeline,now);
