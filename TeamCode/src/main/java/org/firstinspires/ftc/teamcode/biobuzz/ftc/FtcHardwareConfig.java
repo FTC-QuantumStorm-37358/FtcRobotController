@@ -20,7 +20,7 @@ public class FtcHardwareConfig {
     public String cameraTilt="limelight_tilt_servo";
     public double podXOffsetMm=0,podYOffsetMm=0,tiltUp=.3,tiltDown=.7;
     public boolean reverseXPod=false,reverseYPod=false;
-    public int tagPipeline=0,ballPipeline=1;
+    public int tagPipeline=1,ballPipeline=0;
     /** Confirm Limelight camera pose/extrinsics at tiltUp before using 3D heights. */
     public boolean hiveHeightCalibrated=false;
     /** Robot-space vertical axis: 2 for Z-up. Set only after verifying the pose convention. */

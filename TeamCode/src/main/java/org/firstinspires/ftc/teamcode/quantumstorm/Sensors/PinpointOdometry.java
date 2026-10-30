@@ -80,6 +80,7 @@ public class PinpointOdometry {
 
     public void addTelemetry(Telemetry telemetry) {
         telemetry.addData("Pinpoint", getStatus());
+        telemetry.addData("Pinpoint pose valid",valid?"YES":"NO - last known / initialized pose only");
         telemetry.addData("X (in)", "%.1f", getX());
         telemetry.addData("Y (in)", "%.1f", getY());
         telemetry.addData("Heading (deg)", "%.1f", getHeading());

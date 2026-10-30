@@ -10,9 +10,11 @@ import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.*;
 public final class MirroredHiveTags {
     public static final double MAX_CENTER_TX_DEGREES=10;
     private final FieldLayout field;
+    private final boolean flipped;
     private int family=-1;
     private double lastFrame=Double.NEGATIVE_INFINITY;
-    public MirroredHiveTags(FieldLayout field){this.field=field;}
+    public MirroredHiveTags(FieldLayout field){this(field,true);}
+    public MirroredHiveTags(FieldLayout field,boolean flipped){this.field=field;this.flipped=flipped;}
     public void reset(){family=-1;lastFrame=Double.NEGATIVE_INFINITY;}
     public int observedFamily(){return family;}
     public Vision normalize(Vision v,double now,boolean atShot){
@@ -23,7 +25,7 @@ public final class MirroredHiveTags {
             if(!atShot)return Vision.empty(0,now);
             int[] raised=new int[2];
             for(int a=0;a<2;a++){
-                for(int id:field.farTags[a])for(Target t:v.targets)if(t.id==id&&Double.isFinite(t.tx)&&Math.abs(t.tx)<=MAX_CENTER_TX_DEGREES&&Double.isFinite(t.ty)
+                for(int id:(flipped?field.farTags[a]:field.nearTags[a]))for(Target t:v.targets)if(t.id==id&&Double.isFinite(t.tx)&&Math.abs(t.tx)<=MAX_CENTER_TX_DEGREES&&Double.isFinite(t.ty)
                         &&Double.isFinite(t.heightInches)&&Math.abs(t.heightInches-field.upperTagHeight)<=field.tagHeightTolerance){raised[a]++;break;}
             }
             // The adjacent Hive may be in the wide FOV: require one centered raised

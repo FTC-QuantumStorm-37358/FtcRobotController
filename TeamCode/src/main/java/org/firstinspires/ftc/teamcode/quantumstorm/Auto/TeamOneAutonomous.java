@@ -10,6 +10,7 @@ import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 public final class TeamOneAutonomous extends LinearOpMode {
     @Override public void runOpMode(){
         try(AutoStateMachine auto=new AutoStateMachine(this,false)){
+            while(opModeInInit()&&!isStopRequested()){auto.updateInitTelemetry();sleep(100);}
             waitForStart();
             if(!isStopRequested())auto.run();
         }catch(java.util.concurrent.CancellationException ignored){

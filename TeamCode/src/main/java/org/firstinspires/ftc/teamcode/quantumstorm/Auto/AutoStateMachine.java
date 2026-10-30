@@ -6,6 +6,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.biobuzz.FieldLayout;
+import org.firstinspires.ftc.teamcode.biobuzz.AutoDebugSnapshot;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotController;
 import org.firstinspires.ftc.teamcode.biobuzz.TeamOnePollenAuto;
@@ -36,6 +37,11 @@ public final class AutoStateMachine implements AutoCloseable {
     private final RobotController routine;
     private final TeamOneLimelight camera;
     private final PollenInventory inventory;
+    private final RobotIO robotIO;
+    private Sensors debugSensors;
+    private Vision debugRawVision,debugLastTags;
+    private Outputs debugOutputs=new Outputs();
+    private String debugReadError="";
     private boolean closed;
     private final boolean robotRelative;
     private final org.firstinspires.ftc.teamcode.biobuzz.MirroredHiveTags mirroredTags;
@@ -56,7 +62,7 @@ public final class AutoStateMachine implements AutoCloseable {
         this.opMode=opMode;this.position=position;this.robotRelative=robotRelative;
         int alliance=position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2?0:1;
         FieldLayout field=new FieldLayout();Pose start=field.roleStart(alliance,selectedRoutine==Routine.TEAM_TWO);
-        mirroredTags=robotRelative&&selectedRoutine==Routine.TEAM_TWO?new org.firstinspires.ftc.teamcode.biobuzz.MirroredHiveTags(field):null;
+        mirroredTags=robotRelative&&selectedRoutine!=Routine.FULL?new org.firstinspires.ftc.teamcode.biobuzz.MirroredHiveTags(field,selectedRoutine==Routine.TEAM_TWO):null;
         initStage("Initializing drive motors");
         drive=new MecanumDrive(opMode.hardwareMap);
         initStage("Initializing odometry_1: verify Pinpoint wiring/configuration");
@@ -65,10 +71,10 @@ public final class AutoStateMachine implements AutoCloseable {
         shooter=new Shooter(opMode.hardwareMap);intake=new Intake(opMode.hardwareMap);
         field.upperTagHeight=selectedRoutine==Routine.TEAM_TWO?Constants.TEAM_TWO_UPPER_TAG_HEIGHT_IN:Constants.TEAM_ONE_UPPER_TAG_HEIGHT_IN;
         field.lowerTagHeight=selectedRoutine==Routine.TEAM_TWO?Constants.TEAM_TWO_LOWER_TAG_HEIGHT_IN:Constants.TEAM_ONE_LOWER_TAG_HEIGHT_IN;
-        initStage(selectedRoutine==Routine.TEAM_TWO?"Initializing Limelight: own raised far Cell required before feeding":"Initializing optional Limelight for Team One pollen recovery");
+        initStage("Initializing Limelight: own raised Cell required before feeding");
         camera=selectedRoutine==Routine.FULL?null:new TeamOneLimelight(opMode.hardwareMap,clock::seconds,selectedRoutine==Routine.TEAM_TWO);
         inventory=selectedRoutine==Routine.FULL?null:new PollenInventory(opMode.hardwareMap);
-        RobotIO io=new RobotIO(){
+        robotIO=new RobotIO(){
             private boolean stopped;
             public boolean stopRequested(){return opMode.isStopRequested()||Thread.currentThread().isInterrupted();}
             public double nowSeconds(){return clock.seconds();}
@@ -76,15 +82,19 @@ public final class AutoStateMachine implements AutoCloseable {
                 odometry.update();double now=clock.seconds();
                 Pose pose=new Pose(odometry.getX(),odometry.getY(),odometry.getPose().getHeading(AngleUnit.RADIANS));
                 Vision vision=camera==null?Vision.empty(0,now):camera.read(now);
-                if(mirroredTags!=null){
-                    Pose shot=field.teamTwoWallHive[0];
+                debugRawVision=vision;
+                if(vision.fresh(now,0)&&vision.targets.length>0)debugLastTags=vision;
+                if(mirroredTags!=null&&!Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG){
+                    Pose shot=selectedRoutine==Routine.TEAM_TWO?field.teamTwoWallHive[0]:field.hive[0];
                     boolean atShot=pose.distance(shot)<=1&&Math.abs(Pose.angle(pose.heading-shot.heading))<=Math.toRadians(2);
                     vision=mirroredTags.normalize(vision,now,atShot);
                 }
                 PollenInventory.Sample count=inventory==null?null:inventory.read();
-                return new Sensors(pose,now,odometry.isValid(),camera!=null&&camera.connected(),count==null?-1:count.total,count==null?-1:count.pollen,vision);
+                debugSensors=new Sensors(pose,now,odometry.isValid(),camera!=null&&camera.connected(),count==null?-1:count.total,count==null?-1:count.pollen,vision);
+                debugReadError="";return debugSensors;
             }
             public void apply(Outputs o){
+                debugOutputs=o.copy();
                 if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.shooterPower==0&&o.feederPower==0&&o.intakePower==0){
                     if(!stopped){stopped=true;SafeShutdown.run(drive::stop,shooter::stop,intake::stop);}
                     // Stop actuators BEFORE any camera SDK call, including a pipeline transition.
@@ -97,10 +107,17 @@ public final class AutoStateMachine implements AutoCloseable {
                 if(camera!=null&&!stopRequested())camera.select(o.pipeline);
             }
         };
+        RobotIO io=robotIO;
+        opMode.telemetry.setMsTransmissionInterval(100);
         if(selectedRoutine==Routine.TEAM_ONE){
             TeamOnePollenAuto one=new TeamOnePollenAuto(io,field);
             one.spinUpSeconds=Constants.AUTO_SHOOTER_SPINUP_SEC;one.feedSeconds=Constants.AUTO_FEED_TIME_SEC;
             one.observationHeadingOffsetRadians=Math.toRadians(Constants.TEAM_ONE_TAG_VIEW_TURN_DEG);
+            one.surveyBeforePickup=false;
+            one.gardenAdvanceInches=Constants.AUTO_GARDEN_ADVANCE_IN;
+            one.gardenAdvanceSeconds=Constants.AUTO_GARDEN_ADVANCE_SEC;
+            one.gardenAdvancePower=Constants.AUTO_GARDEN_ADVANCE_POWER;
+            one.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
             routine=one;
         }else if(selectedRoutine==Routine.TEAM_TWO){
             TeamTwoHiveAuto two=new TeamTwoHiveAuto(io,field);
@@ -117,10 +134,13 @@ public final class AutoStateMachine implements AutoCloseable {
         opMode.telemetry.addData("Drive forward power sign",Constants.AUTO_FORWARD_POWER_SIGN);
         opMode.telemetry.addLine("Start FRONT toward wall, rear shooter toward Hive. Retreat BACKWARD into the field after shooting.");
         opMode.telemetry.addLine(camera==null?"Legacy camera-free mode":camera.status());
-        opMode.telemetry.addLine(selectedRoutine==Routine.TEAM_TWO?"Team 2: opposite wall -> VERIFY raised far Cell -> feed -> nearest Flower -> wall -> VERIFY -> feed -> park by 26 s.":"Team 1: preloads -> Garden pollen intake -> start-side-half park by 26 s.");
+        opMode.telemetry.addLine(selectedRoutine==Routine.TEAM_TWO?"Team 2: START at opposite-wall shot beside Flower, FRONT to wall / REAR to Hive. Wait for raised far tags -> feed -> Flower -> wall -> verify/feed -> park.":"Team 1: preloads -> Garden pollen intake -> start-side-half park by 26 s.");
         opMode.telemetry.addLine("LIVE shooter/feed/intake after START. Load four pollen; clear the robot and firing path.");
         opMode.telemetry.addLine(inventory==null?"Inventory unknown: timed attempts do not invent ball counts.":inventory.status());
-        opMode.telemetry.addLine(selectedRoutine==Routine.TEAM_TWO?"Pipeline 0: raised own far Cell required before AND during feed; no any-tag fallback.":camera==null?"No extra pickup; wait then park at 26 s; stop at 30 s.":"Team One: immediate preloads; yellow-only Limelight for Garden pickup; park by 26 s.");
+        opMode.telemetry.addLine(selectedRoutine==Routine.TEAM_TWO?"Pipeline 1: raised own far Cell required before AND during feed; no any-tag fallback.":camera==null?"No extra pickup; wait then park at 26 s; stop at 30 s.":Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG?"PRACTICE TAG MODE: any fresh Pipeline 1 AprilTag permits Team 1 preload feeding.":"Team One: raised own near Cell tags required before AND during feeding; yellow-only Garden pickup.");
+        opMode.telemetry.addLine("Intake ON from pickup departure until four measured pieces or parking. Unknown counts are not assumed full.");
+        opMode.telemetry.addLine("No idle camera-search spins. Garden: bounded slow forward intake stroke, then stationary wait for parking.");
+        if(selectedRoutine==Routine.TEAM_TWO){Pose park=field.teamTwoGardenSidePark[alliance];opMode.telemetry.addData("Team Two shooting-side-half park","X %.1f, Y %.1f in",park.x,park.y);}
         if(selectedRoutine==Routine.TEAM_ONE){Pose park=field.teamOneStartSidePark[alliance];opMode.telemetry.addData("Team One start-side-half park","X %.1f, Y %.1f in; nearest starting wall",park.x,park.y);}
         if(selectedRoutine==Routine.TEAM_TWO){Pose shot=field.teamTwoWallHive[alliance];opMode.telemetry.addData("Team Two wall shot","X %.2f, Y %.2f in, heading %.1f deg",shot.x,shot.y,Math.toDegrees(shot.heading));opMode.telemetry.addLine("Limelight must see the Hive behind the rear shooter while the front faces the wall.");}
         opMode.telemetry.addLine("Parking: within 2 inches -> all outputs OFF; no final heading correction.");
@@ -140,10 +160,49 @@ public final class AutoStateMachine implements AutoCloseable {
         return ((org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine)routine).lastError();
     }
 
+    /** Samples sensors during INIT without ticking autonomous or commanding motors. */
+    public void updateInitTelemetry(){
+        if(opMode.isStopRequested()||Thread.currentThread().isInterrupted())return;
+        try{robotIO.readSensors();}
+        catch(java.util.concurrent.CancellationException e){throw e;}
+        catch(RuntimeException e){debugSensors=null;debugRawVision=null;debugReadError=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();}
+        opMode.telemetry.addData("Autonomous",label());
+        opMode.telemetry.addData("State","INIT - keep robot still for odometry calibration");
+        addDebugTelemetry();opMode.telemetry.update();
+    }
+    private void addDebugTelemetry(){
+        double now=clock.seconds();
+        opMode.telemetry.addData("Limelight device",camera==null?"Not used (legacy)":camera.mapped()?"DETECTED: "+camera.hardwareName():camera.hardwareName());
+        opMode.telemetry.addData("Limelight connection",debugSensors==null?"Not sampled":debugSensors.cameraConnected?"CONNECTED":"DISCONNECTED / NOT FOUND");
+        if(camera!=null){
+            opMode.telemetry.addData("Limelight status",camera.cachedStatus());
+            opMode.telemetry.addData("Limelight requested pipeline",camera.selectedPipeline());
+        }
+        opMode.telemetry.addData("Raw AprilTag IDs",AutoDebugSnapshot.ids(debugRawVision,now));
+        opMode.telemetry.addData("Raw tag measurements",AutoDebugSnapshot.details(debugRawVision,now));
+        opMode.telemetry.addData("Last tag frame age",AutoDebugSnapshot.age(debugLastTags,now));
+        if(debugLastTags!=null)opMode.telemetry.addData("Last seen raw tag IDs",AutoDebugSnapshot.ids(debugLastTags,debugLastTags.capturedAt)+" (HISTORY ONLY, not shooting permission)");
+        opMode.telemetry.addData("Controller tag IDs",AutoDebugSnapshot.ids(debugSensors==null?null:debugSensors.vision,now));
+        if(mirroredTags!=null)opMode.telemetry.addData("Hive tag family",Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG?"Practice mode - official Hive lock bypassed":mirroredTags.observedFamily()<0?"Not locked - await centered raised Hive at shot pose":mirroredTags.observedFamily()==0?"Red family":"Blue family");
+        opMode.telemetry.addData("Current location",AutoDebugSnapshot.pose(debugSensors));
+        opMode.telemetry.addData("Coordinate frame",robotRelative?"LOCAL role reference; inches; heading CCW from +X. Not absolute alliance coordinates.":"Field X/Y inches; heading CCW from +X");
+        opMode.telemetry.addData("Odometry sample",debugSensors!=null&&debugSensors.odometryValid?"VALID":"INVALID / UNAVAILABLE - do not trust last known pose");
+        Pose target=routine.destination();
+        opMode.telemetry.addData("Destination",target==null?"None - stationary state":String.format(java.util.Locale.US,"X %.1f, Y %.1f in, heading %.1f deg",target.x,target.y,Math.toDegrees(target.heading)));
+        if(target!=null&&debugSensors!=null)opMode.telemetry.addData("Distance to target (in)","%.1f",debugSensors.pose.distance(target));
+        opMode.telemetry.addData("Drive request F / right / CW","%.2f / %.2f / %.2f",debugOutputs.forward,debugOutputs.strafeRight,debugOutputs.turnClockwise);
+        opMode.telemetry.addData("Shooter / feeder / intake","%.2f / %.2f / %.2f",debugOutputs.shooterPower,debugOutputs.feederPower,debugOutputs.intakePower);
+        opMode.telemetry.addData("Measured pieces",debugSensors==null||debugSensors.ballCount<0?"UNKNOWN":debugSensors.ballCount+" / 4");
+        opMode.telemetry.addData("Measured pollen",debugSensors==null||debugSensors.pollenCount<0?"UNKNOWN":debugSensors.pollenCount+" / 4");
+        if(!debugReadError.isEmpty())opMode.telemetry.addData("Sensor read error",debugReadError);
+        odometry.addTelemetry(opMode.telemetry);
+    }
+
     public void run(){
         int alliance=position==AutoStartPosition.RED_1||position==AutoStartPosition.RED_2?0:1;
         if(opMode.isStopRequested())return;
         clock.reset();
+        debugSensors=null;debugRawVision=debugLastTags=null;debugOutputs=new Outputs();debugReadError="";
         try {
             if(camera!=null)camera.reset();
             if(mirroredTags!=null)mirroredTags.reset();
@@ -159,14 +218,26 @@ public final class AutoStateMachine implements AutoCloseable {
                 routine.tick();
                 opMode.telemetry.addData("Autonomous",label());
                 opMode.telemetry.addData("Routine",routine.status());
-                if(mirroredTags!=null)opMode.telemetry.addData("Hive tag family",mirroredTags.observedFamily()<0?"Waiting for one unambiguous raised Hive at shot pose":mirroredTags.observedFamily()==0?"Red family observed automatically":"Blue family observed automatically");
                 opMode.telemetry.addData("State",routine.getState());
                 opMode.telemetry.addData("Last error",lastError().isEmpty()?"None":lastError());
-                opMode.telemetry.addData("AprilTags",camera==null?"Not required (legacy mode)":camera.status());
                 opMode.telemetry.addData("Navigation",routine instanceof TeamTwoHiveAuto?"Opposite-wall shots; fixed route; fresh own-tag gate":camera==null?"Fixed simulator route; no route search":"Camera pollen approach + collision-checked start-side-half park");
                 opMode.telemetry.addData("Mechanisms",inventory==null?"LIVE hardware outputs; unknown inventory":inventory.status());
-                odometry.addTelemetry(opMode.telemetry);opMode.telemetry.update();
+                addDebugTelemetry();opMode.telemetry.update();
                 opMode.idle();
+            }
+            // A controller failure previously ended the LinearOpMode immediately, so
+            // the Driver Hub only flashed the useful reason before preselecting TeleOp.
+            // Keep the robot stopped and the diagnostics visible until the operator
+            // presses STOP. Normal completion still exits normally.
+            if(opMode.opModeIsActive()&&!lastError().isEmpty()){
+                while(opMode.opModeIsActive()&&!opMode.isStopRequested()){
+                    opMode.telemetry.addData("Autonomous","ERROR - robot outputs are OFF");
+                    opMode.telemetry.addData("Last error",lastError());
+                    opMode.telemetry.addLine("Read this screen, then press STOP to exit autonomous.");
+                    addDebugTelemetry();
+                    opMode.telemetry.update();
+                    opMode.idle();
+                }
             }
         }catch(java.util.concurrent.CancellationException e){
             // STOP is a normal exit, not an autonomous fault.

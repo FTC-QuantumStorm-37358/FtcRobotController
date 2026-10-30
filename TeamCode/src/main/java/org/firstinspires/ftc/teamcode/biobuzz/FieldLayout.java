@@ -34,7 +34,7 @@ public final class FieldLayout {
     /** Same placements as autonomous-modes.js; Java coordinates are X, -browser Z. */
     public Pose roleStart(int alliance,boolean teamTwo) {
         if(alliance<0||alliance>1)throw new IllegalArgumentException("Invalid alliance");
-        return teamTwo?(alliance==0?fromBrowser(-62.9,-6,Math.PI):fromBrowser(62.9,6,0)):hive[alliance];
+        return teamTwo?teamTwoWallHive[alliance]:hive[alliance];
     }
     public Pose parkingTarget(Pose current,int alliance) {
         Pose location=loadingPark[alliance];

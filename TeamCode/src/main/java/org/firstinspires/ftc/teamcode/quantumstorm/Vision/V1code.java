@@ -10,12 +10,13 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
+import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 
 import java.util.List;
 
 /**
  * Reports firing permission only; never drives or runs the shooter.
- * Configure Limelight pipeline 0 for 36h11 with the correct physical tag size.
+ * Configure Limelight pipeline 1 for 36h11 with the correct physical tag size.
  * D-pad left selects red; right selects blue. With the camera mounted 30 degrees
  * upward, hold a raised tag directly facing it and press A to calibrate orientation.
  * For the first 10 seconds after Start, require calibration, the selected alliance
@@ -30,7 +31,7 @@ import java.util.List;
 @TeleOp(name = "V1 AprilTag Fire Permission", group = "Vision")
 public class V1code extends LinearOpMode {
     private static final String LIMELIGHT_NAME = "limelight 3a";
-    private static final int APRILTAG_PIPELINE = 0;
+    private static final int APRILTAG_PIPELINE = Constants.LIMELIGHT_APRILTAG_PIPELINE;
     private static final long MAX_RESULT_AGE_MS = 250;
 
     public boolean isBlue = false;
@@ -124,7 +125,7 @@ public class V1code extends LinearOpMode {
                 telemetry.addData("Visible tags", visibleTagCount);
                 telemetry.addData("Camera connected", connected);
                 telemetry.addData("Result valid", result != null && result.isValid());
-                telemetry.addData("Pipeline (expected 0)", result == null ? -1 : result.getPipelineIndex());
+                telemetry.addData("Pipeline (expected 1)", result == null ? -1 : result.getPipelineIndex());
                 telemetry.addData("Result age (ms; max 250)", resultAgeMs);
                 telemetry.addData("Fresh result", fresh);
                 telemetry.addData("isBlue", isBlue);

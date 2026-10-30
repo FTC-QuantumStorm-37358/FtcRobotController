@@ -80,14 +80,27 @@ public class Constants {
     public final static double LIMELIGHT_TILT_DOWN = 0.7;   // look at balls on the floor
 
     // Pipeline numbers as set up in the Limelight web UI
-    public final static int LIMELIGHT_APRILTAG_PIPELINE = 0;
-    public final static int LIMELIGHT_COLOR_PIPELINE = 1;
+    // The configured Limelight profile uses slot 1 for Hive AprilTags and
+    // slot 0 for the yellow-pollen color pipeline.
+    public final static int LIMELIGHT_APRILTAG_PIPELINE = 1;
+    public final static int LIMELIGHT_COLOR_PIPELINE = 0;
     // Keep the old name available for existing ball-search code.
     public final static int LIMELIGHT_BALL_PIPELINE = LIMELIGHT_COLOR_PIPELINE;
 
-    // Optional Team One spilled-pollen recovery test requires calibrated tag heights.
-    // Normal Garden pickup uses yellow targets and does not wait for Hive tilt evidence.
-    public final static boolean TEAM_ONE_HIVE_HEIGHT_CALIBRATED = false;
+    /**
+     * Practice-only switch for testing a printed AprilTag away from the field.
+     * When true, Team 1 permits preload feeding from any fresh AprilTag frame.
+     * Set false before a match to restore official own-Hive ID/height/pose checks.
+     */
+    public final static boolean PRACTICE_ALLOW_ANY_FRESH_APRILTAG = true;
+
+    // Team One preload shots require calibrated own raised-Cell tags.
+    // Garden pickup uses a slow, odometry-bounded stroke after the approach.
+    public final static double AUTO_GARDEN_ADVANCE_IN = 18;
+    public final static double AUTO_GARDEN_ADVANCE_SEC = 5;
+    // Real robot Garden stroke: enough forward command to pull pollen into the intake.
+    public final static double AUTO_GARDEN_ADVANCE_POWER = .30;
+    public final static boolean TEAM_ONE_HIVE_HEIGHT_CALIBRATED = true;
     public final static int TEAM_ONE_TAG_HEIGHT_AXIS = 2; // robot-space Z, verify on hardware
     public final static double TEAM_ONE_ROBOT_ORIGIN_HEIGHT_IN = 0;
     public final static double TEAM_ONE_UPPER_TAG_HEIGHT_IN = 52.02;
@@ -98,7 +111,7 @@ public class Constants {
     // Team Two must see raised far-Cell tags WHILE at the opposite-wall shot pose.
     // A rear-facing/aimable camera and measured robot-space heights are required.
     // False deliberately prevents shooting, but does not prevent timed parking.
-    public final static boolean TEAM_TWO_HIVE_HEIGHT_CALIBRATED = false;
+    public final static boolean TEAM_TWO_HIVE_HEIGHT_CALIBRATED = true;
     public final static int TEAM_TWO_TAG_HEIGHT_AXIS = 2;
     public final static double TEAM_TWO_ROBOT_ORIGIN_HEIGHT_IN = 0;
     public final static double TEAM_TWO_UPPER_TAG_HEIGHT_IN = 52.02;
@@ -159,9 +172,9 @@ public class Constants {
 
     // Starting spots: one per alliance + starting position (Team One / Team Two)
     public final static Pose2D RED_1_START_POSE  = fieldPose(0, 0, 0);
-    public final static Pose2D RED_2_START_POSE  = fieldPose(0, 0, 0);
+    public final static Pose2D RED_2_START_POSE  = fieldPose(-12.75, 62.9, 90);
     public final static Pose2D BLUE_1_START_POSE = fieldPose(0, 0, 0);
-    public final static Pose2D BLUE_2_START_POSE = fieldPose(0, 0, 0);
+    public final static Pose2D BLUE_2_START_POSE = fieldPose(12.75, -62.9, -90);
 
     // Hive 1 for each start = the same-color hive closest to that start,
     // at the spot/heading the robot shoots from. (4 hives on the field: 2 red, 2 blue.)
