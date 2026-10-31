@@ -26,9 +26,9 @@ The Flower trigger is deliberate contact: at its clearance pose, Team Two applie
 
 On gamepad 2, tap **A** to start the single shooter and **B** to stop it. A second A press does not toggle it off; B wins when both are pressed.
 
-Hold **Start**, then tap **LB** to increase signed power or **LT** to decrease it by `SHOOTER_POWER_INCREMENT` (0.05). Each press changes power once; holding a shoulder button does not repeat. Pressing Start after a shoulder button is already held does not change power: release and press the shoulder again. Simultaneous LB/LT requests cancel. Telemetry shows whether adjustment is locked and the previous/current power.
+Hold **Back**, then tap **LB** to increase signed power or **LT** to decrease it by `SHOOTER_POWER_INCREMENT` (0.05). Each press changes power once; holding a shoulder button does not repeat. Pressing Back after a shoulder button is already held does not change power: release and press the shoulder again. Start+LB/LT without Back no longer adjusts power. Simultaneous LB/LT requests cancel. Telemetry shows whether adjustment is locked and the previous/current power.
 
-Release Start before using A/B for the shooter. Start+A/B is reserved for Driver Station controller assignment, and a fresh A press is required afterward. The Logitech F310 Mode button changes controller behavior internally and is not used as the modifier. Shooter 2 remains removed, so X/Y and RB/RT do not control a second shooter. D-pad up/down retains the existing feeder controls.
+Release Start before using A/B for the shooter. Start+A/B is reserved for Driver Station controller assignment, and a fresh A press is required afterward. The Logitech F310 Mode button changes controller behavior internally and is not used as the modifier. Shooter 2 remains removed, so X/Y and RB/RT do not control a second shooter. D-pad up/down retains the existing spindexer controls.
 
 ## Build
 All positions below are robot-center coordinates in inches, origin at field center, with counterclockwise headings in degrees. The corrected initial Hive tilt places Team One on the opposite wall from the earlier layout. Its front faces the wall and its rear-facing shooter points toward the Hive.
@@ -63,29 +63,30 @@ Select **Biobuzz-Quantum Storm Tele-Op** on the Driver Station.
 | Left stick up/down | Forward/backward, with the robot's corrected longitudinal mapping |
 | Left stick left/right | Strafe left/right |
 | Right stick left/right | Turn left/right |
-| Tap A without Start | Intake forward ON; stays on until another command |
-| B | Intake OFF; overrides A and Start+A |
-| Hold Start, then tap A | Intake reverse ON; stays on after releasing the buttons |
+| Tap A without Back or Start | Intake forward ON; stays on until another command |
+| B | Intake OFF; overrides A and all modifier combinations |
+| Hold Back, then tap A, with Start released | Intake reverse ON; stays on after releasing the buttons |
+| Start + A | Driver Station gamepad 1 assignment; no intake direction command |
 
-A is no longer a toggle. Tapping A again leaves forward intake on. Changing Start while A remains held does not change direction; release A before issuing a new direction command. B always stops the intake, including while Start is held. Start+A also assigns gamepad 1 in the Driver Station: assign the controller before starting TeleOp, then release A. An A held across the TeleOp start is ignored until released and pressed again.
+A is no longer a toggle. Tapping A alone again leaves forward intake on. Hold Back before pressing A to reverse; changing Back while A remains held does not change direction. Start suppresses all A direction commands, even with Back held, and releasing Start while A remains held does not activate the intake. Release A before issuing a new direction command. B always stops the intake, including while Start or Back is held. Assign the controller before starting TeleOp, then release A. An A held across the TeleOp start is ignored until released and pressed again. On the Logitech F310, use the Back button: Mode changes stick/D-pad behavior internally and is not available as a normal FTC button.
 
 | Gamepad 2 control | Assignment |
 | --- | --- |
 | Tap A, with Start released | Shooter ON |
 | B, with Start released | Shooter OFF; overrides A |
-| Hold Start, then tap LB | Increase signed shooter power by 0.05 |
-| Hold Start, then tap LT past halfway | Decrease signed shooter power by 0.05 |
+| Hold Back, then tap LB | Increase signed shooter power by 0.05 |
+| Hold Back, then tap LT past halfway | Decrease signed shooter power by 0.05 |
 | Hold D-pad Up | Spindexer forward, using timed pulses |
 | Hold D-pad Down | Spindexer reverse continuously for unjamming |
 | Release D-pad Up/Down | Spindexer STOP |
 
-Gamepad 2 A/B are ignored while Start is held for controller assignment. Power changes happen once per new shoulder press; holding a shoulder or pressing Start after it is held does not repeat/change power. LB and LT together cancel. Shooter power starts at +0.50, with bounds -1.0 to +1.0; adjustment does not start a stopped shooter. Shooter 2 remains removed. Other buttons/stick axes have no robot action in this TeleOp; the F310 Mode button changes the controller's stick/D-pad behavior internally.
+Gamepad 2 A/B are ignored while Start is held for controller assignment. Power changes happen once per new shoulder press; holding a shoulder or pressing Back after it is held does not repeat/change power. LB and LT together cancel. Shooter power starts at +0.55, with bounds -1.0 to +1.0; adjustment does not start a stopped shooter. Shooter 2 remains removed. Other buttons/stick axes have no robot action in this TeleOp; the F310 Mode button changes the controller's stick/D-pad behavior internally.
 
 `FeedCadence` applies a 0.18-second spindexer pulse followed by at least 0.5 seconds OFF in QuantumStorm TeleOp, normal autonomous Shooter and the generic FTC adapter. Held controls and rapid taps cannot skip the gap; TeleOp reverse unjamming stays immediate. The autonomous feed window is extended from two to three seconds for paced preloads. No sleep blocks steering, sensing, parking or STOP.
 
 This is **open-loop timing**, not confirmed-shot or angle feedback. Calibrate `SPINDEXER_FEED_PULSE_SEC` to advance exactly one pocket on the physical mechanism. A pulse that advances two pockets cannot be fixed by its subsequent pause. The configured CR servo cannot guarantee a 90-degree maximum without suitable position feedback or different hardware; no such guarantee is implemented.
 
-TeleOp joystick Y is inverted to correct the reported forward/backward reversal. Normal QuantumStorm autonomous now applies the same physical correction with AUTO_FORWARD_POWER_SIGN=-1 at the hardware wheel-output boundary. Only forward/backward is corrected; strafing, turning, field coordinates, measured odometry and motor direction configuration are unchanged. Keep the wall-facing start heading: navigation first backs straight approximately six inches into a collision-checked corridor, holding that heading with no sideways command, before routing/turning toward pickup. The same wall-departure clearance is used when leaving a wall shot to park. An already-reached wall shooting target is not backed away from before verification. Do not flip the initial heading 180 degrees to compensate for a motor-power sign error. The simulator retains its ideal forward-positive mixer. Verify the hardware sign with wheels raised, then at low power; this assumes the robot still matches the earlier TeleOp observation. Current local shooter settings are +0.50 (previous master +0.55); verify actual launch direction, power and hood angle before running. Pinpoint offsets remain -170 / -150 mm; verify wiring, configuration, pod directions and odometry axes before field use.
+TeleOp joystick Y is inverted to correct the reported forward/backward reversal. Normal QuantumStorm autonomous now applies the same physical correction with AUTO_FORWARD_POWER_SIGN=-1 at the hardware wheel-output boundary. Only forward/backward is corrected; strafing, turning, field coordinates, measured odometry and motor direction configuration are unchanged. Keep the wall-facing start heading: navigation first backs straight approximately six inches into a collision-checked corridor, holding that heading with no sideways command, before routing/turning toward pickup. The same wall-departure clearance is used when leaving a wall shot to park. An already-reached wall shooting target is not backed away from before verification. Do not flip the initial heading 180 degrees to compensate for a motor-power sign error. The simulator retains its ideal forward-positive mixer. Verify the hardware sign with wheels raised, then at low power; this assumes the robot still matches the earlier TeleOp observation. Current local shooter settings are +0.55; verify actual launch direction, power and hood angle before running. Pinpoint offsets remain -170 / -150 mm; verify wiring, configuration, pod directions and odometry axes before field use.
 
 ## Verification and build
 
