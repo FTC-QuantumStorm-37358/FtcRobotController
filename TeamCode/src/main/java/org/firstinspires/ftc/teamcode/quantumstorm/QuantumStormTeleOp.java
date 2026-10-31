@@ -120,9 +120,10 @@ public class QuantumStormTeleOp extends LinearOpMode {
         telemetry.addLine("GAMEPAD 1 - DRIVE + INTAKE");
         telemetry.addLine("Left Stick = Drive / Strafe");
         telemetry.addLine("Right Stick X = Turn");
-        telemetry.addLine("A = Intake Forward ON");
+        telemetry.addLine("A (without BACK/START) = Intake Forward ON");
         telemetry.addLine("B = Intake OFF (also with START held)");
-        telemetry.addLine("Hold START + tap A = Intake Reverse ON");
+        telemetry.addLine("Hold BACK + tap A = Intake Reverse ON (release START)");
+        telemetry.addLine("START + A = Assign gamepad 1; no intake direction command");
         telemetry.addLine("START + D-Pad DOWN = Flower Intake DROP");
         telemetry.addLine("START + D-Pad UP = Flower Intake LIFT");
         telemetry.addLine("LB + D-Pad UP/DOWN = Flower Angle Nudge");
@@ -131,8 +132,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         telemetry.addLine("GAMEPAD 2 - SHOOTER + SPINDEXER");
         telemetry.addLine("A = Shooter 1 START, B = Shooter 1 STOP");
-        telemetry.addLine("Hold START + tap LB = Shooter 1 Power Up");
-        telemetry.addLine("Hold START + tap LT = Shooter 1 Power Down");
+        telemetry.addLine("Hold BACK + tap LB = Shooter 1 Power Up");
+        telemetry.addLine("Hold BACK + tap LT = Shooter 1 Power Down");
         telemetry.addLine("Release START before using shooter START/STOP buttons");
         telemetry.addLine("Hold D-Pad UP = Spindexer Forward (pulsed)");
         telemetry.addLine("Hold D-Pad DOWN = Spindexer Reverse");
@@ -174,13 +175,14 @@ public class QuantumStormTeleOp extends LinearOpMode {
             boolean currentB = gamepad1.b;
 
 
-            // Fresh A selects forward; holding Start at that press selects reverse.
-            // Repeated A presses do not toggle off. Releasing Start while A is held
-            // does not change direction; holding A then pressing Start does not reverse.
-            if (currentA && !previousA) {
-                intakeState = gamepad1.start ? -1 : 1;
+            // Fresh A selects forward; holding Back at that press selects reverse.
+            // Start+A is reserved for Driver Station assignment. Track A even while
+            // Start is held so releasing Start cannot issue an intake command.
+            // Changing Back while A is held does not change direction.
+            if (!gamepad1.start && currentA && !previousA) {
+                intakeState = gamepad1.back ? -1 : 1;
             }
-            // STOP always wins, including A+B and Start+A+B.
+            // STOP always wins, including A+B, Back+A+B and Start+A+B.
             if (currentB) intakeState = 0;
             previousA = currentA;
 
@@ -224,17 +226,17 @@ public class QuantumStormTeleOp extends LinearOpMode {
             }
 
 
-            // Require Start already held when a shoulder button is freshly pressed.
-            // Track raw buttons below even while locked: holding LB then pressing Start
+            // Require Back already held when a shoulder button is freshly pressed.
+            // Track raw buttons below even while locked: holding LB then pressing Back
             // must not accidentally adjust power. Opposite requests cancel each other.
-            if (gamepad2.start && currentLeftBumper && !previousLeftBumper && !currentLeftTrigger) {
+            if (gamepad2.back && currentLeftBumper && !previousLeftBumper && !currentLeftTrigger) {
                 previousShooterSpeed = shooterSpeed;
                 shooterSpeed = clampShooterPower(
                         shooterSpeed + Constants.SHOOTER_POWER_INCREMENT);
             }
 
-            // Start + LT = shooter 1 power down
-            if (gamepad2.start && currentLeftTrigger && !previousLeftTrigger && !currentLeftBumper) {
+            // Back + LT = shooter 1 power down
+            if (gamepad2.back && currentLeftTrigger && !previousLeftTrigger && !currentLeftBumper) {
                 previousShooterSpeed = shooterSpeed;
                 shooterSpeed = clampShooterPower(
                         shooterSpeed - Constants.SHOOTER_POWER_INCREMENT);
@@ -320,7 +322,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             telemetry.addLine("");
             telemetry.addLine("=== DRIVER 2 ===");
-            telemetry.addData("Power adjustment", gamepad2.start ? "UNLOCKED: tap LB/LT" : "LOCKED: hold START");
+            telemetry.addData("Power adjustment", gamepad2.back ? "UNLOCKED: tap LB/LT" : "LOCKED: hold BACK");
 
 
             telemetry.addData(
