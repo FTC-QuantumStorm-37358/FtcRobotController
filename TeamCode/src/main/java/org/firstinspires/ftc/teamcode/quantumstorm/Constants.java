@@ -26,8 +26,9 @@ public class Constants {
     public final static String BACK_LEFT_DRIVE = "left_back_drive";
     public final static String BACK_RIGHT_DRIVE = "right_back_drive";
 
-    // Match the reported forward/backward reversal already corrected in TeleOp.
-    // Hardware-only sign: keep strafe, turn, field coordinates and headings unchanged.
+    // TeleOp applies its own joystick sign. Physical testing confirms autonomous
+    // needs the opposite longitudinal sign so its initial wall-departure command
+    // moves the chassis backward, away from the wall.
     public final static double AUTO_FORWARD_POWER_SIGN = -1.0;
 
     // Mechanism motors
@@ -55,10 +56,10 @@ public class Constants {
     public final static double INTAKE_POWER = 1.0;
 
     // Used by the autonomous Shooter mechanism
-    public final static double SHOOTER_POWER = 0.50;
+    public final static double SHOOTER_POWER = 0.55;
 
     // Signed starting power matching the remaining shooter's mounting direction.
-    public final static double SHOOTER_1_POWER = 0.50;
+    public final static double SHOOTER_1_POWER = 0.55;
 
     public final static double SHOOTER_POWER_INCREMENT = 0.05;
 
@@ -122,7 +123,7 @@ public class Constants {
      * When true, Team 1 permits preload feeding from any fresh AprilTag frame.
      * Set false before a match to restore official own-Hive ID/height/pose checks.
      */
-    public final static boolean PRACTICE_ALLOW_ANY_FRESH_APRILTAG = true;
+    public final static boolean PRACTICE_ALLOW_ANY_FRESH_APRILTAG = false;
 
     // Team One preload shots require calibrated own raised-Cell tags.
     // Garden pickup uses a slow, odometry-bounded stroke after the approach.
@@ -130,10 +131,14 @@ public class Constants {
     public final static double AUTO_GARDEN_ADVANCE_SEC = 5;
     // Real robot Garden stroke: enough forward command to pull pollen into the intake.
     public final static double AUTO_GARDEN_ADVANCE_POWER = .30;
+    /** First straight Garden pass before the back-right-forward second pass. */
+    public final static double AUTO_GARDEN_FIRST_PASS_SEC = 2.0;
+    /** Pinpoint heading required for every Team 1 straight Garden intake pass. */
+    public final static double TEAM_ONE_GARDEN_INTAKE_HEADING_DEG = 90.0;
     public final static boolean TEAM_ONE_HIVE_HEIGHT_CALIBRATED = true;
     public final static int TEAM_ONE_TAG_HEIGHT_AXIS = 2; // robot-space Z, verify on hardware
     public final static double TEAM_ONE_ROBOT_ORIGIN_HEIGHT_IN = 0;
-    public final static double TEAM_ONE_UPPER_TAG_HEIGHT_IN = 52.02;
+    public final static double TEAM_ONE_UPPER_TAG_HEIGHT_IN = 70.0;
     public final static double TEAM_ONE_LOWER_TAG_HEIGHT_IN = 36.57;
     // Front-mounted camera/intake must face the Hive after rear-facing preload shots.
     public final static double TEAM_ONE_TAG_VIEW_TURN_DEG = 180;
@@ -144,7 +149,7 @@ public class Constants {
     public final static boolean TEAM_TWO_HIVE_HEIGHT_CALIBRATED = true;
     public final static int TEAM_TWO_TAG_HEIGHT_AXIS = 2;
     public final static double TEAM_TWO_ROBOT_ORIGIN_HEIGHT_IN = 0;
-    public final static double TEAM_TWO_UPPER_TAG_HEIGHT_IN = 52.02;
+    public final static double TEAM_TWO_UPPER_TAG_HEIGHT_IN = 70.0;
     public final static double TEAM_TWO_LOWER_TAG_HEIGHT_IN = 36.57;
     // These optional slots must provide BOTH normalized color and distance readings.
     // No device names are guessed, and no ball counts are inferred from intake time.
@@ -243,7 +248,10 @@ public class Constants {
     public final static int AUTO_MAX_RETRIES = 3;                  // recoverable errors before giving up and parking
     public final static double AUTO_APRILTAG_TIMEOUT_SEC = 3.0;    // no tag / not aligned -> ERROR
     public final static double AUTO_SHOOTER_SPINUP_SEC = 1.0;      // flywheel spin-up before feeding
-    public final static double AUTO_FEED_TIME_SEC = 3.0;           // feed time to empty the indexer
+    /** Team 1 keeps feeding longer so all four preloads can clear before Garden travel. */
+    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 5.0;
+    /** Match Team 1's longer feed window so all four preloads can clear. */
+    public final static double AUTO_TEAM_TWO_FEED_TIME_SEC = AUTO_TEAM_ONE_FEED_TIME_SEC;
     public final static double AUTO_AIM_TOLERANCE_DEG = 2.0;       // AprilTag tx within this = aligned
     public final static double AUTO_AIM_TURN_KP = 0.02;            // turn power per degree of tag offset
     public final static double AUTO_PICKUP_TIMEOUT_SEC = 3.0;      // time spent intaking at garden/flower

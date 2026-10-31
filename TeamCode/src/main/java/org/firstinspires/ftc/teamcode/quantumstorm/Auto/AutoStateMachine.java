@@ -88,10 +88,14 @@ public final class AutoStateMachine implements AutoCloseable {
                 Vision vision=camera==null?Vision.empty(0,now):camera.read(now);
                 debugRawVision=vision;
                 if(vision.fresh(now,0)&&vision.targets.length>0)debugLastTags=vision;
-                if(mirroredTags!=null&&!Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG){
+                if(mirroredTags!=null){
                     Pose shot=selectedRoutine==Routine.TEAM_TWO?field.teamTwoWallHive[0]:field.hive[0];
                     boolean atShot=pose.distance(shot)<=1&&Math.abs(Pose.angle(pose.heading-shot.heading))<=Math.toRadians(2);
-                    vision=mirroredTags.normalize(vision,now,atShot);
+                    Vision normalized=mirroredTags.normalize(vision,now,atShot);
+                    // Practice still feeds from any fresh tag, but keep the strict
+                    // detector alive for telemetry so Red/Blue family diagnosis is
+                    // possible before the match switch is turned off.
+                    if(!Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG)vision=normalized;
                 }
                 PollenInventory.Sample count=inventory==null?null:inventory.read();
                 debugSensors=new Sensors(pose,now,odometry.isValid(),camera!=null&&camera.connected(),count==null?-1:count.total,count==null?-1:count.pollen,vision);
@@ -115,17 +119,20 @@ public final class AutoStateMachine implements AutoCloseable {
         opMode.telemetry.setMsTransmissionInterval(100);
         if(selectedRoutine==Routine.TEAM_ONE){
             TeamOnePollenAuto one=new TeamOnePollenAuto(io,field);
-            one.spinUpSeconds=Constants.AUTO_SHOOTER_SPINUP_SEC;one.feedSeconds=Constants.AUTO_FEED_TIME_SEC;
+            one.spinUpSeconds=Constants.AUTO_SHOOTER_SPINUP_SEC;one.feedSeconds=Constants.AUTO_TEAM_ONE_FEED_TIME_SEC;
             one.observationHeadingOffsetRadians=Math.toRadians(Constants.TEAM_ONE_TAG_VIEW_TURN_DEG);
             one.surveyBeforePickup=false;
             one.gardenAdvanceInches=Constants.AUTO_GARDEN_ADVANCE_IN;
             one.gardenAdvanceSeconds=Constants.AUTO_GARDEN_ADVANCE_SEC;
             one.gardenAdvancePower=Constants.AUTO_GARDEN_ADVANCE_POWER;
+            one.gardenFirstPassSeconds=Constants.AUTO_GARDEN_FIRST_PASS_SEC;
+            one.gardenIntakeHeadingRadians=Math.toRadians(Constants.TEAM_ONE_GARDEN_INTAKE_HEADING_DEG);
             one.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
             routine=one;
         }else if(selectedRoutine==Routine.TEAM_TWO){
             TeamTwoHiveAuto two=new TeamTwoHiveAuto(io,field);
-            two.spinUpSeconds=Constants.AUTO_SHOOTER_SPINUP_SEC;two.feedSeconds=Constants.AUTO_FEED_TIME_SEC;
+            two.spinUpSeconds=Constants.AUTO_SHOOTER_SPINUP_SEC;two.feedSeconds=Constants.AUTO_TEAM_TWO_FEED_TIME_SEC;
+            two.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
             routine=two;
         }else{
             org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine two=new org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine(io,field,false,selectedRoutine,false,false);
@@ -141,7 +148,7 @@ public final class AutoStateMachine implements AutoCloseable {
         opMode.telemetry.addLine(selectedRoutine==Routine.TEAM_TWO?"Team 2: START at opposite-wall shot beside Flower, FRONT to wall / REAR to Hive. Wait for raised far tags -> feed -> Flower -> wall -> verify/feed -> park.":"Team 1: preloads -> Garden pollen intake -> start-side-half park by 26 s.");
         opMode.telemetry.addLine("LIVE shooter/feed/intake after START. Load four pollen; clear the robot and firing path.");
         opMode.telemetry.addLine(inventory==null?"Inventory unknown: timed attempts do not invent ball counts.":inventory.status());
-        opMode.telemetry.addLine(selectedRoutine==Routine.TEAM_TWO?"Pipeline 1: raised own far Cell required before AND during feed; no any-tag fallback.":camera==null?"No extra pickup; wait then park at 26 s; stop at 30 s.":Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG?"PRACTICE TAG MODE: any fresh Pipeline 1 AprilTag permits Team 1 preload feeding.":"Team One: raised own near Cell tags required before AND during feeding; yellow-only Garden pickup.");
+        opMode.telemetry.addLine(selectedRoutine==Routine.TEAM_TWO?(Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG?"PRACTICE TAG MODE: any fresh Pipeline 1 AprilTag permits Team 2 timed feeding.":"Pipeline 1: raised own far Cell required before AND during feed; no any-tag fallback."):camera==null?"No extra pickup; wait then park at 26 s; stop at 30 s.":Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG?"PRACTICE TAG MODE: any fresh Pipeline 1 AprilTag permits Team 1 preload feeding.":"Team One: raised own near Cell tags required before AND during feeding; yellow-only Garden pickup.");
         opMode.telemetry.addLine("Intake ON from pickup departure until four measured pieces or parking. Unknown counts are not assumed full.");
         opMode.telemetry.addLine("No idle camera-search spins. Garden: bounded slow forward intake stroke, then stationary wait for parking.");
         if(selectedRoutine==Routine.TEAM_TWO){Pose park=field.teamTwoGardenSidePark[alliance];opMode.telemetry.addData("Team Two shooting-side-half park","X %.1f, Y %.1f in",park.x,park.y);}
@@ -162,6 +169,27 @@ public final class AutoStateMachine implements AutoCloseable {
         if(routine instanceof TeamOnePollenAuto)return ((TeamOnePollenAuto)routine).lastError();
         if(routine instanceof TeamTwoHiveAuto)return ((TeamTwoHiveAuto)routine).lastError();
         return ((org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine)routine).lastError();
+    }
+
+    /** Keep the Flower slider down from the post-shot retreat through pollen intake. */
+    private void updateFlowerIntakeArm(){
+        if(!(routine instanceof TeamTwoHiveAuto)){flowerIntake.lift();return;}
+        TeamTwoHiveAuto.State state=(TeamTwoHiveAuto.State)routine.getState();
+        switch(state){
+            case RETREAT_FROM_HIVE:
+            case ALIGN_FLOWER:
+            case TO_FLOWER:
+            case PRESS_FLOWER:
+            case CLEAR_FLOWER:
+            case TO_OUTLET_LANE:
+            case TO_PICKUP:
+            case INTAKE:
+                flowerIntake.drop();
+                break;
+            default:
+                flowerIntake.lift();
+                break;
+        }
     }
 
     /** Samples sensors during INIT without ticking autonomous or commanding motors. */
@@ -187,7 +215,7 @@ public final class AutoStateMachine implements AutoCloseable {
         opMode.telemetry.addData("Last tag frame age",AutoDebugSnapshot.age(debugLastTags,now));
         if(debugLastTags!=null)opMode.telemetry.addData("Last seen raw tag IDs",AutoDebugSnapshot.ids(debugLastTags,debugLastTags.capturedAt)+" (HISTORY ONLY, not shooting permission)");
         opMode.telemetry.addData("Controller tag IDs",AutoDebugSnapshot.ids(debugSensors==null?null:debugSensors.vision,now));
-        if(mirroredTags!=null)opMode.telemetry.addData("Hive tag family",Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG?"Practice mode - official Hive lock bypassed":mirroredTags.observedFamily()<0?"Not locked - await centered raised Hive at shot pose":mirroredTags.observedFamily()==0?"Red family":"Blue family");
+        if(mirroredTags!=null)opMode.telemetry.addData("Hive tag family",mirroredTags.observedFamily()<0?"Not locked - need 2 correct raised tags, centered at shot pose":(Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG?"Practice bypass; detector sees ":"")+(mirroredTags.observedFamily()==0?"Red family":"Blue family"));
         opMode.telemetry.addData("Current location",AutoDebugSnapshot.pose(debugSensors));
         opMode.telemetry.addData("Coordinate frame",robotRelative?"LOCAL role reference; inches; heading CCW from +X. Not absolute alliance coordinates.":"Field X/Y inches; heading CCW from +X");
         opMode.telemetry.addData("Odometry sample",debugSensors!=null&&debugSensors.odometryValid?"VALID":"INVALID / UNAVAILABLE - do not trust last known pose");
@@ -221,9 +249,7 @@ public final class AutoStateMachine implements AutoCloseable {
             }
             while(opMode.opModeIsActive()&&routine.isRunning()){
                 routine.tick();
-                // Flower arm: DOWN only while Team Two drives to and presses the Flower; held UP otherwise.
-                Enum<?> state=routine.getState();
-                if(state==TeamTwoHiveAuto.State.TO_FLOWER||state==TeamTwoHiveAuto.State.PRESS_FLOWER)flowerIntake.drop();else flowerIntake.lift();
+                updateFlowerIntakeArm();
                 opMode.telemetry.addData("Autonomous",label());
                 opMode.telemetry.addData("Routine",routine.status());
                 opMode.telemetry.addData("State",routine.getState());
@@ -257,6 +283,6 @@ public final class AutoStateMachine implements AutoCloseable {
     /** Also called when STOP is pressed during INIT before run() ever starts. */
     public void close(){
         if(closed)return;closed=true;
-        SafeShutdown.run(routine::stop,drive::stop,shooter::stop,intake::stop,()->{if(camera!=null)camera.close();});
+        SafeShutdown.run(routine::stop,drive::stop,shooter::stop,intake::stop,flowerIntake::lift,()->{if(camera!=null)camera.close();});
     }
 }
