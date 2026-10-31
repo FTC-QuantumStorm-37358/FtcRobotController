@@ -17,6 +17,7 @@ import org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine.Routine;
 import org.firstinspires.ftc.teamcode.biobuzz.ftc.SafeShutdown;
 import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.FlowerIntake;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Intake;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Shooter;
 import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
@@ -33,6 +34,7 @@ public final class AutoStateMachine implements AutoCloseable {
     private final PinpointOdometry odometry;
     private final Shooter shooter;
     private final Intake intake;
+    private final FlowerIntake flowerIntake;
     private final ElapsedTime clock=new ElapsedTime();
     private final RobotController routine;
     private final TeamOneLimelight camera;
@@ -69,6 +71,8 @@ public final class AutoStateMachine implements AutoCloseable {
         odometry=new PinpointOdometry(opMode.hardwareMap,new Pose2D(DistanceUnit.INCH,start.x,start.y,AngleUnit.RADIANS,start.heading));
         initStage("Initializing shooter and intake; OFF until START");
         shooter=new Shooter(opMode.hardwareMap);intake=new Intake(opMode.hardwareMap);
+        initStage("Initializing flower_servo: arm LIFTS now");
+        flowerIntake=new FlowerIntake(opMode.hardwareMap);flowerIntake.lift();
         field.upperTagHeight=selectedRoutine==Routine.TEAM_TWO?Constants.TEAM_TWO_UPPER_TAG_HEIGHT_IN:Constants.TEAM_ONE_UPPER_TAG_HEIGHT_IN;
         field.lowerTagHeight=selectedRoutine==Routine.TEAM_TWO?Constants.TEAM_TWO_LOWER_TAG_HEIGHT_IN:Constants.TEAM_ONE_LOWER_TAG_HEIGHT_IN;
         initStage("Initializing Limelight: own raised Cell required before feeding");
@@ -192,6 +196,7 @@ public final class AutoStateMachine implements AutoCloseable {
         if(target!=null&&debugSensors!=null)opMode.telemetry.addData("Distance to target (in)","%.1f",debugSensors.pose.distance(target));
         opMode.telemetry.addData("Drive request F / right / CW","%.2f / %.2f / %.2f",debugOutputs.forward,debugOutputs.strafeRight,debugOutputs.turnClockwise);
         opMode.telemetry.addData("Shooter / feeder / intake","%.2f / %.2f / %.2f",debugOutputs.shooterPower,debugOutputs.feederPower,debugOutputs.intakePower);
+        opMode.telemetry.addData("Flower intake","%s %.0f deg",flowerIntake.isDown()?"DOWN":"UP",flowerIntake.getAngle());
         opMode.telemetry.addData("Measured pieces",debugSensors==null||debugSensors.ballCount<0?"UNKNOWN":debugSensors.ballCount+" / 4");
         opMode.telemetry.addData("Measured pollen",debugSensors==null||debugSensors.pollenCount<0?"UNKNOWN":debugSensors.pollenCount+" / 4");
         if(!debugReadError.isEmpty())opMode.telemetry.addData("Sensor read error",debugReadError);
@@ -216,6 +221,9 @@ public final class AutoStateMachine implements AutoCloseable {
             }
             while(opMode.opModeIsActive()&&routine.isRunning()){
                 routine.tick();
+                // Flower arm: DOWN only while Team Two drives to and presses the Flower; held UP otherwise.
+                Enum<?> state=routine.getState();
+                if(state==TeamTwoHiveAuto.State.TO_FLOWER||state==TeamTwoHiveAuto.State.PRESS_FLOWER)flowerIntake.drop();else flowerIntake.lift();
                 opMode.telemetry.addData("Autonomous",label());
                 opMode.telemetry.addData("Routine",routine.status());
                 opMode.telemetry.addData("State",routine.getState());

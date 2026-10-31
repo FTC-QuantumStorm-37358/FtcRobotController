@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.FlowerIntake;
 
 @TeleOp(name = Constants.TELEOP_NAME, group = "Quantum Storm")
 public class QuantumStormTeleOp extends LinearOpMode {
@@ -23,6 +24,9 @@ public class QuantumStormTeleOp extends LinearOpMode {
     private CRServo leftIntakeServo;
     private CRServo shooterServo;
     private final org.firstinspires.ftc.teamcode.biobuzz.FeedCadence feedCadence=new org.firstinspires.ftc.teamcode.biobuzz.FeedCadence(Constants.SPINDEXER_FEED_PULSE_SEC,Constants.SPINDEXER_SHOT_GAP_SEC);
+
+    // Flower intake arm (position servo)
+    private FlowerIntake flowerIntake;
 
     // Intake:
     //  1 = forward
@@ -67,6 +71,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         shooterServo = hardwareMap.get(CRServo.class, Constants.SHOOTER_SERVO);
 
+        flowerIntake = new FlowerIntake(hardwareMap);
+
 
         // =========================================================
         // MOTOR DIRECTIONS
@@ -104,6 +110,9 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         stopAll();
 
+        // The flower arm moves to UP as soon as INIT is pressed
+        flowerIntake.lift();
+
 
         telemetry.addLine("Quantum Storm Two Driver Ready");
         telemetry.addLine("");
@@ -114,6 +123,9 @@ public class QuantumStormTeleOp extends LinearOpMode {
         telemetry.addLine("A = Intake Forward ON");
         telemetry.addLine("B = Intake OFF (also with START held)");
         telemetry.addLine("Hold START + tap A = Intake Reverse ON");
+        telemetry.addLine("START + D-Pad DOWN = Flower Intake DROP");
+        telemetry.addLine("START + D-Pad UP = Flower Intake LIFT");
+        telemetry.addLine("LB + D-Pad UP/DOWN = Flower Angle Nudge");
 
         telemetry.addLine("");
 
@@ -184,6 +196,14 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             rightIntakeServo.setPower(intakeOutput);
             leftIntakeServo.setPower(intakeOutput);
+
+
+            // =====================================================
+            // GAMEPAD 1 - FLOWER INTAKE SERVO
+            // =====================================================
+
+            // START + D-pad UP/DOWN = lift/drop, LB + D-pad = nudge
+            flowerIntake.handleGamepad(gamepad1);
 
 
             // =====================================================
@@ -289,6 +309,13 @@ public class QuantumStormTeleOp extends LinearOpMode {
                         "Intake",
                         "STOPPED");
             }
+
+            telemetry.addData(
+                    "Flower Intake",
+                    "%s  %.0f deg  (servo pos %.3f)",
+                    flowerIntake.isDown() ? "DOWN" : "UP",
+                    flowerIntake.getAngle(),
+                    flowerIntake.getPosition());
 
 
             telemetry.addLine("");

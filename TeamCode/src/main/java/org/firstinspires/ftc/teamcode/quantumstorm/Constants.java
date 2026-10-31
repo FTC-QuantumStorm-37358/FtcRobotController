@@ -41,6 +41,9 @@ public class Constants {
     public final static String LEFT_INTAKE_SERVO = "left_intake_servo";
     public final static String SHOOTER_SERVO = "shooter_servo";
 
+    // Position servo (goBILDA Dual Mode Servo in servo mode) that swings the flower intake
+    public final static String FLOWER_SERVO = "flower_servo";
+
     // Limelight camera + the servo that tilts it
     public final static String LIMELIGHT = "limelight";
     public final static String LIMELIGHT_TILT_SERVO = "limelight_tilt_servo";
@@ -70,6 +73,33 @@ public class Constants {
 
     // Power used by MecanumDriveTest when spinning one wheel at a time
     public final static double DRIVE_TEST_POWER = 0.3;
+
+    // =========================================================
+    // FLOWER INTAKE SERVO (goBILDA Dual Mode Servo 2000-0025-0002)
+    // Angles are arm degrees: 0 = the arm position installed with the
+    // servo centered by the goBILDA programmer; positive = toward UP.
+    // =========================================================
+
+    // In servo mode it turns 300 degrees over a 500..2500 us pulse
+    public final static int FLOWER_SERVO_PWM_MIN_US = 500;
+    public final static int FLOWER_SERVO_PWM_MAX_US = 2500;
+    public final static double FLOWER_SERVO_RANGE_DEG = 300;
+
+    // Servo position (0..1) at arm 0 degrees. 0.5 = the programmer's center (1500 us).
+    // TODO: tune so the "Flower Angle" telemetry matches the real arm
+    public final static double FLOWER_SERVO_ZERO_POSITION = 0.5;
+
+    // Flip if a bigger angle moves the arm DOWN instead of UP
+    public final static boolean FLOWER_SERVO_REVERSED = false;
+
+    // Hard limits: the arm is never commanded outside these
+    public final static double FLOWER_ANGLE_MIN_DEG = -10;
+    // 90 for now: past 90 the arm presses against the intake. Raise to 95 once there is room.
+    public final static double FLOWER_ANGLE_MAX_DEG = 90;
+
+    public final static double FLOWER_UP_DEG = 90;     // lifted/stowed; also where it goes on INIT
+    public final static double FLOWER_DOWN_DEG = -10;  // dropped for intaking
+    public final static double FLOWER_NUDGE_DEG = 2;   // per LB + D-pad press, for tuning
 
     // =========================================================
     // LIMELIGHT
