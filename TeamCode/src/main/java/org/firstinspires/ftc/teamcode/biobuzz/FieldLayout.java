@@ -17,9 +17,14 @@ public final class FieldLayout {
     public final Pose[] flower={fromBrowser(-58,35.5,0),fromBrowser(58,-35.5,Math.PI)};
     public final Pose[] nearFlower={fromBrowser(-35.5,-58,-Math.PI/2),fromBrowser(35.5,58,Math.PI/2)};
     // Nearest Flower to Team Two's corrected wall shot is the end-wall Flower.
+    // First retreat from the Hive wall, then line up with the Flower before
+    // making the short forward trigger contact. This avoids a long diagonal
+    // across the field and preserves the wall-shot heading throughout.
+    public final Pose[] teamTwoHiveRetreat={new Pose(-12.75,50,Math.PI/2),new Pose(12.75,-50,-Math.PI/2)};
+    public final Pose[] teamTwoFlowerAlign={new Pose(-35.5,50,Math.PI/2),new Pose(35.5,-50,-Math.PI/2)};
     // Trigger with a corner, clear the post, then face its inward pollen outlet.
-    public final Pose[] teamTwoFlowerTouch={new Pose(-35.5,57.5,0),new Pose(35.5,-57.5,Math.PI)};
-    public final Pose[] teamTwoFlowerClear={new Pose(-42,55,0),new Pose(42,-55,Math.PI)};
+    public final Pose[] teamTwoFlowerTouch={new Pose(-35.5,57.5,Math.PI/2),new Pose(35.5,-57.5,-Math.PI/2)};
+    public final Pose[] teamTwoFlowerClear={new Pose(-42,55,Math.PI/2),new Pose(42,-55,-Math.PI/2)};
     public final Pose[] teamTwoFlowerLane={new Pose(-42,30,Math.PI/2),new Pose(42,-30,-Math.PI/2)};
     public final Pose[] teamTwoFlowerPickup={new Pose(-24,30,Math.PI/2),new Pose(24,-30,-Math.PI/2)};
     // Inset enough to fit the chassis at any heading while overlapping the Loading Zone.
