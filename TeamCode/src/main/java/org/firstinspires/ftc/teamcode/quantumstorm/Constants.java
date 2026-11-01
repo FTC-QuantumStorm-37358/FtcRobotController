@@ -55,17 +55,15 @@ public class Constants {
 
     public final static double INTAKE_POWER = 1.0;
 
-    // Used by the autonomous Shooter mechanism
-    public final static double SHOOTER_POWER = 0.55;
+    // Encoder-regulated motor-shaft RPM, shared by TeleOp and autonomous.
+    // The configured motor type must have the correct encoder ticks/revolution.
+    public final static double SHOOTER_BASE_RPM = 6000.0;
+    public final static double SHOOTER_RPM_MULTIPLIER = 0.54; // 3240 RPM
+    public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.01; // 60 RPM
 
-    // Signed starting power matching the remaining shooter's mounting direction.
-    public final static double SHOOTER_1_POWER = 0.55;
-
-    public final static double SHOOTER_POWER_INCREMENT = 0.05;
-
-    // Clamp bounds for the adjustable TeleOp shooter powers
-    public final static double SHOOTER_POWER_MIN = -1.0;
-    public final static double SHOOTER_POWER_MAX = 1.0;
+    // Preserve signed TeleOp tuning; autonomous uses nonnegative demand.
+    public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
+    public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
 
     public final static double SHOOTER_SERVO_POWER = 1.0;
 
