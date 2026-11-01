@@ -5,6 +5,8 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.FlowerIntake;
@@ -17,7 +19,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
     // Mechanism motors
     private DcMotor intake;
-    private DcMotor shooter;
+    private DcMotorEx shooter;
 
     // CR servos
     private CRServo rightIntakeServo;
@@ -39,8 +41,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
     // Require a fresh A press for each intake direction command.
     private boolean previousA = false;
 
-    // Adjustable shooter power
-    private double shooterSpeed = Constants.SHOOTER_1_POWER;
+    // Adjustable fraction of SHOOTER_BASE_RPM
+    private double shooterRpmMultiplier = Constants.SHOOTER_RPM_MULTIPLIER;
 
     // Track even during controller assignment so releasing Start cannot start a shooter.
     private boolean previousGamepad2A = false;
@@ -49,8 +51,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
     private boolean previousLeftBumper = false;
     private boolean previousLeftTrigger = false;
 
-    // Powers before the most recent change, for tuning telemetry
-    private double previousShooterSpeed = Constants.SHOOTER_1_POWER;
+    // Multiplier before the most recent change, for tuning telemetry
+    private double previousShooterRpmMultiplier = Constants.SHOOTER_RPM_MULTIPLIER;
 
     @Override
     public void runOpMode() {
@@ -63,7 +65,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         intake = hardwareMap.get(DcMotor.class, Constants.INTAKE_MOTOR);
 
-        shooter = hardwareMap.get(DcMotor.class, Constants.SHOOTER_MOTOR);
+        shooter = hardwareMap.get(DcMotorEx.class, Constants.SHOOTER_MOTOR);
 
         rightIntakeServo = hardwareMap.get(CRServo.class, Constants.RIGHT_INTAKE_SERVO);
 
@@ -102,6 +104,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         shooter.setZeroPowerBehavior(
                 DcMotor.ZeroPowerBehavior.FLOAT);
+        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
 
         // =========================================================
@@ -132,8 +135,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         telemetry.addLine("GAMEPAD 2 - SHOOTER + SPINDEXER");
         telemetry.addLine("A = Shooter 1 START, B = Shooter 1 STOP");
-        telemetry.addLine("Hold BACK + tap LB = Shooter 1 Power Up");
-        telemetry.addLine("Hold BACK + tap LT = Shooter 1 Power Down");
+        telemetry.addLine("Hold BACK + tap LB = Shooter RPM +60 (multiplier +0.01)");
+        telemetry.addLine("Hold BACK + tap LT = Shooter RPM -60 (multiplier -0.01)");
         telemetry.addLine("Release START before using shooter START/STOP buttons");
         telemetry.addLine("Hold D-Pad UP = Spindexer Forward (pulsed)");
         telemetry.addLine("Hold D-Pad DOWN = Spindexer Reverse");
@@ -228,18 +231,18 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             // Require Back already held when a shoulder button is freshly pressed.
             // Track raw buttons below even while locked: holding LB then pressing Back
-            // must not accidentally adjust power. Opposite requests cancel each other.
+            // must not accidentally adjust RPM. Opposite requests cancel each other.
             if (gamepad2.back && currentLeftBumper && !previousLeftBumper && !currentLeftTrigger) {
-                previousShooterSpeed = shooterSpeed;
-                shooterSpeed = clampShooterPower(
-                        shooterSpeed + Constants.SHOOTER_POWER_INCREMENT);
+                previousShooterRpmMultiplier = shooterRpmMultiplier;
+                shooterRpmMultiplier = clampShooterRpmMultiplier(
+                        shooterRpmMultiplier + Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
             }
 
-            // Back + LT = shooter 1 power down
+            // Back + LT = shooter RPM multiplier down
             if (gamepad2.back && currentLeftTrigger && !previousLeftTrigger && !currentLeftBumper) {
-                previousShooterSpeed = shooterSpeed;
-                shooterSpeed = clampShooterPower(
-                        shooterSpeed - Constants.SHOOTER_POWER_INCREMENT);
+                previousShooterRpmMultiplier = shooterRpmMultiplier;
+                shooterRpmMultiplier = clampShooterRpmMultiplier(
+                        shooterRpmMultiplier - Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
             }
 
 
@@ -250,11 +253,12 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             if (shooterRunning) {
 
-                shooter.setPower(shooterSpeed);
+                shooter.setVelocity(Constants.SHOOTER_BASE_RPM * shooterRpmMultiplier * 6.0,
+                        AngleUnit.DEGREES);
 
             } else {
 
-                shooter.setPower(0);
+                shooter.setVelocity(0);
             }
 
 
@@ -322,21 +326,25 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             telemetry.addLine("");
             telemetry.addLine("=== DRIVER 2 ===");
-            telemetry.addData("Power adjustment", gamepad2.back ? "UNLOCKED: tap LB/LT" : "LOCKED: hold BACK");
+            telemetry.addData("RPM adjustment", gamepad2.back ? "UNLOCKED: tap LB/LT" : "LOCKED: hold BACK");
 
 
             telemetry.addData(
                     "Shooter 1",
-                    "%s @ %.0f%%",
+                    "%s | RPM multiplier %.2f",
                     shooterRunning ? "ON" : "OFF",
-                    shooterSpeed * 100);
+                    shooterRpmMultiplier);
 
-            // Previous -> current, so a power that works can be written down
+            telemetry.addData("Shooter RPM actual / target", "%.0f / %.0f",
+                    shooter.getVelocity(AngleUnit.DEGREES) / 6.0,
+                    shooterRunning ? Constants.SHOOTER_BASE_RPM * shooterRpmMultiplier : 0);
+
+            // Previous -> current, so a useful RPM multiplier can be written down
             telemetry.addData(
-                    "Shooter 1 Power",
+                    "Shooter RPM multiplier",
                     "%.2f -> %.2f",
-                    previousShooterSpeed,
-                    shooterSpeed);
+                    previousShooterRpmMultiplier,
+                    shooterRpmMultiplier);
 
 
             if (gamepad2.dpad_up) {
@@ -375,7 +383,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
         drive.stop();
 
         intake.setPower(0);
-        shooter.setPower(0);
+        shooter.setVelocity(0);
 
         rightIntakeServo.setPower(0);
         leftIntakeServo.setPower(0);
@@ -384,19 +392,21 @@ public class QuantumStormTeleOp extends LinearOpMode {
     }
 
     /**
-     * Keeps an adjustable shooter power inside the configured bounds.
+     * Keeps the adjustable RPM multiplier inside the configured bounds.
      * The range spans both signs so tuning can reverse the motor if needed.
      */
-    private double clampShooterPower(double power) {
+    private double clampShooterRpmMultiplier(double multiplier) {
 
-        if (power < Constants.SHOOTER_POWER_MIN) {
-            return Constants.SHOOTER_POWER_MIN;
+        if (multiplier < Constants.SHOOTER_RPM_MULTIPLIER_MIN) {
+            return Constants.SHOOTER_RPM_MULTIPLIER_MIN;
         }
 
-        if (power > Constants.SHOOTER_POWER_MAX) {
-            return Constants.SHOOTER_POWER_MAX;
+        if (multiplier > Constants.SHOOTER_RPM_MULTIPLIER_MAX) {
+            return Constants.SHOOTER_RPM_MULTIPLIER_MAX;
         }
 
-        return power;
+        // Keep button steps on the configured grid, including an exact zero target.
+        double step = Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT;
+        return Math.round(multiplier / step) * step;
     }
 }
