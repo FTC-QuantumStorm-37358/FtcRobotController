@@ -15,7 +15,8 @@ Gamepad 1 controls:
 - Hold **Y**: halve drivetrain output, including forward/backward, strafe, turning, and heading correction. This also halves LB slow-mode output; intake, shooter, and indexer speeds are unchanged.
 - Hold right bumper: intake forward; hold left trigger: reverse intake (takes priority).
 - Hold right trigger past the 5% deadband: manual shooter at **fixed 60%**; release to stop. This TeleOp has its own power setting and does not change other OpModes.
-- Press **A** to toggle the `indexer_servo` CRServo on/off. It runs with direction set to `REVERSE` and stops when the OpMode ends.
+- Press **A** to toggle the `indexer_servo` CRServo on/off. It starts with direction set to `REVERSE` and stops when the OpMode ends.
+- Press **X** to switch indexer direction between `FORWARD` and `REVERSE`, once per press. While running it reverses immediately; while stopped it changes the direction for the next start without starting the servo. Telemetry shows the selected direction.
 
 Driver Hub telemetry displays the operating instructions during INIT and throughout the run, plus each drive motor, intake, shooter, and indexer output as a percentage. Percentages are commanded power, not measured motor speed/RPM; negative values indicate reverse commands.
 
@@ -54,6 +55,50 @@ Dependency-free detector regression test (requires a JDK):
 classes=$(mktemp -d)
 javac -d "$classes" TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/Vision/HiveRaisedDetector.java TeamCode/src/test/java/org/firstinspires/ftc/teamcode/quantumstorm/Vision/HiveRaisedDetectorTest.java
 java -cp "$classes" org.firstinspires.ftc.teamcode.quantumstorm.Vision.HiveRaisedDetectorTest
+rm -rf "$classes"
+```
+
+## Ryan's BioBuzz autonomous test
+
+Select **Ryan's auto test** after deploying. Set the `Team` string near the top of [Auto30sec.java](TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/Auto/Auto30sec.java):
+
+| String option | Preload behavior at PLAY |
+|---|---|
+| `red 1 fire red` | Start shooter and feeder immediately, without a vision check |
+| `blue 1 fire blue` | Start shooter and feeder immediately, without a vision check (default) |
+| `red 2 no fire` | No immediate shot; navigate to the scoring pose and require vision |
+| `blue 2 no fire` | No immediate shot; navigate to the scoring pose and require vision |
+
+Short strings `red 1`, `blue 1`, `red 2`, `blue 2` and the previous `Red Team One`-style strings also work. **No fire means no startup override**, not that later shots are disabled. The Driver Hub OpMode name stays **Ryan's auto test**; telemetry shows the chosen team label.
+
+This routine uses Pinpoint odometry with mecanum drive, one intake motor, one shooter motor, and a CRServo feeder named `indexer_servo`, matching the mecanum test TeleOp hardware. Device names, odometry calibration, pipeline IDs, powers, and route poses use [Constants.java](TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/Constants.java). A Limelight is optional for the team-1 startup shot but required for vision-guided pickup and subsequent firing. No camera tilt servo is commanded; the camera is assumed to be fixed 30 degrees up as in the TeleOp.
+
+After the preload, the robot navigates to the alliance Garden pickup pose and selects the alliance color pipeline: **blue pipeline 1** or **red pipeline 3** (indices use `Constants`). Configure these as color-threshold pipelines that identify individual balls and return multiple color contours, not one merged pile. The intake starts when pickup searching begins. The robot slowly turns at 15% power when no usable ball is visible, then strafes to center the selected ball within ±2 degrees and advances with the intake running. It chooses the **largest positive color-target area**, using the most centered target only to break equal-area ties. For equal-sized balls, this estimates the closest **currently visible** ball; it is not a measured distance or a guarantee of the nearest ball across the whole field. Selection is reevaluated each loop.
+
+Pickup advance is limited to 18 odometry inches or 3 seconds; forward motion pauses when the selected ball is more than 10 degrees off-center, and all chassis motion pauses on ball loss during the advance. Searching also times out after 3 seconds. Missing/disconnected/stale vision or an unsettled/wrong pipeline stops vision-directed motion rather than blindly searching/driving. Set the Garden pose **18 inches before the pile**, with the intake facing it. It returns to the scoring pose while spinning the shooter up and repeats until parking begins at **27 seconds**. At the scoring pose it switches to **AprilTag pipeline 0**, slowly searches for alliance tags, and turns toward a visible tag before applying the firing gate. All outputs stop at **30 seconds**, STOP, a navigation timeout, or invalid/not-ready odometry; drivetrain zero-power behavior is BRAKE. This is waypoint navigation with bounded rotational searches, not a spline path or free-roaming obstacle avoidance. Pickup/feeding are timed attempts, not sensor-confirmed piece counts; cycle count is not guaranteed.
+
+Except for the initial team-1 override, feeding requires a connected Limelight, the AprilTag pipeline, a result no older than 250 ms, and an alliance hive tag (red IDs 34–37, blue IDs 42–45). **The same tag** must have horizontal offset `tx` within **±10 degrees inclusive** and camera-space pitch within **±10 degrees inclusive** under the matched camera/hive tilt assumption. Wrong pipeline, missing 3D pose, tag loss, excess angle, or stale results stop feeding on the next loop. Normal shots wait for shooter spin-up; the requested immediate startup override does **not**, so its initial feed may precede usable flywheel speed. No range/trajectory check or AprilTag field-pose correction is implemented.
+
+Ryan's test field is **4 × 4 tiles (16 total)**, each **2 × 2 feet (24 × 24 inches)**, making an **8 × 8 foot (96 × 96 inch)** square. [Auto30secSettings.java](TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/Auto/Auto30secSettings.java) defines these dimensions; Driver Hub telemetry displays them. Odometry retains the center-origin convention, so X and Y each span **−48 to +48 inches**. This test-field size applies only to Ryan's auto, not the other routines' standard-field assumptions. Its start, scoring, pickup, and park poses must be finite and inside these bounds for navigation to enable. These are waypoint-center checks, not robot-footprint clearance or collision avoidance; allow space for the robot and its 18-inch pickup advance.
+
+The existing field poses are placeholders. Until distinct, valid start, scoring, pickup, and park positions are entered, translation is disabled and only stationary firing is attempted. Confirm tag IDs, motor/feeder directions, camera orientation, odometry offsets, and measured route poses before a supervised field test. Code compilation does not validate robot performance.
+
+### Small obstacle stop-and-retreat guard
+
+An optional forward-facing **DistanceSensor** named `sensor_distance` (the existing REV 2m sample's name) detects any object within **10 inches** while the chassis is commanded forward: a wall, robot, or anything else. It does not classify the object. The current Limelight AprilTag/color pipelines **cannot reliably identify walls or other robots**, so this guard uses range sensing, not camera recognition. Without the front sensor, this protection is unavailable and telemetry explicitly warns; existing autonomous behavior is unchanged.
+
+On detection, drivetrain, intake, shooter, and feeder stop immediately. After a **0.15-second brake pause**, the robot reverses at **20% power** for at most **3 odometry inches or 0.90 seconds total**, then stays stopped for the rest of autonomous instead of repeatedly driving into the obstacle. An invalid configured front reading stops forward motion without attempting a retreat. Odometry failure and the 27/30-second guards still take priority.
+
+An optional rear-facing DistanceSensor named `rear_distance` blocks reversal if it reads 10 inches or less or returns an invalid measurement. Without it, the robot cannot sense a robot/object behind it. A projected reverse segment must also remain inside the 8-foot field with **15-inch center-to-wall clearance**, assuming an 18-inch square robot (corner radius plus margin); tune this clearance for the actual robot. If reversal is blocked, it simply remains stopped.
+
+This is a small software guard, **not comprehensive collision avoidance**: it does not cover sideways motion, rotation, sensor blind spots, stopping distance, or inaccurate odometry. Mount the front range sensor above ball height so intended pickups do not look like obstacles, verify the sensor range and stopping distance at low speed, and test only in a clear supervised area. No new hardware is required to compile; front range hardware is required to enable detection.
+
+Dependency-free geometry, protection, firing, and ball-selection regression test:
+
+```bash
+classes=$(mktemp -d)
+javac -d "$classes" TeamCode/src/main/java/org/firstinspires/ftc/teamcode/quantumstorm/Auto/Auto30secSettings.java TeamCode/src/test/java/org/firstinspires/ftc/teamcode/quantumstorm/Auto30secSettingsTest.java
+java -cp "$classes" org.firstinspires.ftc.teamcode.quantumstorm.Auto30secSettingsTest
 rm -rf "$classes"
 ```
 

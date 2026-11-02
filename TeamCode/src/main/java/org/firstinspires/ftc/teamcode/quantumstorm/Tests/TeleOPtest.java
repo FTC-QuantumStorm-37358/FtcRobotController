@@ -27,7 +27,7 @@ import java.util.List;
  * Gamepad 1: left stick drive/strafe, right stick turn, LB slow mode, Y half-speed,
  * RB intake forward, LT intake reverse, RT fixed 60% shooter power while held,
  * IMU heading hold during translation with the turn stick released.
- * A toggles the indexer continuous-rotation servo.
+ * A toggles the indexer continuous-rotation servo; X switches its direction.
  * Limelight AprilTag detection is informational only: camera-space pitch 0 +/- 10
  * degrees with matched 30-degree camera/tag tilt. Validate the pose on the actual robot.
  */
@@ -61,6 +61,7 @@ public class TeleOPtest extends LinearOpMode {
         indexerServo.setPower(0);
         boolean indexerRunning = false;
         boolean previousA = false;
+        boolean previousX = false;
         Limelight3A limelight = hardwareMap.tryGet(Limelight3A.class, Constants.LIMELIGHT);
         telemetry.setMsTransmissionInterval(100);
 
@@ -118,6 +119,12 @@ public class TeleOPtest extends LinearOpMode {
                     indexerRunning = !indexerRunning;
                 }
                 previousA = gamepad1.a;
+                if (gamepad1.x && !previousX) {
+                    indexerServo.setPower(0);
+                    indexerServo.setDirection(indexerServo.getDirection() == CRServo.Direction.REVERSE
+                            ? CRServo.Direction.FORWARD : CRServo.Direction.REVERSE);
+                }
+                previousX = gamepad1.x;
 
                 intake.setPower(intakePower);
                 shooter.setPower(shooterPower);
@@ -128,6 +135,7 @@ public class TeleOPtest extends LinearOpMode {
                 telemetry.addData("Shooter power (manual)", "%.1f%%", shooterPower * 100.0);
                 telemetry.addData("Indexer servo", "%s (%.1f%%)",
                         indexerRunning ? "RUNNING" : "STOPPED", indexerServo.getPower() * 100.0);
+                telemetry.addData("Indexer direction (X to switch)", indexerServo.getDirection());
                 telemetry.addData("Slow drive", gamepad1.left_bumper);
                 telemetry.addData("Y half-speed", gamepad1.y);
                 telemetry.addLine("Motor percentages are commanded power, not measured RPM; negative = reverse.");
@@ -154,6 +162,7 @@ public class TeleOPtest extends LinearOpMode {
         telemetry.addLine("Hold LB: 35% drive scale | Hold Y: halve drive output (stacks with LB)");
         telemetry.addLine("Hold RB: intake forward | Hold LT: intake reverse (priority over RB)");
         telemetry.addLine("Hold RT: shooter 60%; release to stop | Press A: toggle indexer");
+        telemetry.addLine("Press X: switch indexer direction (running or stopped)");
         telemetry.addLine("IMU holds heading while translating; right stick overrides. STOP ends all motion.");
     }
 
