@@ -223,7 +223,8 @@ public final class AutoStateMachine implements AutoCloseable {
         opMode.telemetry.addData("Destination",target==null?"None - stationary state":String.format(java.util.Locale.US,"X %.1f, Y %.1f in, heading %.1f deg",target.x,target.y,Math.toDegrees(target.heading)));
         if(target!=null&&debugSensors!=null)opMode.telemetry.addData("Distance to target (in)","%.1f",debugSensors.pose.distance(target));
         opMode.telemetry.addData("Drive request F / right / CW","%.2f / %.2f / %.2f",debugOutputs.forward,debugOutputs.strafeRight,debugOutputs.turnClockwise);
-        opMode.telemetry.addData("Shooter / feeder / intake","%.2f / %.2f / %.2f",debugOutputs.shooterPower,debugOutputs.feederPower,debugOutputs.intakePower);
+        opMode.telemetry.addData("Shooter RPM multiplier / spindexer / intake","%.2f / %.2f / %.2f",debugOutputs.shooterPower,debugOutputs.feederPower,debugOutputs.intakePower);
+        opMode.telemetry.addData("Shooter RPM actual / target","%.0f / %.0f",shooter.getMeasuredRpm(),shooter.getTargetRpm());
         opMode.telemetry.addData("Flower intake","%s %.0f deg",flowerIntake.isDown()?"DOWN":"UP",flowerIntake.getAngle());
         opMode.telemetry.addData("Measured pieces",debugSensors==null||debugSensors.ballCount<0?"UNKNOWN":debugSensors.ballCount+" / 4");
         opMode.telemetry.addData("Measured pollen",debugSensors==null||debugSensors.pollenCount<0?"UNKNOWN":debugSensors.pollenCount+" / 4");
@@ -239,7 +240,7 @@ public final class AutoStateMachine implements AutoCloseable {
         try {
             if(camera!=null)camera.reset();
             if(mirroredTags!=null)mirroredTags.reset();
-            routine.start(alliance,Constants.SHOOTER_POWER);
+            routine.start(alliance,Constants.SHOOTER_RPM_MULTIPLIER);
             // Bounded, stationary wait; included in the match's 26/30-second clock.
             while(opMode.opModeIsActive()&&clock.seconds()<2){
                 odometry.update();
