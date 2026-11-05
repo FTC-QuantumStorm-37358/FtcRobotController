@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.quantumstorm;
 
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -72,6 +73,28 @@ public class Constants {
 
     // Power used by MecanumDriveTest when spinning one wheel at a time
     public final static double DRIVE_TEST_POWER = 0.3;
+
+    // =========================================================
+    // FIELD-CENTRIC DRIVE (Starter Bot) - Control Hub built-in IMU
+    // =========================================================
+
+    // A new Control Hub configuration adds the built-in IMU as "imu" automatically
+    public final static String IMU = "imu";
+
+    // Which way the Control Hub's REV logo and USB ports face on the robot.
+    // TODO: match the real mounting, or heading telemetry will be wrong
+    public final static RevHubOrientationOnRobot.LogoFacingDirection HUB_LOGO_DIRECTION =
+            RevHubOrientationOnRobot.LogoFacingDirection.RIGHT;
+    public final static RevHubOrientationOnRobot.UsbFacingDirection HUB_USB_DIRECTION =
+            RevHubOrientationOnRobot.UsbFacingDirection.UP;
+
+    // A positive drive() "forward" moves this chassis BACKWARD, so field-centric
+    // flips it after rotating into robot directions. Flipping the joystick
+    // instead only works when the robot is square to the driver.
+    public final static double FIELD_CENTRIC_FORWARD_SIGN = -1.0;
+
+    // Drive speed while RB is held, for precise lining up
+    public final static double FIELD_CENTRIC_SLOW_SCALE = 0.4;
 
     // =========================================================
     // FLOWER INTAKE SERVO (goBILDA Dual Mode Servo 2000-0025-0002)
