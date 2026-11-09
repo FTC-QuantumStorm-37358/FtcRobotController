@@ -75,8 +75,8 @@ public class Constants {
 
     // Pipeline indices must match the pipelines configured in the Limelight web UI.
     public final static int LIMELIGHT_APRILTAG_PIPELINE = 0;
-    public final static int LIMELIGHT_BLUE_PIPELINE = 1;
-    public final static int LIMELIGHT_YELLOW_PIPELINE = 2;
+    public final static int LIMELIGHT_YELLOW_PIPELINE = 1;
+    public final static int LIMELIGHT_BLUE_PIPELINE = 2;
     public final static int LIMELIGHT_RED_PIPELINE = 3;
     // Existing ball-search code uses the blue color pipeline until its target is specified.
     public final static int LIMELIGHT_COLOR_PIPELINE = LIMELIGHT_BLUE_PIPELINE;
