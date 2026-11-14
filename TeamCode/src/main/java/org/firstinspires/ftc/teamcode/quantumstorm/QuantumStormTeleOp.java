@@ -6,7 +6,6 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
-import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.FlowerIntake;
@@ -41,8 +40,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
     // Require a fresh A press for each intake direction command.
     private boolean previousA = false;
 
-    // Adjustable fraction of SHOOTER_BASE_RPM
-    private double shooterRpmMultiplier = Constants.SHOOTER_RPM_MULTIPLIER;
+    // Adjustable fraction of SHOOTER_BASE_RPM.
+    private double shooterPower = Constants.SHOOTER_POWER;
 
     // Track even during controller assignment so releasing Start cannot start a shooter.
     private boolean previousGamepad2A = false;
@@ -52,7 +51,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
     private boolean previousLeftTrigger = false;
 
     // Multiplier before the most recent change, for tuning telemetry
-    private double previousShooterRpmMultiplier = Constants.SHOOTER_RPM_MULTIPLIER;
+    private double previousShooterPower = Constants.SHOOTER_POWER;
 
     @Override
     public void runOpMode() {
@@ -82,6 +81,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         intake.setDirection(DcMotor.Direction.FORWARD);
         shooter.setDirection(DcMotor.Direction.FORWARD);
+        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
 
         // =========================================================
@@ -233,16 +233,14 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // Track raw buttons below even while locked: holding LB then pressing Back
             // must not accidentally adjust RPM. Opposite requests cancel each other.
             if (gamepad2.back && currentLeftBumper && !previousLeftBumper && !currentLeftTrigger) {
-                previousShooterRpmMultiplier = shooterRpmMultiplier;
-                shooterRpmMultiplier = clampShooterRpmMultiplier(
-                        shooterRpmMultiplier + Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
+                previousShooterPower = shooterPower;
+                shooterPower = clampShooterPower(shooterPower + Constants.SHOOTER_POWER_INCREMENT);
             }
 
             // Back + LT = shooter RPM multiplier down
             if (gamepad2.back && currentLeftTrigger && !previousLeftTrigger && !currentLeftBumper) {
-                previousShooterRpmMultiplier = shooterRpmMultiplier;
-                shooterRpmMultiplier = clampShooterRpmMultiplier(
-                        shooterRpmMultiplier - Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
+                previousShooterPower = shooterPower;
+                shooterPower = clampShooterPower(shooterPower - Constants.SHOOTER_POWER_INCREMENT);
             }
 
 
@@ -253,12 +251,11 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             if (shooterRunning) {
 
-                shooter.setVelocity(Constants.SHOOTER_BASE_RPM * shooterRpmMultiplier * 6.0,
-                        AngleUnit.DEGREES);
+                shooter.setPower(shooterPower);
 
             } else {
 
-                shooter.setVelocity(0);
+                shooter.setPower(0);
             }
 
 
@@ -326,25 +323,24 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             telemetry.addLine("");
             telemetry.addLine("=== DRIVER 2 ===");
-            telemetry.addData("RPM adjustment", gamepad2.back ? "UNLOCKED: tap LB/LT" : "LOCKED: hold BACK");
+            telemetry.addData("Shooter power adjustment", gamepad2.back ? "UNLOCKED: tap LB/LT" : "LOCKED: hold BACK");
 
 
             telemetry.addData(
                     "Shooter 1",
-                    "%s | RPM multiplier %.2f",
+                    "%s | power %.2f",
                     shooterRunning ? "ON" : "OFF",
-                    shooterRpmMultiplier);
+                    shooterPower);
 
-            telemetry.addData("Shooter RPM actual / target", "%.0f / %.0f",
-                    shooter.getVelocity(AngleUnit.DEGREES) / 6.0,
-                    shooterRunning ? Constants.SHOOTER_BASE_RPM * shooterRpmMultiplier : 0);
+            telemetry.addData("Shooter applied / requested power", "%.2f / %.2f",
+                    shooter.getPower(), shooterRunning ? shooterPower : 0);
 
             // Previous -> current, so a useful RPM multiplier can be written down
             telemetry.addData(
-                    "Shooter RPM multiplier",
+                    "Shooter power",
                     "%.2f -> %.2f",
-                    previousShooterRpmMultiplier,
-                    shooterRpmMultiplier);
+                    previousShooterPower,
+                    shooterPower);
 
 
             if (gamepad2.dpad_up) {
@@ -383,7 +379,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
         drive.stop();
 
         intake.setPower(0);
-        shooter.setVelocity(0);
+        shooter.setPower(0);
 
         rightIntakeServo.setPower(0);
         leftIntakeServo.setPower(0);
@@ -395,18 +391,18 @@ public class QuantumStormTeleOp extends LinearOpMode {
      * Keeps the adjustable RPM multiplier inside the configured bounds.
      * The range spans both signs so tuning can reverse the motor if needed.
      */
-    private double clampShooterRpmMultiplier(double multiplier) {
+    private double clampShooterPower(double power) {
 
-        if (multiplier < Constants.SHOOTER_RPM_MULTIPLIER_MIN) {
-            return Constants.SHOOTER_RPM_MULTIPLIER_MIN;
+        if (power < Constants.SHOOTER_POWER_MIN) {
+            return Constants.SHOOTER_POWER_MIN;
         }
 
-        if (multiplier > Constants.SHOOTER_RPM_MULTIPLIER_MAX) {
-            return Constants.SHOOTER_RPM_MULTIPLIER_MAX;
+        if (power > Constants.SHOOTER_POWER_MAX) {
+            return Constants.SHOOTER_POWER_MAX;
         }
 
         // Keep button steps on the configured grid, including an exact zero target.
-        double step = Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT;
-        return Math.round(multiplier / step) * step;
+        double step = Constants.SHOOTER_POWER_INCREMENT;
+        return Math.round(power / step) * step;
     }
 }

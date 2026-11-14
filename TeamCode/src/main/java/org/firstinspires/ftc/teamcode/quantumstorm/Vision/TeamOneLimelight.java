@@ -70,7 +70,9 @@ public final class TeamOneLimelight implements AutoCloseable {
             if(result==null||!result.isValid()||result.getPipelineIndex()!=expected)return empty;
             double age=(result.getStaleness()+result.getCaptureLatency()+result.getTargetingLatency())/1000;
             double stamp=result.getTimestamp();
-            if(!Double.isFinite(age)||age<0||age>.25||!Double.isFinite(stamp))return empty;
+            // Match RobotIO.Vision freshness: this accepts a live frame that
+            // arrived late, but never invents a detection from an old result.
+            if(!Double.isFinite(age)||age<0||age>1.0||!Double.isFinite(stamp))return empty;
             if(!Double.isNaN(frameTimestamp)&&stamp<frameTimestamp)return empty;
             if(stamp!=frameTimestamp){frameTimestamp=stamp;capturedAt=now-age;}
             List<Target> targets=new ArrayList<Target>();
