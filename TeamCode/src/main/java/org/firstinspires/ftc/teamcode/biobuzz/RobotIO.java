@@ -49,7 +49,10 @@ public interface RobotIO {
             this.valid=valid; this.pipeline=pipeline; this.capturedAt=capturedAt; this.targets=targets.clone();
         }
         public boolean fresh(double now,int expectedPipeline) {
-            return valid&&pipeline==expectedPipeline&&now-capturedAt>=0&&now-capturedAt<=.25;
+            // A Limelight frame can reach the Driver Hub late while the camera
+            // is switching pipelines.  One second is still short enough to
+            // discard a previous-location observation during this fixed shot.
+            return valid&&pipeline==expectedPipeline&&now-capturedAt>=0&&now-capturedAt<=1.0;
         }
         public static Vision empty(int pipeline,double now) { return new Vision(false,pipeline,now,new Target[0]); }
     }

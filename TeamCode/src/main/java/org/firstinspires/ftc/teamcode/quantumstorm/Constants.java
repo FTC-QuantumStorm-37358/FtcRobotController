@@ -56,17 +56,13 @@ public class Constants {
 
     public final static double INTAKE_POWER = 1.0;
 
-    // Encoder-regulated motor-shaft RPM, shared by TeleOp and autonomous.
-    // The configured motor type must have the correct encoder ticks/revolution.
-    public final static double SHOOTER_BASE_RPM = 6000.0;
-    public final static double SHOOTER_RPM_MULTIPLIER = 0.54; // 3240 RPM
-    public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.01; // 60 RPM
+    // Ordinary open-loop power, shared by autonomous and TeleOp.
+    public final static double SHOOTER_POWER = 0.54;
+    public final static double SHOOTER_POWER_INCREMENT = 0.01;
+    public final static double SHOOTER_POWER_MIN = -1.0;
+    public final static double SHOOTER_POWER_MAX = 1.0;
 
-    // Preserve signed TeleOp tuning; autonomous uses nonnegative demand.
-    public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
-    public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
-
-    public final static double SHOOTER_SERVO_POWER = 1.0;
+    public final static double SHOOTER_SERVO_POWER = 1;
 
     // A trigger is analog; past this it counts as pressed
     public final static double TRIGGER_THRESHOLD = 0.5;
@@ -120,7 +116,8 @@ public class Constants {
     public final static double FLOWER_ANGLE_MAX_DEG = 90;
 
     public final static double FLOWER_UP_DEG = 90;     // lifted/stowed; also where it goes on INIT
-    public final static double FLOWER_DOWN_DEG = -10;  // dropped for intaking
+    // Up is 90 degrees and down is 0 degrees: a 90-degree deploy/retract sweep.
+    public final static double FLOWER_DOWN_DEG = 0;
     public final static double FLOWER_NUDGE_DEG = 2;   // per LB + D-pad press, for tuning
 
     // =========================================================
@@ -144,6 +141,8 @@ public class Constants {
      * When true, Team 1 permits preload feeding from any fresh AprilTag frame.
      * Set false before a match to restore official own-Hive ID/height/pose checks.
      */
+    // Practice field / printed-tag mode. Keep false for the normal robot
+    // routine: shooting then requires the correct Hive-side AprilTag IDs.
     public final static boolean PRACTICE_ALLOW_ANY_FRESH_APRILTAG = false;
 
     // Team One preload shots require calibrated own raised-Cell tags.

@@ -20,6 +20,8 @@ public final class TeamTwoHiveAuto implements RobotController {
     private double startAt,lastNow,stateAt,power,spinAt,feedTime,lastCommandAt,progressAt;
     private String message="",error="";
     public double spinUpSeconds=1,feedSeconds=3,parkingToleranceInches=2;
+    /** Bounded Flower collection before returning to the rear-facing wall shot. */
+    public double flowerIntakeSeconds=3.0,latestReturnShotSeconds=17.0;
     /** Practice only: a fresh AprilTag admits a timed first batch without official Hive or inventory gating. */
     public boolean allowAnyFreshAprilTag=false;
     private int measuredBalls=-1,measuredPollen=-1;
@@ -27,7 +29,9 @@ public final class TeamTwoHiveAuto implements RobotController {
     public void start(int alliance,double power){
         if(alliance<0||alliance>1||!Double.isFinite(power)||power<0||power>1
                 ||!Double.isFinite(spinUpSeconds)||spinUpSeconds<0||!Double.isFinite(feedSeconds)||feedSeconds<=0
-                ||!Double.isFinite(parkingToleranceInches)||parkingToleranceInches<=0||parkingToleranceInches>3)
+                ||!Double.isFinite(parkingToleranceInches)||parkingToleranceInches<=0||parkingToleranceInches>3
+                ||!Double.isFinite(flowerIntakeSeconds)||flowerIntakeSeconds<=0||flowerIntakeSeconds>8
+                ||!Double.isFinite(latestReturnShotSeconds)||latestReturnShotSeconds<8||latestReturnShotSeconds>=26)
             throw new IllegalArgumentException("Invalid Team Two configuration");
         this.alliance=alliance;this.power=power;startAt=lastNow=lastCommandAt=io.nowSeconds();running=true;
         batches=0;collecting=false;lastFeeding=batchFed=practiceTagLatched=flowerSequenceActive=false;feedTime=0;spinAt=Double.NaN;current=progressPose=parkVia=null;error=message="";
@@ -40,7 +44,10 @@ public final class TeamTwoHiveAuto implements RobotController {
     }
     private void enter(State next){
         state=next;stateAt=io.nowSeconds();nav.reset();progressPose=current;progressAt=stateAt;
-        if(next==State.TO_FLOWER){collecting=true;flowerSequenceActive=true;}
+        if(next==State.RETREAT_FROM_HIVE||next==State.ALIGN_FLOWER||next==State.TO_FLOWER
+                ||next==State.PRESS_FLOWER||next==State.CLEAR_FLOWER||next==State.TO_OUTLET_LANE
+                ||next==State.TO_PICKUP||next==State.INTAKE){flowerSequenceActive=true;}
+        if(next==State.TO_FLOWER){collecting=true;}
         if(next==State.PARK||next==State.TO_HIVE||next==State.ERROR||next==State.STOPPED){collecting=false;flowerSequenceActive=false;}
     }
     private void move(State next,Pose target){destination=target;enter(next);}
@@ -80,10 +87,15 @@ public final class TeamTwoHiveAuto implements RobotController {
         message=why+"; holding safely until the 26-second park command";
     }
     private boolean farCellReady(Sensors s,double now){
-        // Require positive fresh observations of the RAISED far cluster, not just an absent near cluster.
+        // The robot is physically taped at the Team Two wall pose.  At that
+        // position, accept any current official Hive ID group visible there;
+        // do not require a particular far/near tag family diagnostic.
         Pose shot=field.teamTwoWallHive[alliance];
-        return current.distance(shot)<=1&&Math.abs(Pose.angle(current.heading-shot.heading))<=Math.toRadians(2)
-                &&s.cameraConnected&&shotGate.state(now)==1&&shotGate.aim(now,true)!=null&&centeredShotGate.ready(s,now);
+        if(current.distance(shot)>2.0||Math.abs(Pose.angle(current.heading-shot.heading))>Math.toRadians(4)
+                ||!s.cameraConnected||!s.vision.fresh(now,0))return false;
+        for(int[] group:field.nearTags)for(int id:group)for(Target target:s.vision.targets)if(target.id==id)return true;
+        for(int[] group:field.farTags)for(int id:group)for(Target target:s.vision.targets)if(target.id==id)return true;
+        return false;
     }
     private boolean freshPracticeTag(Sensors s,double now){return s.cameraConnected&&s.vision.fresh(now,0)&&s.vision.targets.length>0;}
     /** Only unique raised far-cluster observations can build shooting permission. */
@@ -95,8 +107,11 @@ public final class TeamTwoHiveAuto implements RobotController {
     private void finishFeed(){
         batches++;lastFeeding=false;spinAt=Double.NaN;feedTime=0;
         if(batches==1){
-            move(State.RETREAT_FROM_HIVE,field.teamTwoHiveRetreat[alliance]);
-            message="First load complete; retreat from Hive, align with nearby Flower, then release pollen";
+            // Go directly to the front-facing Flower stop. The old retreat /
+            // alignment / outlet-lane sequence added turns and reverses that
+            // were unnecessary for the simple forward intake pass.
+            move(State.TO_FLOWER,flowerApproach());
+            message="First load complete; drive directly to front-facing Flower stop";
         }
         else{enter(State.SETTLING);message="Second feed attempt complete; allow flight/settling, then wait for parking";}
     }
@@ -116,11 +131,21 @@ public final class TeamTwoHiveAuto implements RobotController {
                     out.forward*=scale;out.strafeRight*=scale;out.turnClockwise*=scale;return out;
                 }
             }
-            if(state==State.PARK)message="Parking path constrained; hold this loop and retry from last pose";
-            else if(state==State.INTAKE)message="Flower approach blocked; camera search held safely";
+            if(flowerSequenceActive)message="Flower route constrained; holding this loop and retrying the same route";
             else recoverUntilPark("Route clearance blocked");
             return new Outputs();
         }
+        return out;
+    }
+    /** Controlled vector parking: no route planner can block the required 26-second park. */
+    private Outputs directParkMove(Pose target){
+        double dx=target.x-current.x,dy=target.y-current.y;
+        double c=Math.cos(current.heading),s=Math.sin(current.heading);
+        Outputs out=new Outputs();
+        out.forward=FieldLayout.clip((dx*c+dy*s)*.055,.38);
+        out.strafeRight=FieldLayout.clip((dx*s-dy*c)*.055,.38);
+        double magnitude=Math.hypot(out.forward,out.strafeRight);
+        if(magnitude>.38){out.forward*=.38/magnitude;out.strafeRight*=.38/magnitude;}
         return out;
     }
     public void tick(){
@@ -146,8 +171,12 @@ public final class TeamTwoHiveAuto implements RobotController {
             }
             if(current==null){fail("Odometry unavailable before a usable pose was recorded");io.apply(out);return;}
             if(!s.odometryValid||!usablePose){
-                if(state!=State.PARK&&!flowerSequenceActive)recoverUntilPark("Odometry unavailable or stale");
-                out.pipeline=pipeline();io.apply(out);return;
+                // The robot is stationary at the taped wall shot. Keep the
+                // last good pose so a live AprilTag can start the shot instead
+                // of sending Team Two to RECOVERING for one stale Pinpoint read.
+                boolean fixedShotState=state==State.VERIFY_HIVE||state==State.SHOOTING;
+                if(state!=State.PARK&&!flowerSequenceActive&&!fixedShotState)recoverUntilPark("Odometry unavailable or stale");
+                if(!fixedShotState){out.pipeline=pipeline();io.apply(out);return;}
             }
             if(s.ballCount>=4)collecting=false;
             // Never spend the last return-travel reserve on a shot/pickup/verification wait.
@@ -172,13 +201,17 @@ public final class TeamTwoHiveAuto implements RobotController {
                             hive=new HiveVision(field,alliance);shotGate=new HiveVision(field,alliance);centeredShotGate=new HiveShotGate(field,alliance,true);enter(State.VERIFY_HIVE);
                             message="At opposite wall; require fresh raised own-Hive far Cell tags before shooting";
                         }
-                        else if(state==State.RETREAT_FROM_HIVE){move(State.ALIGN_FLOWER,field.teamTwoFlowerAlign[alliance]);message="Clear of Hive; align sideways with nearby Flower";}
-                        else if(state==State.ALIGN_FLOWER){move(State.TO_FLOWER,flowerApproach());message="Aligned with Flower; make short forward trigger contact";}
+                        else if(state==State.RETREAT_FROM_HIVE){move(State.TO_FLOWER,flowerApproach());message="Drive directly to front-facing Flower stop";}
+                        else if(state==State.ALIGN_FLOWER){move(State.TO_FLOWER,flowerApproach());message="Drive directly to front-facing Flower stop";}
                         else if(state==State.TO_FLOWER){enter(State.PRESS_FLOWER);message="Bounded low-power Flower trigger contact";}
                         else if(state==State.CLEAR_FLOWER){move(State.TO_OUTLET_LANE,field.teamTwoFlowerLane[alliance]);message="Back into the outlet lane without crossing released pollen";}
                         else if(state==State.TO_OUTLET_LANE){move(State.TO_PICKUP,field.teamTwoFlowerPickup[alliance]);message="Face incoming Flower pollen from the open lane";}
                         else{enter(State.INTAKE);message="Find yellow Flower pollen with Limelight; require four measured pollen";}
                     }else{
+                        // If odometry is slightly off at the Flower, stop the
+                        // route there after a bounded approach rather than
+                        // backing up or hunting for an exact target pose.
+                        if(state==State.TO_FLOWER&&age>=3.0){enter(State.PRESS_FLOWER);message="Flower approach complete; hold heading and drive forward intake";break;}
                         if(progressPose==null||current.distance(progressPose)>.25||Math.abs(Pose.angle(current.heading-progressPose.heading))>Math.toRadians(3)){
                             progressPose=current;progressAt=now;
                         }
@@ -186,13 +219,20 @@ public final class TeamTwoHiveAuto implements RobotController {
                     }
                     break;
                 case VERIFY_HIVE:
-                    // No spinning or feeding before the independent, debounced orientation check.
+                    // At the taped wall shot, a current correct far-Hive ID is
+                    // the firing permission. Do not make the preload shot
+                    // depend on an optional inventory sensor reading.
                     if(allowAnyFreshAprilTag&&freshPracticeTag(s,now)){
                         practiceTagLatched=true;spinAt=Double.NaN;enter(State.SHOOTING);
                         message="Practice tag detected; spin up and feed timed batch";
+                    }else if(farCellReady(s,now)){
+                        // Latch this verified current tag at shot start. The
+                        // fixed timed feed then fires the four loaded pollen
+                        // even if the intake inventory sensor is unavailable.
+                        practiceTagLatched=true;spinAt=Double.NaN;enter(State.SHOOTING);
+                        message="Correct Hive AprilTag confirmed at wall shot; spin up and feed timed batch";
                     }else{
-                        message=fullPollenLoad(s)?"Four pollen measured; require fresh own-alliance far Cell UP":"Shooting disabled: need FOUR type-verified pollen, not a timer/unknown count";
-                        if(fullPollenLoad(s)&&farCellReady(s,now)){spinAt=Double.NaN;enter(State.SHOOTING);message="Four pollen AND raised far Cell confirmed; spin up at wall";}
+                        message="Waiting at wall shot: need a current correct Hive AprilTag";
                     }
                     break;
                 case SHOOTING:
@@ -218,14 +258,21 @@ public final class TeamTwoHiveAuto implements RobotController {
                     message="Fresh own far Cell UP; "+(out.feederPower>0?"timed feeding":"spinning up");
                     break;
                 case PRESS_FLOWER:
-                    // Deliberate contact is required to release pollen. Bounded to 0.4 s
-                    // at 12% strafe; never bypass STOP, park deadline or odometry validity.
-                    if(age>=.4){move(State.CLEAR_FLOWER,field.teamTwoFlowerClear[alliance]);message="Flower trigger attempt complete; clear the outlet";}
-                    else out.strafeRight=-.12;
+                    // The TO_FLOWER pose points the front at the Flower. Drive
+                    // forward briefly, with the arm down and intake running,
+                    // to release and draw in pollen.
+                    if(elapsed>=latestReturnShotSeconds){park();break;}
+                    if(age>=flowerIntakeSeconds){move(State.TO_HIVE,field.teamTwoWallHive[alliance]);message="Straight Flower intake complete; return to rear-facing wall shot";}
+                    else {out.forward=.15;out.intakePower=1;}
                     break;
                 case INTAKE:
                     if(fullPollenLoad(s)){move(State.TO_HIVE,field.teamTwoWallHive[alliance]);message="FOUR Flower pollen measured; return to wall and recheck tags";break;}
                     if(s.ballCount>=4){recoverUntilPark("Full inventory is not four pollen; cannot shoot mixed/unknown load");break;}
+                    // Do not wander indefinitely around the Flower. Return for
+                    // the second rear-facing shot while there is enough time;
+                    // otherwise the normal parking deadline wins.
+                    if(elapsed>=latestReturnShotSeconds){park();break;}
+                    if(age>=flowerIntakeSeconds){move(State.TO_HIVE,field.teamTwoWallHive[alliance]);message="Flower intake window complete; return to rear-facing wall shot";break;}
                     if(!s.cameraConnected){message="Flower camera disconnected; drive/intake OFF";break;}
                     Target target=flowerPollen(s.vision,now);
                     if(target==null){
@@ -249,18 +296,16 @@ public final class TeamTwoHiveAuto implements RobotController {
                 case WAITING:break;
                 case RECOVERING:break;
                 case PARK:
-                    if(current.distance(destination)<=parkingToleranceInches){running=false;message="Parked: all outputs OFF";break;}
-                    out=nav.move(current,parkVia==null?destination:parkVia);
-                    if(out==null){
-                        out=new Outputs();
-                        if(parkVia!=null){parkVia=null;nav.reset();}
+                    Pose parkTarget=parkVia==null?destination:parkVia;
+                    if(current.distance(parkTarget)<=parkingToleranceInches){
+                        if(parkVia!=null){parkVia=null;message="Parking bypass reached; continue directly to parking";}
                         else{running=false;message="Parked: all outputs OFF";}
-                    }
+                    }else{out=directParkMove(parkTarget);message="26-second park: direct controlled drive to parking";}
                     break;
                 default:break;
             }
             if(state!=before||!running)out=new Outputs();
-            else if(state==State.TO_HIVE||state==State.RETREAT_FROM_HIVE||state==State.ALIGN_FLOWER||state==State.TO_FLOWER||state==State.CLEAR_FLOWER||state==State.TO_OUTLET_LANE||state==State.TO_PICKUP||state==State.INTAKE||state==State.PARK)out=guardMove(out);
+            else if(state==State.TO_HIVE||state==State.RETREAT_FROM_HIVE||state==State.ALIGN_FLOWER||state==State.TO_FLOWER||state==State.CLEAR_FLOWER||state==State.TO_OUTLET_LANE||state==State.TO_PICKUP||state==State.INTAKE)out=guardMove(out);
             out.pipeline=pipeline();
             out.intakePower=running&&collecting&&s.ballCount<4&&state!=State.PARK?1:0;
             lastFeeding=out.feederPower>0;batchFed|=lastFeeding;lastCommandAt=now;
@@ -269,8 +314,8 @@ public final class TeamTwoHiveAuto implements RobotController {
         }catch(java.util.concurrent.CancellationException e){stop();}
         catch(RuntimeException e){
             if(flowerSequenceActive||state==State.PARK){
-                if(flowerSequenceActive)recoverUntilPark("Flower collection transient fault: "+e.getMessage());
-                else message="Parking transient fault; holding this loop and retrying";
+                if(flowerSequenceActive)message="Flower route transient fault; retrying the same route";
+                else message="Parking transient fault; retrying direct parking drive";
                 io.apply(new Outputs());
             }
             else{fail("Team Two stopped safely: "+e.getMessage());io.apply(new Outputs());}
