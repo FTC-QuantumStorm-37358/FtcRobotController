@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.DigitalChannel;
 import org.firstinspires.ftc.teamcode.biobuzz.FieldLayout;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO.Pose;
+import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 
 /** Hardware calibration only; the autonomous algorithm lives in the parent biobuzz package. */
 public class FtcHardwareConfig {
@@ -26,7 +27,8 @@ public class FtcHardwareConfig {
     /** Robot-space vertical axis: 2 for Z-up. Set only after verifying the pose convention. */
     public int tagHeightAxis=2;
     public double robotOriginHeightInches=0;
-    public double shooterPower=.395;
+    /** Target speed as a fraction of Constants.SHOOTER_BASE_RPM (default 2940 RPM). */
+    public double shooterRpmMultiplier=Constants.SHOOTER_RPM_MULTIPLIER;
     /** Configure four occupied-slot signals, or override createBallCounter with your actual sensing mechanism. */
     public String[] ballSlotNames={};
     public boolean occupiedSignalLow=true;
@@ -41,10 +43,10 @@ public class FtcHardwareConfig {
     }
     public void validate() {
         if(movementOnly&&useVision)throw new IllegalArgumentException("Movement-only requires useVision=false");
-        if(!calibrated)throw new IllegalStateException("Calibrate field/start poses, pod offsets/directions and shooter power in FtcHardwareConfig; configure vision/count sensors if used, then mark calibrated=true.");
+        if(!calibrated)throw new IllegalStateException("Calibrate field/start poses, pod offsets/directions and shooter RPM in FtcHardwareConfig; configure vision/count sensors if used, then mark calibrated=true.");
         if(useVision&&(!hiveHeightCalibrated||tagHeightAxis<0||tagHeightAxis>2||!Double.isFinite(robotOriginHeightInches)))
             throw new IllegalStateException("Calibrate robot-space tag heights at tiltUp, including camera pose, vertical axis and origin height.");
-        if(shooterPower<0||shooterPower>1||!Double.isFinite(shooterPower))throw new IllegalArgumentException("Shooter power");
+        if(shooterRpmMultiplier<0||shooterRpmMultiplier>1||!Double.isFinite(shooterRpmMultiplier))throw new IllegalArgumentException("Shooter RPM multiplier");
         for(Pose[] poses:new Pose[][]{start,field.hive,field.farHive,field.garden,field.flower})for(Pose p:poses)
             if(p==null||!p.finite()||!field.allowed(p))throw new IllegalArgumentException("Invalid field calibration pose");
         for(int[][] groups:new int[][][]{field.nearTags,field.farTags})for(int[] ids:groups)

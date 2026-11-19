@@ -87,7 +87,9 @@ public interface RobotIO {
     final class Outputs {
         /** Robot relative forward, right strafe, clockwise turn; normalized powers. */
         public double forward, strafeRight, turnClockwise;
-        public double shooterPower, feederPower, intakePower;
+        /** Legacy field name: FTC adapters interpret this as a fraction of SHOOTER_BASE_RPM. */
+        public double shooterPower;
+        public double feederPower, intakePower;
         /** 0 = hive AprilTags / camera up, 1 = balls / camera down. */
         public int pipeline;
         /** Front-left, front-right, back-left, back-right, after mecanum normalization. */
