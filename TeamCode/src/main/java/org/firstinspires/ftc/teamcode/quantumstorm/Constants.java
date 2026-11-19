@@ -15,7 +15,6 @@ public class Constants {
     // =========================================================
 
     public final static String TELEOP_NAME = "Biobuzz-Quantum Storm Tele-Op";
-    public final static String VELOCITY_TELEOP_NAME = "Biobuzz-Quantum Storm Velocity Test";
 
     // =========================================================
     // DEVICE NAMES
@@ -55,11 +54,7 @@ public class Constants {
 
     public final static double INTAKE_POWER = 1.0;
 
-    // Original TeleOp uses open-loop power for comparison with the velocity test.
-    public final static double SHOOTER_POWER = 0.54;
-    public final static double SHOOTER_POWER_INCREMENT = 0.01;
-
-    // Encoder-regulated motor-shaft speed, used by autonomous and the velocity-test TeleOp.
+    // Encoder-regulated motor-shaft speed, shared by the default TeleOp and autonomous.
     public final static double SHOOTER_BASE_RPM = 6000.0;
     // goBILDA 5203-2402-0001: 1:1, 6000 RPM, 28 quadrature counts/output revolution.
     // SDK's generic GoBILDA 5202/3/4 profile instead describes the 99.5:1 gearbox.

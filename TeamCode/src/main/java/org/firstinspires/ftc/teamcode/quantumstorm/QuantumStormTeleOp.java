@@ -10,7 +10,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.FlowerIntake;
-import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.ShooterControlMode;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.ShooterVelocityControl;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.SpindexerControls;
 
 @TeleOp(name = Constants.TELEOP_NAME, group = "Quantum Storm")
@@ -42,8 +42,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
     // Require a fresh A press for each intake direction command.
     private boolean previousA = false;
 
-    // Power fraction in the original TeleOp; RPM fraction in the velocity-test subclass.
-    private ShooterControlMode shooterControlMode;
+    // Signed fraction of the configured shooter base RPM.
     private double shooterSetting;
 
     // Track even during controller assignment so releasing Start cannot start a shooter.
@@ -56,15 +55,9 @@ public class QuantumStormTeleOp extends LinearOpMode {
     // Setting before the most recent change, for tuning telemetry.
     private double previousShooterSetting;
 
-    protected ShooterControlMode getShooterControlMode() {
-        return ShooterControlMode.POWER;
-    }
-
     @Override
     public void runOpMode() {
-        shooterControlMode = getShooterControlMode();
-        boolean velocityControl = shooterControlMode == ShooterControlMode.VELOCITY;
-        shooterSetting = shooterControlMode.initialSetting;
+        shooterSetting = Constants.SHOOTER_RPM_MULTIPLIER;
         previousShooterSetting = shooterSetting;
 
         // =========================================================
@@ -107,7 +100,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         shooter.setZeroPowerBehavior(
                 DcMotor.ZeroPowerBehavior.FLOAT);
-        shooterControlMode.configure(shooter);
+        ShooterVelocityControl.configure(shooter);
 
 
         // =========================================================
@@ -121,7 +114,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
 
         telemetry.addLine("Quantum Storm Two Driver Ready");
-        telemetry.addData("Shooter control", velocityControl ? "VELOCITY / encoder RPM" : "POWER / open loop");
+        telemetry.addData("Shooter control", "VELOCITY / encoder RPM");
         telemetry.addData("Shooter encoder scale", "%.0f ticks/rev; %.1f:1; %.0f max RPM",
                 shooter.getMotorType().getTicksPerRev(), shooter.getMotorType().getGearing(),
                 shooter.getMotorType().getMaxRPM());
@@ -139,9 +132,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         telemetry.addLine("GAMEPAD 2 - SHOOTER + SPINDEXER");
         telemetry.addLine("A = Shooter 1 START, B = Shooter 1 STOP");
-        telemetry.addLine(velocityControl
-                ? "Hold BACK + tap LB/LT = Shooter RPM +60/-60"
-                : "Hold BACK + tap LB/LT = Shooter power +0.01/-0.01");
+        telemetry.addLine("Hold BACK + tap LB/LT = Shooter RPM +60/-60");
         telemetry.addLine("Release START before using shooter START/STOP buttons");
         telemetry.addLine("Hold D-Pad UP = Spindexer Forward (pulsed)");
         telemetry.addLine("Hold D-Pad DOWN = Spindexer Reverse");
@@ -247,13 +238,13 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // must not accidentally adjust the shooter setting. Opposite requests cancel each other.
             if (gamepad2.back && currentLeftBumper && !previousLeftBumper && !currentLeftTrigger) {
                 previousShooterSetting = shooterSetting;
-                shooterSetting = clampShooterSetting(shooterSetting + shooterControlMode.increment);
+                shooterSetting = clampShooterSetting(shooterSetting + Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
             }
 
             // Back + LT = shooter setting down
             if (gamepad2.back && currentLeftTrigger && !previousLeftTrigger && !currentLeftBumper) {
                 previousShooterSetting = shooterSetting;
-                shooterSetting = clampShooterSetting(shooterSetting - shooterControlMode.increment);
+                shooterSetting = clampShooterSetting(shooterSetting - Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
             }
 
 
@@ -262,7 +253,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
             previousLeftTrigger = currentLeftTrigger;
 
 
-            shooterControlMode.setOutput(shooter, shooterRunning ? shooterSetting : 0);
+            ShooterVelocityControl.setOutput(shooter, shooterRunning ? shooterSetting : 0);
 
 
             // =====================================================
@@ -324,32 +315,25 @@ public class QuantumStormTeleOp extends LinearOpMode {
             telemetry.addData("Shooter adjustment", gamepad2.back ? "UNLOCKED: tap LB/LT" : "LOCKED: hold BACK");
 
 
-            telemetry.addData("Shooter control", velocityControl ? "VELOCITY / encoder RPM" : "POWER / open loop");
+            telemetry.addData("Shooter control", "VELOCITY / encoder RPM");
             telemetry.addData(
                     "Shooter 1",
-                    velocityControl ? "%s | RPM multiplier %.2f" : "%s | power %.2f",
+                    "%s | RPM multiplier %.2f",
                     shooterRunning ? "ON" : "OFF",
                     shooterSetting);
 
-            if (velocityControl) {
-                telemetry.addData("Shooter RPM actual / target", "%.0f / %.0f",
-                        shooter.getVelocity(AngleUnit.DEGREES) / 6.0,
-                        shooterRunning ? Constants.SHOOTER_BASE_RPM * shooterSetting : 0);
-                telemetry.addData("Shooter ticks/sec actual / target", "%.0f / %.0f",
-                        shooter.getVelocity(), shooterRunning
-                                ? Constants.SHOOTER_BASE_RPM * shooterSetting
-                                        * shooter.getMotorType().getTicksPerRev() / 60.0 : 0);
-            } else {
-                telemetry.addData("Shooter applied / requested power", "%.2f / %.2f",
-                        shooter.getPower(), shooterRunning ? shooterSetting : 0);
-                telemetry.addData("Shooter measured RPM", "%.0f",
-                        shooter.getVelocity(AngleUnit.DEGREES) / 6.0);
-            }
+            telemetry.addData("Shooter RPM actual / target", "%.0f / %.0f",
+                    shooter.getVelocity(AngleUnit.DEGREES) / 6.0,
+                    shooterRunning ? Constants.SHOOTER_BASE_RPM * shooterSetting : 0);
+            telemetry.addData("Shooter ticks/sec actual / target", "%.0f / %.0f",
+                    shooter.getVelocity(), shooterRunning
+                            ? Constants.SHOOTER_BASE_RPM * shooterSetting
+                                    * shooter.getMotorType().getTicksPerRev() / 60.0 : 0);
             telemetry.addData("Shooter ticks/rev", "%.0f", shooter.getMotorType().getTicksPerRev());
 
             // Previous -> current setting for comparison between runs
             telemetry.addData(
-                    velocityControl ? "Shooter RPM multiplier" : "Shooter power",
+                    "Shooter RPM multiplier",
                     "%.2f -> %.2f",
                     previousShooterSetting,
                     shooterSetting);
@@ -399,14 +383,14 @@ public class QuantumStormTeleOp extends LinearOpMode {
         drive.stop();
 
         intake.setPower(0);
-        shooterControlMode.setOutput(shooter, 0);
+        ShooterVelocityControl.setOutput(shooter, 0);
 
         feedCadence.apply(0,System.nanoTime()/1e9);
         shooterServo.setPower(0);
     }
 
     /**
-     * Keeps the adjustable power/RPM fraction inside [-1, 1].
+     * Keeps the adjustable RPM fraction inside [-1, 1].
      * The range spans both signs so tuning can reverse the motor if needed.
      */
     private double clampShooterSetting(double setting) {
@@ -420,7 +404,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
         }
 
         // Keep button steps on the configured grid, including an exact zero target.
-        double step = shooterControlMode.increment;
+        double step = Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT;
         return Math.round(setting / step) * step;
     }
 }
