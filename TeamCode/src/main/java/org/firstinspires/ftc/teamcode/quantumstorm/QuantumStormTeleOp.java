@@ -55,6 +55,14 @@ public class QuantumStormTeleOp extends LinearOpMode {
     // Setting before the most recent change, for tuning telemetry.
     private double previousShooterSetting;
 
+    // Optional automatic target source; default TeleOp retains manual RPM adjustment.
+    protected void initializeShooterTarget() { }
+    protected void waitForDriverStart() { waitForStart(); }
+    protected double updateShooterTarget(double currentSetting) { return currentSetting; }
+    protected boolean manualShooterAdjustment() { return true; }
+    protected boolean shooterTargetReady() { return true; }
+    protected void addShooterTargetTelemetry() { }
+
     @Override
     public void runOpMode() {
         shooterSetting = Constants.SHOOTER_RPM_MULTIPLIER;
@@ -112,7 +120,15 @@ public class QuantumStormTeleOp extends LinearOpMode {
         // The flower arm moves to UP as soon as INIT is pressed
         flowerIntake.lift();
 
+        try {
+            initializeShooterTarget();
+            runDriverControls();
+        } finally {
+            stopAll();
+        }
+    }
 
+    private void runDriverControls() {
         telemetry.addLine("Quantum Storm Two Driver Ready");
         telemetry.addData("Shooter control", "VELOCITY / encoder RPM");
         telemetry.addData("Shooter encoder scale", "%.0f ticks/rev; %.1f:1; %.0f max RPM",
@@ -132,7 +148,9 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         telemetry.addLine("GAMEPAD 2 - SHOOTER + SPINDEXER");
         telemetry.addLine("A = Shooter 1 START, B = Shooter 1 STOP");
-        telemetry.addLine("Hold BACK + tap LB/LT = Shooter RPM +60/-60");
+        telemetry.addLine(manualShooterAdjustment()
+                ? "Hold BACK + tap LB/LT = Shooter RPM +60/-60"
+                : "Shooter RPM follows distance automatically; LB/LT speed adjustment disabled");
         telemetry.addLine("Release START before using shooter START/STOP buttons");
         telemetry.addLine("Hold D-Pad UP = Spindexer Forward (pulsed)");
         telemetry.addLine("Hold D-Pad DOWN = Spindexer Reverse");
@@ -142,14 +160,15 @@ public class QuantumStormTeleOp extends LinearOpMode {
         telemetry.addLine("LB + D-Pad UP/DOWN = Flower Angle Nudge");
         telemetry.addLine("After flower controls, release D-Pad before running spindexer");
 
+        addShooterTargetTelemetry();
         telemetry.update();
 
 
-        waitForStart();
+        waitForDriverStart();
 
-        // Start+A assigns gamepad 1 in the Driver Station. A held through INIT/START
-        // must be released before it can command the intake during TeleOp.
+        // A held through INIT/START must be released before it can command either motor.
         previousA = gamepad1.a;
+        previousGamepad2A = gamepad2.a;
 
 
         // =========================================================
@@ -157,6 +176,10 @@ public class QuantumStormTeleOp extends LinearOpMode {
         // =========================================================
 
         while (opModeIsActive()) {
+
+            shooterSetting = updateShooterTarget(shooterSetting);
+            boolean targetReady = shooterTargetReady();
+            if (!targetReady) shooterRunning = false;
 
             // =====================================================
             // GAMEPAD 1 - MECANUM DRIVE
@@ -228,7 +251,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // Start+A/B assigns controllers in the Driver Station, not shooter commands.
             // Require a fresh A press after assignment; STOP wins if both are pressed.
             if (!gamepad2.start) {
-                if (gamepad2.a && !previousGamepad2A) shooterRunning = true;
+                if (targetReady && gamepad2.a && !previousGamepad2A) shooterRunning = true;
                 if (gamepad2.b) shooterRunning = false;
             }
 
@@ -236,13 +259,13 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // Require Back already held when a shoulder button is freshly pressed.
             // Track raw buttons below even while locked: holding LB then pressing Back
             // must not accidentally adjust the shooter setting. Opposite requests cancel each other.
-            if (gamepad2.back && currentLeftBumper && !previousLeftBumper && !currentLeftTrigger) {
+            if (manualShooterAdjustment() && gamepad2.back && currentLeftBumper && !previousLeftBumper && !currentLeftTrigger) {
                 previousShooterSetting = shooterSetting;
                 shooterSetting = clampShooterSetting(shooterSetting + Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
             }
 
             // Back + LT = shooter setting down
-            if (gamepad2.back && currentLeftTrigger && !previousLeftTrigger && !currentLeftBumper) {
+            if (manualShooterAdjustment() && gamepad2.back && currentLeftTrigger && !previousLeftTrigger && !currentLeftBumper) {
                 previousShooterSetting = shooterSetting;
                 shooterSetting = clampShooterSetting(shooterSetting - Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
             }
@@ -267,7 +290,12 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // your actual physical mechanism.
             // =====================================================
 
-            if (spindexerDpadUp) {
+            if (!targetReady || (!manualShooterAdjustment() && !shooterRunning)) {
+                feedCadence.apply(0,System.nanoTime()/1e9);
+                shooterServo.setPower(0);
+                spindexerDpadUp = false;
+                spindexerDpadDown = false;
+            } else if (spindexerDpadUp) {
 
                 shooterServo.setPower(feedCadence.apply(1,System.nanoTime()/1e9)*Constants.SHOOTER_SERVO_POWER);
 
@@ -312,7 +340,9 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             telemetry.addLine("");
             telemetry.addLine("=== DRIVER 2 ===");
-            telemetry.addData("Shooter adjustment", gamepad2.back ? "UNLOCKED: tap LB/LT" : "LOCKED: hold BACK");
+            telemetry.addData("Shooter adjustment", manualShooterAdjustment()
+                    ? (gamepad2.back ? "UNLOCKED: tap LB/LT" : "LOCKED: hold BACK")
+                    : "AUTOMATIC: distance calibration");
 
 
             telemetry.addData("Shooter control", "VELOCITY / encoder RPM");
@@ -367,15 +397,9 @@ public class QuantumStormTeleOp extends LinearOpMode {
             }
 
 
+            addShooterTargetTelemetry();
             telemetry.update();
         }
-
-
-        // =========================================================
-        // STOP EVERYTHING
-        // =========================================================
-
-        stopAll();
     }
 
     private void stopAll() {
