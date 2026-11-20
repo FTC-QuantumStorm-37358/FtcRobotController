@@ -1,6 +1,6 @@
 # Standalone BIOBUZZ robot control
 
-The robot app builds entirely from TeamCode. SDK-free controllers, field geometry, navigation and sensor/output contracts are in `src/main/java/org/firstinspires/ftc/teamcode/biobuzz/`; the `ftc/` subpackage contains SDK adapters. Only **Biobuzz-Team 1 Auto** and **Biobuzz-Team 2 Auto** are enabled under `quantumstorm/Auto/`; the only enabled TeleOp is **Biobuzz-Quantum Storm Tele-Op** (`Constants.TELEOP_NAME`, which both autos preselect). No simulator directory, browser or laptop connection is required to build or run the robot app.
+The robot app builds entirely from TeamCode. SDK-free controllers, field geometry, navigation and sensor/output contracts are in `src/main/java/org/firstinspires/ftc/teamcode/biobuzz/`; the `ftc/` subpackage contains SDK adapters. Only **Biobuzz-Team 1 Auto** and **Biobuzz-Team 2 Auto** are enabled under `quantumstorm/Auto/`; the default two-driver TeleOp is **Biobuzz-Quantum Storm Tele-Op** (`Constants.TELEOP_NAME`, which both autos preselect). No simulator directory, browser or laptop connection is required to build or run the robot app.
 
 ## Two modes, no alliance setup
 
@@ -24,13 +24,19 @@ The Flower trigger is deliberate contact: at its clearance pose, Team Two applie
 
 ## TeleOp shooter controls
 
-The shooter uses `DcMotorEx` in `RUN_USING_ENCODER` mode with the configured motor's default velocity PIDF coefficients. Target motor-shaft RPM is `SHOOTER_BASE_RPM` (6000) × `SHOOTER_RPM_MULTIPLIER` (0.54), initially **3240 RPM**. This is a speed fraction, not a motor power percentage. QuantumStorm autonomous interprets its existing `RobotIO.shooterPower` demand as this RPM fraction too. Encoder feedback lets the hub adjust output as battery voltage and load change; a target above the motor's available speed cannot be maintained.
+Select **Biobuzz-Quantum Storm Tele-Op** on the Driver Station. Its shooter uses `DcMotorEx.setVelocity` in `RUN_USING_ENCODER`, with a default target of **2940 RPM** (`SHOOTER_BASE_RPM` 6000 × `SHOOTER_RPM_MULTIPLIER` 0.49). Back + LB/LT adjusts the target by +60/−60 RPM. INIT sets encoder mode and stops the shooter; STOP commands zero velocity.
 
-Connect the shooter's encoder to the matching hub motor/encoder port and select the correct motor type (encoder ticks per output-shaft revolution) in Robot Configuration. The SDK's angular-velocity conversion depends on that configuration. External gearing between the motor output shaft and the shooting wheel requires a separate ratio. Check actual versus target RPM under load before tuning PIDF; no unmeasured PIDF gains are supplied here. Existing spindexer timing and autonomous spin-up delays remain in place; feeding is not gated on measured RPM in this change.
+The two-driver drive, intake, flower-arm and spindexer controls remain available, including the flower-modifier release guard. Connect the shooter power and encoder cables to **Control Hub port 1**, configured as `shooter`.
+
+Encoder feedback lets the hub adjust motor output as battery voltage and load change. Telemetry displays actual/target RPM, actual/target ticks per second, and the applied encoder scale. The controller uses the configured motor's default velocity PIDF coefficients.
+
+QuantumStorm autonomous and the shared BioBuzz FTC adapter continue to use velocity control. Their legacy `RobotIO.Outputs.shooterPower` field represents an RPM fraction, and `FtcHardwareConfig.shooterRpmMultiplier` defaults to 0.49. The separate spindexer CR servo still uses power commands.
+
+The shooter is confirmed as a [goBILDA 5203-2402-0001, 1:1, 6000 RPM motor](https://www.gobilda.com/5203-series-yellow-jacket-motor-1-1-ratio-24mm-length-8mm-rex-shaft-6000-rpm-3-3-5v-encoder/), with **28 encoder counts per output-shaft revolution**. `ShooterMotorConfiguration` applies 28 ticks/rev, 1:1 gearing and 6000 max RPM to a cloned shooter profile in the default TeleOp and the autonomous adapters. The SDK's generic **GoBILDA 5202/3/4 series** profile instead specifies 2786 ticks/rev, 99.5:1 and 60 RPM; using it unchanged makes the 1:1 motor read 99.5 times too slowly and can saturate the velocity controller. Other motors' profiles are not modified. Keep the shooter named `shooter` and connect its encoder to the matching motor/encoder port. INIT reports the applied motor scale; running telemetry reports ticks/rev and velocity-mode raw ticks/sec actual/target. At multiplier **0.10**, the target is **600 RPM = 280 ticks/sec**, not 10% power. If the physical shooter motor changes, update the three motor-spec constants before running. External gearing between the motor output shaft and the shooting wheel requires a separate ratio. Check actual versus target RPM under load before tuning PIDF; no unmeasured PIDF gains are supplied here. Existing spindexer timing and autonomous spin-up delays remain in place; feeding is not gated on measured RPM in this change.
 
 On gamepad 2, tap **A** to start the single shooter and **B** to stop it. A second A press does not toggle it off; B wins when both are pressed.
 
-Hold **Back**, then tap **LB** to increase the signed RPM multiplier or **LT** to decrease it by `SHOOTER_RPM_MULTIPLIER_INCREMENT` (0.01, equivalent to 60 RPM). Each press changes the multiplier once; holding a shoulder button does not repeat. Pressing Back after a shoulder button is already held does not change RPM: release and press the shoulder again. Start+LB/LT without Back no longer adjusts RPM. Simultaneous LB/LT requests cancel. Telemetry shows whether adjustment is locked and the previous/current multiplier, plus actual/target RPM.
+Hold **Back**, then tap **LB** to increase the setting or **LT** to decrease it. Each adjustment changes the RPM multiplier by 0.01 (60 RPM). Each press changes the setting once; holding a shoulder button does not repeat. Pressing Back after a shoulder button is already held does not change the setting: release and press the shoulder again. Start+LB/LT without Back does not adjust the setting. Simultaneous LB/LT requests cancel. Telemetry shows the selected control mode, whether adjustment is locked, and the previous/current setting.
 
 Release Start before using A/B for the shooter. Start+A/B is reserved for Driver Station controller assignment, and a fresh A press is required afterward. The Logitech F310 Mode button changes controller behavior internally and is not used as the modifier. Shooter 2 remains removed, so X/Y and RB/RT do not control a second shooter. D-pad up/down retains the existing spindexer controls.
 
@@ -64,7 +70,7 @@ Corrected initial raised clusters are Red 34-37 and Blue 42-45. After the partne
 
 ## Spindexer and TeleOp
 
-Select **Biobuzz-Quantum Storm Tele-Op** on the Driver Station.
+Select **Biobuzz-Quantum Storm Tele-Op** for encoder RPM control using the controls below.
 
 | Gamepad 1 control | Assignment |
 | --- | --- |
@@ -82,8 +88,8 @@ A is no longer a toggle. Tapping A alone again leaves forward intake on. Hold Ba
 | --- | --- |
 | Tap A, with Start released | Shooter ON |
 | B, with Start released | Shooter OFF; overrides A |
-| Hold Back, then tap LB | Increase RPM multiplier by 0.01 (+60 RPM) |
-| Hold Back, then tap LT past halfway | Decrease RPM multiplier by 0.01 (−60 RPM) |
+| Hold Back, then tap LB | Increase velocity target by 60 RPM |
+| Hold Back, then tap LT past halfway | Decrease velocity target by 60 RPM |
 | Hold D-pad Up | Spindexer forward, using timed pulses |
 | Hold D-pad Down | Spindexer reverse continuously for unjamming |
 | Release D-pad Up/Down | Spindexer STOP |
@@ -92,13 +98,13 @@ A is no longer a toggle. Tapping A alone again leaves forward intake on. Hold Ba
 
 Flower-arm combinations reserve the D-pad until **both Up and Down are released**. Releasing Back or LB first does not run the spindexer. Release the D-pad, then press it again without either modifier to feed or reverse.
 
-Gamepad 2 A/B are ignored while Start is held for controller assignment. RPM multiplier changes happen once per new shoulder press; holding a shoulder or pressing Back after it is held does not repeat/change RPM. LB and LT together cancel. The RPM multiplier starts at +0.54 (3240 RPM), with bounds -1.0 to +1.0 (−6000 to +6000 RPM); adjustment does not start a stopped shooter. Shooter 2 remains removed. Other buttons/stick axes have no robot action in this TeleOp; the F310 Mode button changes the controller's stick/D-pad behavior internally.
+Gamepad 2 A/B are ignored while Start is held for controller assignment. Shooter setting changes happen once per new shoulder press; holding a shoulder or pressing Back after it is held does not repeat/change the setting. LB and LT together cancel. The velocity multiplier starts at +0.49 (2940 RPM), with bounds −1.0 to +1.0 (−6000 to +6000 RPM). Adjustment does not start a stopped shooter. Shooter 2 remains removed. Other buttons/stick axes have no robot action in this TeleOp; the F310 Mode button changes the controller's stick/D-pad behavior internally.
 
 `FeedCadence` applies a 0.18-second spindexer pulse followed by at least 0.5 seconds OFF in QuantumStorm TeleOp, normal autonomous Shooter and the generic FTC adapter. Held controls and rapid taps cannot skip the gap; TeleOp reverse unjamming stays immediate. The autonomous feed window is extended from two to three seconds for paced preloads. No sleep blocks steering, sensing, parking or STOP.
 
 This is **open-loop timing**, not confirmed-shot or angle feedback. Calibrate `SPINDEXER_FEED_PULSE_SEC` to advance exactly one pocket on the physical mechanism. A pulse that advances two pockets cannot be fixed by its subsequent pause. The configured CR servo cannot guarantee a 90-degree maximum without suitable position feedback or different hardware; no such guarantee is implemented.
 
-TeleOp joystick Y is inverted to correct the reported forward/backward reversal. Normal QuantumStorm autonomous now applies the same physical correction with AUTO_FORWARD_POWER_SIGN=-1 at the hardware wheel-output boundary. Only forward/backward is corrected; strafing, turning, field coordinates, measured odometry and motor direction configuration are unchanged. Keep the wall-facing start heading: navigation first backs straight approximately six inches into a collision-checked corridor, holding that heading with no sideways command, before routing/turning toward pickup. The same wall-departure clearance is used when leaving a wall shot to park. An already-reached wall shooting target is not backed away from before verification. Do not flip the initial heading 180 degrees to compensate for a motor-power sign error. The simulator retains its ideal forward-positive mixer. Verify the hardware sign with wheels raised, then at low power; this assumes the robot still matches the earlier TeleOp observation. The shooter targets 6000 × 0.54 = 3240 RPM by default in TeleOp and QuantumStorm autonomous; verify actual launch direction, RPM and hood angle before running. Pinpoint offsets remain -170 / -150 mm; verify wiring, configuration, pod directions and odometry axes before field use.
+TeleOp joystick Y is inverted to correct the reported forward/backward reversal. Normal QuantumStorm autonomous now applies the same physical correction with AUTO_FORWARD_POWER_SIGN=-1 at the hardware wheel-output boundary. Only forward/backward is corrected; strafing, turning, field coordinates, measured odometry and motor direction configuration are unchanged. Keep the wall-facing start heading: navigation first backs straight approximately six inches into a collision-checked corridor, holding that heading with no sideways command, before routing/turning toward pickup. The same wall-departure clearance is used when leaving a wall shot to park. An already-reached wall shooting target is not backed away from before verification. Do not flip the initial heading 180 degrees to compensate for a motor-power sign error. The simulator retains its ideal forward-positive mixer. Verify the hardware sign with wheels raised, then at low power; this assumes the robot still matches the earlier TeleOp observation. The shooter targets 6000 × 0.49 = 2940 RPM by default in the default TeleOp and QuantumStorm autonomous; verify actual launch direction, RPM and hood angle before running. Pinpoint offsets remain -170 / -150 mm; verify wiring, configuration, pod directions and odometry axes before field use.
 
 ## Verification and build
 

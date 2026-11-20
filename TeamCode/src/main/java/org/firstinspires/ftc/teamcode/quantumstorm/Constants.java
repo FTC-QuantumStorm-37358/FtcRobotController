@@ -54,11 +54,16 @@ public class Constants {
 
     public final static double INTAKE_POWER = 1.0;
 
-    // Ordinary open-loop power, shared by autonomous and TeleOp.
-    public final static double SHOOTER_POWER = 0.54;
-    public final static double SHOOTER_POWER_INCREMENT = 0.01;
-    public final static double SHOOTER_POWER_MIN = -1.0;
-    public final static double SHOOTER_POWER_MAX = 1.0;
+    // Encoder-regulated motor-shaft speed, shared by the default TeleOp and autonomous.
+    public final static double SHOOTER_BASE_RPM = 6000.0;
+    // goBILDA 5203-2402-0001: 1:1, 6000 RPM, 28 quadrature counts/output revolution.
+    // SDK's generic GoBILDA 5202/3/4 profile instead describes the 99.5:1 gearbox.
+    public final static double SHOOTER_ENCODER_TICKS_PER_REV = 28.0;
+    public final static double SHOOTER_GEAR_RATIO = 1.0;
+    public final static double SHOOTER_RPM_MULTIPLIER = 0.49; // 2940 RPM
+    public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.01; // 60 RPM
+    public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
+    public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
 
     public final static double SHOOTER_SERVO_POWER = 1;
 
