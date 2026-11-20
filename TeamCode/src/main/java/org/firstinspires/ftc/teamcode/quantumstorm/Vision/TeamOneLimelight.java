@@ -27,6 +27,7 @@ public final class TeamOneLimelight implements AutoCloseable {
     private boolean lastConnected;
     private int pipeline=-1;
     private boolean idleScan;
+    private boolean pickupScan;
     private double changedAt,frameTimestamp=Double.NaN,capturedAt;
     private String problem="";
     private LLResult lastResult;
@@ -49,16 +50,26 @@ public final class TeamOneLimelight implements AutoCloseable {
         select(mode,false);
     }
     public void select(int mode,boolean scanWhileIdle){
+        select(mode,scanWhileIdle,false);
+    }
+    public void select(int mode,boolean scanWhileIdle,boolean scanWhilePickingUp){
         if(Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException("STOP");
+        if(scanWhilePickingUp){
+            idleScan=false;pickupScan=true;pipeline=1;
+            int previous=servo.getPipelineIndex();
+            servo.updatePickup();
+            if(previous!=servo.getPipelineIndex()){changedAt=clock.getAsDouble();frameTimestamp=Double.NaN;}
+            return;
+        }
         if(scanWhileIdle){
-            idleScan=true;pipeline=mode;
+            pickupScan=false;idleScan=true;pipeline=mode;
             int previous=servo.getPipelineIndex();
             servo.update(false);
             if(previous!=servo.getPipelineIndex()){changedAt=clock.getAsDouble();frameTimestamp=Double.NaN;}
             return;
         }
-        if(mode==pipeline&&!idleScan)return;
-        idleScan=false;
+        if(mode==pipeline&&!idleScan&&!pickupScan)return;
+        idleScan=false;pickupScan=false;
         pipeline=mode;changedAt=clock.getAsDouble();frameTimestamp=Double.NaN;
         try{
             servo.selectPipeline(mode==0?LimeServo.Pipeline.APRIL_TAG:LimeServo.Pipeline.YELLOW);
@@ -101,30 +112,31 @@ public final class TeamOneLimelight implements AutoCloseable {
             }else{
                 // SDK blobs have no label: the configured pipeline defines the color.
                 LLResultTypes.ColorResult target=largestColorTarget(result);
-                String color=idleScan?(servo.getActivePipeline()==LimeServo.Pipeline.RED?"red":"blue"):"yellow";
+                String color=servo.getActivePipeline()==LimeServo.Pipeline.RED?"red"
+                        :servo.getActivePipeline()==LimeServo.Pipeline.BLUE?"blue":"yellow";
                 if(target!=null)targets.add(new Target(-1,target.getTargetXDegrees(),target.getTargetYDegrees(),Double.NaN,target.getTargetArea(),color));
             }
             problem="";
-            lastVision=new Vision(!targets.isEmpty(),idleScan?2:pipeline,capturedAt,targets.toArray(new Target[0]),result.getTx());
+            lastVision=new Vision(result.isValid()&&!targets.isEmpty(),idleScan?2:pipeline,capturedAt,targets.toArray(new Target[0]),result.getTx());
             return lastVision;
         }catch(java.util.concurrent.CancellationException e){throw e;}
         catch(RuntimeException e){problem="Camera read failed: "+e.getMessage();return empty;}
     }
 
     /** Report the already sampled frame; telemetry must not resample camera hardware. */
-    public void addTelemetry(Telemetry telemetry,double now,boolean shootingAuthorized){
+    public void addTelemetry(Telemetry telemetry,double now,boolean shootingAuthorized,Vision aimingVision){
         boolean targetValid=lastConnected&&lastResult!=null
                 &&lastResult.getPipelineIndex()==selectedPipeline()
-                &&lastVision.fresh(now,lastVision.pipeline)&&now-lastVision.capturedAt<=.25;
+                &&aimingVision.fresh(now,aimingVision.pipeline)&&now-aimingVision.capturedAt<=.25;
         telemetry.addData("tv",lastResult!=null&&lastResult.isValid()?"1":"0");
-        telemetry.addData("tx",lastResult==null?"N/A":String.format(java.util.Locale.US,"%.2f deg",lastResult.getTx()));
+        telemetry.addData("tx",!Double.isFinite(aimingVision.tx)?"N/A":String.format(java.util.Locale.US,"%.2f deg",aimingVision.tx));
         telemetry.addData("ty",lastResult==null?"N/A":String.format(java.util.Locale.US,"%.2f deg",lastResult.getTy()));
         telemetry.addData("Shooting authorized",shootingAuthorized?"YES":"NO");
         List<LLResultTypes.FiducialResult> tags=lastResult==null?null:lastResult.getFiducialResults();
         List<LLResultTypes.ColorResult> colors=lastResult==null?null:lastResult.getColorResults();
         telemetry.addData("AprilTags seen",tags==null?0:tags.size());
         telemetry.addData("Colors seen",colors==null?0:colors.size());
-        telemetry.addData("Turn suggestion",ShootingAim.turnSuggestion(targetValid,lastVision.tx));
+        telemetry.addData("Turn suggestion",ShootingAim.turnSuggestion(targetValid,aimingVision.tx));
         double angle=servo.getCommandedTiltDegrees();
         telemetry.addData("Camera servo",Double.isFinite(angle)&&Math.abs(angle)<=1.0?"NEUTRAL":"NOT NEUTRAL");
     }

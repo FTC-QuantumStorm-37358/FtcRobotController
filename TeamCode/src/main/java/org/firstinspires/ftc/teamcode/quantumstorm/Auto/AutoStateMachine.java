@@ -9,6 +9,7 @@ import org.firstinspires.ftc.teamcode.biobuzz.AutoDebugSnapshot;
 import org.firstinspires.ftc.teamcode.biobuzz.FieldLayout;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotController;
+import org.firstinspires.ftc.teamcode.biobuzz.ShootingAim;
 import org.firstinspires.ftc.teamcode.biobuzz.TeamOnePollenAuto;
 import org.firstinspires.ftc.teamcode.biobuzz.TeamTwoHiveAuto;
 import org.firstinspires.ftc.teamcode.quantumstorm.Vision.TeamOneLimelight;
@@ -27,6 +28,7 @@ import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PollenInventory;
  * Calibrate start, Pinpoint offsets/directions, waypoints and shooter RPM.
  * Unknown inventory uses bounded attempts, never invented ball counts.
  */
+
 public final class AutoStateMachine implements AutoCloseable {
     private final LinearOpMode opMode;
     private final AutoStartPosition position;
@@ -106,6 +108,11 @@ public final class AutoStateMachine implements AutoCloseable {
                     // yet locked.
                     if(!Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG&&!teamOneBackup&&selectedRoutine!=Routine.TEAM_TWO)vision=normalized;
                 }
+                if(shootingAlignmentActive()){
+                    boolean farCell=routine instanceof TeamTwoHiveAuto
+                            ||((TeamOnePollenAuto)routine).getState()!=TeamOnePollenAuto.State.SHOOTING;
+                    vision=ShootingAim.centerOnHive(vision,farCell?field.farTags:field.nearTags,robotRelative?-1:alliance);
+                }
                 PollenInventory.Sample count=inventory==null?null:inventory.read();
                 debugSensors=new Sensors(pose,now,odometry.isValid(),camera!=null&&camera.connected(),count==null?-1:count.total,count==null?-1:count.pollen,vision);
                 debugReadError="";return debugSensors;
@@ -115,13 +122,13 @@ public final class AutoStateMachine implements AutoCloseable {
                 if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.shooterPower==0&&o.feederPower==0&&o.intakePower==0){
                     if(!stopped){stopped=true;SafeShutdown.run(drive::stop,shooter::stop,intake::stop);}
                     // Stop actuators BEFORE any camera SDK call, including a pipeline transition.
-                    if(camera!=null&&!stopRequested())camera.select(o.pipeline,idleCameraScan());
+                    if(camera!=null&&!stopRequested())selectCamera(o);
                     return;
                 }
                 stopped=false;
-                double[] wheels=o.wheelPowers(Constants.AUTO_FORWARD_POWER_SIGN);drive.setPowers(wheels[0],wheels[1],wheels[2],wheels[3]);
+                drive.drive(o.forward*Constants.AUTO_FORWARD_POWER_SIGN,o.strafeRight,o.turnClockwise);
                 shooter.apply(o.shooterPower,o.feederPower);intake.setPower(o.intakePower*Constants.INTAKE_POWER);
-                if(camera!=null&&!stopRequested())camera.select(o.pipeline,idleCameraScan());
+                if(camera!=null&&!stopRequested())selectCamera(o);
             }
         };
         RobotIO io=robotIO;
@@ -138,6 +145,7 @@ public final class AutoStateMachine implements AutoCloseable {
             one.gardenIntakeHeadingRadians=Math.toRadians(Constants.TEAM_ONE_GARDEN_INTAKE_HEADING_DEG);
             one.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
             one.aimForShooting=true;
+            one.colorPickupEnabled=true;
             one.useTeamTwoFollowUpShot=teamOneBackup;
             one.gardenPassLimit=teamOneBackup?2:0;
             // The contingency route crosses to the opposite wall after Garden.
@@ -168,6 +176,7 @@ public final class AutoStateMachine implements AutoCloseable {
             two.spinUpSeconds=Constants.AUTO_SHOOTER_SPINUP_SEC;two.feedSeconds=Constants.AUTO_TEAM_TWO_FEED_TIME_SEC;
             two.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
             two.aimForShooting=true;
+            two.colorPickupEnabled=true;
             routine=two;
         }else{
             org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine two=new org.firstinspires.ftc.teamcode.biobuzz.AutoStateMachine(io,field,false,selectedRoutine,false,false);
@@ -237,7 +246,8 @@ public final class AutoStateMachine implements AutoCloseable {
     }
     private void addDebugTelemetry(){
         double now=clock.seconds();
-        if(camera!=null)camera.addTelemetry(opMode.telemetry,now,debugOutputs.shooterPower>0||debugOutputs.feederPower>0);
+        if(camera!=null)camera.addTelemetry(opMode.telemetry,now,debugOutputs.shooterPower>0||debugOutputs.feederPower>0,
+                debugSensors==null?Vision.empty(0,now):debugSensors.vision);
         opMode.telemetry.addData("Current location",AutoDebugSnapshot.pose(debugSensors));
         opMode.telemetry.addData("Coordinate frame",robotRelative?"LOCAL role reference; inches; heading CCW from +X. Not absolute alliance coordinates.":"Field X/Y inches; heading CCW from +X");
         opMode.telemetry.addData("Odometry sample",debugSensors!=null&&debugSensors.odometryValid?"VALID":"INVALID / UNAVAILABLE - do not trust last known pose");
@@ -254,13 +264,39 @@ public final class AutoStateMachine implements AutoCloseable {
         odometry.addTelemetry(opMode.telemetry);
     }
 
+    private boolean shootingAlignmentActive(){
+        if(routine instanceof TeamOnePollenAuto){
+            TeamOnePollenAuto.State state=((TeamOnePollenAuto)routine).getState();
+            return state==TeamOnePollenAuto.State.SHOOTING||state==TeamOnePollenAuto.State.WAIT_FOR_TEAM_TWO_TAG
+                    ||state==TeamOnePollenAuto.State.FOLLOW_UP_SHOOTING;
+        }
+        if(routine instanceof TeamTwoHiveAuto){
+            TeamTwoHiveAuto.State state=((TeamTwoHiveAuto)routine).getState();
+            return state==TeamTwoHiveAuto.State.VERIFY_HIVE||state==TeamTwoHiveAuto.State.SHOOTING;
+        }
+        return false;
+    }
+
     private boolean idleCameraScan(){
         if(routine instanceof TeamOnePollenAuto)return ((TeamOnePollenAuto)routine).getState()==TeamOnePollenAuto.State.WAITING;
         if(routine instanceof TeamTwoHiveAuto){
             TeamTwoHiveAuto.State state=((TeamTwoHiveAuto)routine).getState();
             return state==TeamTwoHiveAuto.State.WAITING||state==TeamTwoHiveAuto.State.SETTLING||state==TeamTwoHiveAuto.State.RECOVERING;
         }
+
         return false;
+    }
+
+    private void selectCamera(Outputs outputs){
+        if(routine instanceof TeamOnePollenAuto){
+            TeamOnePollenAuto one=(TeamOnePollenAuto)routine;
+            if(one.getState()==TeamOnePollenAuto.State.PARK){camera.select(1);return;}
+            camera.select(outputs.pipeline,idleCameraScan(),one.colorPickupActive());
+        }else if(routine instanceof TeamTwoHiveAuto){
+            TeamTwoHiveAuto two=(TeamTwoHiveAuto)routine;
+            if(two.getState()==TeamTwoHiveAuto.State.PARK){camera.select(1);return;}
+            camera.select(outputs.pipeline,idleCameraScan(),two.colorPickupActive());
+        }else camera.select(outputs.pipeline,false);
     }
 
     public void run(){

@@ -10,6 +10,7 @@ public final class TeamTwoHiveAuto implements RobotController {
     private final RobotIO io;
     private final FieldLayout field;
     private final Navigator nav;
+    private final ShootingAim.Alignment shootingAlignment=new ShootingAim.Alignment();
     private HiveVision hive,shotGate;
     private HiveShotGate centeredShotGate;
     private State state=State.STOPPED;
@@ -25,6 +26,7 @@ public final class TeamTwoHiveAuto implements RobotController {
     /** Practice only: a fresh AprilTag admits a timed first batch without official Hive or inventory gating. */
     public boolean allowAnyFreshAprilTag=false;
     public boolean aimForShooting=false;
+    public boolean colorPickupEnabled=false,collectBlue=true,collectRed=false;
     private int measuredBalls=-1,measuredPollen=-1;
     public TeamTwoHiveAuto(RobotIO io,FieldLayout field){this.io=io;this.field=field;nav=new Navigator(field,io::stopRequested);}
     public void start(int alliance,double power){
@@ -35,6 +37,7 @@ public final class TeamTwoHiveAuto implements RobotController {
                 ||!Double.isFinite(latestReturnShotSeconds)||latestReturnShotSeconds<8||latestReturnShotSeconds>=26)
             throw new IllegalArgumentException("Invalid Team Two configuration");
         this.alliance=alliance;this.power=power;startAt=lastNow=lastCommandAt=io.nowSeconds();running=true;
+        shootingAlignment.reset();
         batches=0;collecting=false;lastFeeding=batchFed=practiceTagLatched=flowerSequenceActive=false;feedTime=0;spinAt=Double.NaN;current=progressPose=parkVia=null;error=message="";
         hive=new HiveVision(field,alliance);shotGate=new HiveVision(field,alliance);centeredShotGate=new HiveShotGate(field,alliance,true);nav.useScriptedRoute(true,alliance);
         // Team Two is placed directly at this wall shooting pose after Team One's
@@ -55,6 +58,8 @@ public final class TeamTwoHiveAuto implements RobotController {
     public void stop(){running=false;state=State.STOPPED;lastFeeding=false;io.apply(new Outputs());}
     public boolean isRunning(){return running;}
     public State getState(){return state;}
+    public boolean colorPickupActive(){return running&&colorPickupEnabled
+            &&(state==State.PRESS_FLOWER||state==State.INTAKE);}
     public String lastError(){return error;}
     public String status(){return state+String.format(java.util.Locale.ROOT," · %.1f / 30 s · ",io.nowSeconds()-startAt)+message
             +" · measured "+measuredPollen+" pollen / "+measuredBalls+" total · feed attempts "+batches+" / 2 · require FOUR pollen and own far Cell UP · park by 26 s; stop at 30 s";}
@@ -220,8 +225,8 @@ public final class TeamTwoHiveAuto implements RobotController {
                     }
                     break;
                 case VERIFY_HIVE:
-                    if(aimForShooting&&!ShootingAim.align(s,now,out)){
-                        spinAt=Double.NaN;message="Aligning wall shot: fresh tv and tx within 2 degrees required";break;
+                    if(aimForShooting&&!shootingAlignment.align(s,now,out)){
+                        spinAt=Double.NaN;message="Aligning wall shot: need two Hive tags and stable tx within 2 degrees";break;
                     }
                     // At the taped wall shot, a current correct far-Hive ID is
                     // the firing permission. Do not make the preload shot
@@ -240,8 +245,8 @@ public final class TeamTwoHiveAuto implements RobotController {
                     }
                     break;
                 case SHOOTING:
-                    if(aimForShooting&&!ShootingAim.align(s,now,out)){
-                        spinAt=Double.NaN;lastFeeding=false;message="Feed paused: target lost or not aligned";break;
+                    if(aimForShooting&&!shootingAlignment.align(s,now,out)){
+                        spinAt=Double.NaN;lastFeeding=false;message="Feed paused: need two Hive tags and stable tx within 2 degrees";break;
                     }
                     // Admit a complete batch once. Counts naturally drop after each real shot;
                     // do not demand four remaining balls after the first ball has fired.
@@ -315,6 +320,10 @@ public final class TeamTwoHiveAuto implements RobotController {
             else if(state==State.TO_HIVE||state==State.RETREAT_FROM_HIVE||state==State.ALIGN_FLOWER||state==State.TO_FLOWER||state==State.CLEAR_FLOWER||state==State.TO_OUTLET_LANE||state==State.TO_PICKUP||state==State.INTAKE)out=guardMove(out);
             out.pipeline=pipeline();
             out.intakePower=running&&collecting&&s.ballCount<4&&state!=State.PARK?1:0;
+            if(state==before&&colorPickupActive()){
+                ColorPickup.steer(s,now,out,collectBlue,collectRed);
+                out=guardMove(out);
+            }
             lastFeeding=out.feederPower>0;batchFed|=lastFeeding;lastCommandAt=now;
             if(io.stopRequested()){stop();return;}
             io.apply(out);
