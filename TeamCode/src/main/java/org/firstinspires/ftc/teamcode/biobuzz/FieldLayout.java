@@ -20,10 +20,17 @@ public final class FieldLayout {
     // First retreat from the Hive wall, then line up with the Flower before
     // making the short forward trigger contact. This avoids a long diagonal
     // across the field and preserves the wall-shot heading throughout.
-    public final Pose[] teamTwoHiveRetreat={new Pose(-12.75,50,Math.PI/2),new Pose(12.75,-50,-Math.PI/2)};
-    public final Pose[] teamTwoFlowerAlign={new Pose(-35.5,50,Math.PI/2),new Pose(35.5,-50,-Math.PI/2)};
+    // Fixed Team 2 exit: first back farther off the Hive/Garden wall, then
+    // strafe to the Flower lane before driving straight forward to the arm-down stop.
+    public final Pose[] teamTwoHiveRetreat={new Pose(-12.75,47,Math.PI/2),new Pose(12.75,-47,-Math.PI/2)};
+    public final Pose[] teamTwoFlowerAlign={new Pose(-28.0,47,Math.PI/2),new Pose(28.0,-47,-Math.PI/2)};
     // Trigger with a corner, clear the post, then face its inward pollen outlet.
-    public final Pose[] teamTwoFlowerTouch={new Pose(-35.5,57.5,Math.PI/2),new Pose(35.5,-57.5,-Math.PI/2)};
+    // Keep the same wall clearance after shooting, but stay closer to the
+    // wall-shot lane so the chassis stops directly in front of the Flower
+    // instead of overshooting sideways before its straight intake pass.
+    // Use the proven pre-wiggle standoff distance. The arm lowers here before
+    // the fixed straight intake pass and its small forward/back motion.
+    public final Pose[] teamTwoFlowerTouch={new Pose(-28.0,57.5,Math.PI/2),new Pose(28.0,-57.5,-Math.PI/2)};
     public final Pose[] teamTwoFlowerClear={new Pose(-42,55,Math.PI/2),new Pose(42,-55,-Math.PI/2)};
     public final Pose[] teamTwoFlowerLane={new Pose(-42,30,Math.PI/2),new Pose(42,-30,-Math.PI/2)};
     public final Pose[] teamTwoFlowerPickup={new Pose(-24,30,Math.PI/2),new Pose(24,-30,-Math.PI/2)};

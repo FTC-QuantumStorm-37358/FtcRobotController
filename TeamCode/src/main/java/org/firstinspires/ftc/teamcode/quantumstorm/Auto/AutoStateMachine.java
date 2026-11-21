@@ -144,7 +144,10 @@ public final class AutoStateMachine implements AutoCloseable {
             one.gardenFirstPassSeconds=Constants.AUTO_GARDEN_FIRST_PASS_SEC;
             one.gardenIntakeHeadingRadians=Math.toRadians(Constants.TEAM_ONE_GARDEN_INTAKE_HEADING_DEG);
             one.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
-            one.aimForShooting=true;
+            // Team 1 begins at a taped, fixed preload-shot pose. A missing tx
+            // must not prevent its opening four-pollen feed. The backup still
+            // uses AprilTag aim at the second, Team Two wall-shot position.
+            one.aimForShooting=teamOneBackup;
             one.colorPickupEnabled=true;
             one.useTeamTwoFollowUpShot=teamOneBackup;
             one.gardenPassLimit=teamOneBackup?2:0;
@@ -154,9 +157,9 @@ public final class AutoStateMachine implements AutoCloseable {
             if(teamOneBackup){
                 one.spinUpSeconds=.60;
                 // Four pollen need at least four paced index advances.  Keep a
-                // full 3.6-second feed window before either Garden departure
+                // full paced feed window before either Garden departure
                 // or the follow-up-shot park transition.
-                one.feedSeconds=3.60;
+                one.feedSeconds=4.80;
                 // Two longer measured strokes sweep farther into the Garden,
                 // then the backup immediately starts its Team Two shot route.
                 one.gardenTransitPower=.55;
@@ -175,7 +178,10 @@ public final class AutoStateMachine implements AutoCloseable {
             TeamTwoHiveAuto two=new TeamTwoHiveAuto(io,field);
             two.spinUpSeconds=Constants.AUTO_SHOOTER_SPINUP_SEC;two.feedSeconds=Constants.AUTO_TEAM_TWO_FEED_TIME_SEC;
             two.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
-            two.aimForShooting=true;
+            // Team 2 is taped at its wall-shot pose. While waiting for the
+            // Hive to be tilted, it must remain completely still; the live
+            // AprilTag check below authorizes shooting without auto-turning.
+            two.aimForShooting=false;
             two.colorPickupEnabled=true;
             routine=two;
         }else{
@@ -218,14 +224,9 @@ public final class AutoStateMachine implements AutoCloseable {
         if(!(routine instanceof TeamTwoHiveAuto)){flowerIntake.lift();return;}
         TeamTwoHiveAuto.State state=(TeamTwoHiveAuto.State)routine.getState();
         switch(state){
-            case RETREAT_FROM_HIVE:
-            case ALIGN_FLOWER:
+            case LOWER_FLOWER_ARM:
             case TO_FLOWER:
             case PRESS_FLOWER:
-            case CLEAR_FLOWER:
-            case TO_OUTLET_LANE:
-            case TO_PICKUP:
-            case INTAKE:
                 flowerIntake.drop();
                 break;
             default:
@@ -281,7 +282,7 @@ public final class AutoStateMachine implements AutoCloseable {
         if(routine instanceof TeamOnePollenAuto)return ((TeamOnePollenAuto)routine).getState()==TeamOnePollenAuto.State.WAITING;
         if(routine instanceof TeamTwoHiveAuto){
             TeamTwoHiveAuto.State state=((TeamTwoHiveAuto)routine).getState();
-            return state==TeamTwoHiveAuto.State.WAITING||state==TeamTwoHiveAuto.State.SETTLING||state==TeamTwoHiveAuto.State.RECOVERING;
+            return state==TeamTwoHiveAuto.State.WAITING||state==TeamTwoHiveAuto.State.SETTLING;
         }
 
         return false;
@@ -316,10 +317,18 @@ public final class AutoStateMachine implements AutoCloseable {
                 opMode.idle();
             }
             while(opMode.opModeIsActive()&&routine.isRunning()){
+                // Independent match-time guard: no autonomous output can run past
+                // the FTC autonomous period even if a routine fails to transition.
+                if(clock.seconds()>=30.0){
+                    routine.stop();
+                    break;
+                }
                 routine.tick();
                 updateFlowerIntakeArm();
                 opMode.telemetry.addData("Autonomous",label());
-                opMode.telemetry.addData("State",routine.getState());
+                opMode.telemetry.addData("Current state",routine.getState());
+                opMode.telemetry.addData("Auto time","%.1f / 30.0 s",clock.seconds());
+                opMode.telemetry.addData("Time remaining","%.1f s",Math.max(0,30.0-clock.seconds()));
                 opMode.telemetry.addData("Last error",lastError().isEmpty()?"None":lastError());
                 opMode.telemetry.addData("Navigation",routine instanceof TeamTwoHiveAuto?"Opposite-wall shot route":camera==null?"Fixed simulator route; no route search":"Garden pickup + collision-checked start-side-half park");
                 opMode.telemetry.addData("Mechanisms",inventory==null?"LIVE hardware outputs; unknown inventory":inventory.status());
