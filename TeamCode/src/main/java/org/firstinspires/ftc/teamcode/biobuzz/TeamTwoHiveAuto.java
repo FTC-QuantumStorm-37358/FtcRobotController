@@ -55,8 +55,11 @@ public final class TeamTwoHiveAuto implements RobotController {
                 ||next==State.LOWER_FLOWER_ARM||next==State.PRESS_FLOWER||next==State.BACK_AWAY_FROM_FLOWER
                 ||next==State.RAISE_FLOWER_ARM||next==State.CLEAR_FLOWER||next==State.TO_OUTLET_LANE
                 ||next==State.TO_PICKUP||next==State.INTAKE){flowerSequenceActive=true;}
-        if(next==State.PRESS_FLOWER){collecting=true;}
-        if(next==State.PARK||next==State.TO_HIVE||next==State.RETURN_STRAFE_TO_HIVE||next==State.RETURN_FORWARD_TO_HIVE||next==State.ERROR||next==State.STOPPED){collecting=false;flowerSequenceActive=false;}
+        // After the first wall shot, keep the intake running through the
+        // complete Flower route and return corridor.  It stops only once the
+        // robot reaches the wall-shot location again (or parks/stops).
+        if(next==State.RETREAT_FROM_HIVE||next==State.PRESS_FLOWER){collecting=true;}
+        if(next==State.PARK||next==State.TO_HIVE||next==State.ERROR||next==State.STOPPED){collecting=false;flowerSequenceActive=false;}
     }
     private void move(State next,Pose target){destination=target;enter(next);}
     public void stop(){running=false;state=State.STOPPED;lastFeeding=false;io.apply(new Outputs());}
@@ -216,7 +219,8 @@ public final class TeamTwoHiveAuto implements RobotController {
                 boolean fixedShotState=state==State.VERIFY_HIVE||state==State.SHOOTING;
                 boolean timedFlowerState=state==State.LOWER_FLOWER_ARM||state==State.PRESS_FLOWER
                         ||state==State.BACK_AWAY_FROM_FLOWER||state==State.RAISE_FLOWER_ARM
-                        ||state==State.RETURN_STRAFE_TO_HIVE||state==State.RETURN_FORWARD_TO_HIVE;
+                        ||state==State.RETURN_STRAFE_TO_HIVE||state==State.RETURN_FORWARD_TO_HIVE
+                        ||state==State.RETREAT_FROM_HIVE||state==State.ALIGN_FLOWER||state==State.TO_FLOWER;
                 if(!fixedShotState&&!timedFlowerState){
                     message="Odometry stale; holding safely and retrying current Team 2 state";
                     out.pipeline=pipeline();io.apply(out);return;
@@ -238,7 +242,13 @@ public final class TeamTwoHiveAuto implements RobotController {
                             &&Math.abs(Pose.angle(current.heading-destination.heading))<=Math.toRadians(3)){
                         feedTime=0;spinAt=Double.NaN;lastFeeding=batchFed=false;
                         hive=new HiveVision(field,alliance);shotGate=new HiveVision(field,alliance);centeredShotGate=new HiveShotGate(field,alliance,true);
-                        enter(State.VERIFY_HIVE);message="Back at wall shooting pose; verify a current AprilTag";
+                        if(batches>0){
+                            // The opening shot was already authorized by a live
+                            // raised-Hive tag. Returning from the Flower does
+                            // not need to rediscover that unchanged tilt.
+                            practiceTagLatched=true;enter(State.SHOOTING);
+                            message="Back at wall shot after Flower; prior Hive authorization latched, spin up for return feed";
+                        }else{enter(State.VERIFY_HIVE);message="Back at wall shooting pose; verify a current AprilTag";}
                     }else{
                         out=directHiveShotMove(destination);
                         message="Return directly to wall shooting pose";
@@ -250,9 +260,12 @@ public final class TeamTwoHiveAuto implements RobotController {
                     // the Flower or steer the chassis into it.
                     if(Math.abs((destination.x-current.x)*Math.sin(current.heading)
                             -(destination.y-current.y)*Math.cos(current.heading))<=1.2||age>=2.5){
-                        move(State.RETURN_FORWARD_TO_HIVE,field.teamTwoWallHive[alliance]);
-                        message=age>=2.5?"Flower return strafe timed out; drive straight forward to wall shot"
-                                :"Flower clear; aligned with wall-shot lane, drive straight forward";
+                        // Keep the arm down while backing and strafing so any
+                        // loose pollen can still enter. Lift only here, just
+                        // before the final straight drive to the wall shot.
+                        enter(State.RAISE_FLOWER_ARM);
+                        message=age>=2.5?"Flower return strafe timed out; raise intake, then drive straight to wall shot"
+                                :"Wall-shot lane reached; raise intake immediately before final forward return";
                     }else{
                         out=strafeToWallShotLane(destination);
                         message="Return from Flower: strafe only into wall-shot lane";
@@ -262,28 +275,56 @@ public final class TeamTwoHiveAuto implements RobotController {
                     // The final leg is straight forward only, at the same fixed
                     // heading used for Flower intake and rear-facing shooting.
                     if(current.distance(destination)<=1.5||age>=2.5){
+                        collecting=false;
                         feedTime=0;spinAt=Double.NaN;lastFeeding=batchFed=false;
                         hive=new HiveVision(field,alliance);shotGate=new HiveVision(field,alliance);centeredShotGate=new HiveShotGate(field,alliance,true);
-                        enter(State.VERIFY_HIVE);message=age>=2.5?"Timed wall-shot return complete; verify a current AprilTag"
-                                :"Back at wall shooting pose; verify a current AprilTag";
+                        // This return follows a completed, tag-authorized first
+                        // feed. Keep that authorization through the Flower loop
+                        // so a momentary camera view cannot block the second feed.
+                        practiceTagLatched=true;enter(State.SHOOTING);
+                        message=age>=2.5?"Timed wall-shot return complete; prior Hive authorization latched for return feed"
+                                :"Back at wall shot after Flower; prior Hive authorization latched for return feed";
                     }else{
                         out=driveForwardToWallShot(destination);
                         message="Return from Flower: drive straight forward to wall shooting pose";
                     }
                     break;
                 case RETREAT_FROM_HIVE:
+                    // Fixed wall-shot exit: no route search or heading turn can
+                    // trap the robot in RETREAT_FROM_HIVE after the first feed.
+                    if(current.distance(destination)<=1.5||age>=2.5){
+                        move(State.ALIGN_FLOWER,field.teamTwoFlowerAlign[alliance]);
+                        message="Hive retreat complete; strafe straight into the Flower lane";
+                    }else{
+                        out=directParkMove(destination);
+                        message="After shooting: reverse/translate clear of Hive toward Flower lane";
+                    }
+                    break;
                 case ALIGN_FLOWER:
+                    if(current.distance(destination)<=1.5||age>=2.5){
+                        enter(State.LOWER_FLOWER_ARM);
+                        message="Flower lane reached; lower intake arm before approach";
+                    }else{
+                        out=directParkMove(destination);
+                        message="After shooting: move sideways into Flower lane";
+                    }
+                    break;
                 case TO_FLOWER:
+                    if(current.distance(destination)<=1.5||age>=2.5){
+                        enter(State.PRESS_FLOWER);
+                        message="At Flower with intake arm down; start timed intake contact";
+                    }else{
+                        out=directParkMove(destination);
+                        message="Flower approach: drive straight to intake contact";
+                    }
+                    break;
                 case CLEAR_FLOWER:
                 case TO_OUTLET_LANE:
                 case TO_PICKUP:
                     out=nav.move(current,destination);
                     if(out==null){
                         out=new Outputs();
-                        if(state==State.RETREAT_FROM_HIVE){move(State.ALIGN_FLOWER,field.teamTwoFlowerAlign[alliance]);message="Wall clearance complete; strafe straight into the Flower lane";}
-                        else if(state==State.ALIGN_FLOWER){enter(State.LOWER_FLOWER_ARM);message="Aligned well back from Flower; lower intake arm before final forward approach";}
-                        else if(state==State.TO_FLOWER){enter(State.PRESS_FLOWER);message="At Flower with intake arm already down; begin straight intake contact";}
-                        else if(state==State.CLEAR_FLOWER){move(State.TO_OUTLET_LANE,field.teamTwoFlowerLane[alliance]);message="Back into the outlet lane without crossing released pollen";}
+                        if(state==State.CLEAR_FLOWER){move(State.TO_OUTLET_LANE,field.teamTwoFlowerLane[alliance]);message="Back into the outlet lane without crossing released pollen";}
                         else if(state==State.TO_OUTLET_LANE){move(State.TO_PICKUP,field.teamTwoFlowerPickup[alliance]);message="Face incoming Flower pollen from the open lane";}
                         else{enter(State.INTAKE);message="Find yellow Flower pollen with Limelight; require four measured pollen";}
                     }else{
@@ -298,7 +339,11 @@ public final class TeamTwoHiveAuto implements RobotController {
                     }
                     break;
                 case VERIFY_HIVE:
-                    if(aimForShooting&&!shootingAlignment.align(s,now,out)){
+                    // Team Two is taped at this shot pose. It may wait for a
+                    // tag, but must not drive or turn while the target is
+                    // inaccurate. Five-plus visible tags authorizes the same
+                    // shot through ShootingAim's both-Hives override.
+                    if(aimForShooting&&!shootingAlignment.align(s,now,out,8.0,false)){
                         spinAt=Double.NaN;message="Aligning wall shot: need a fresh centered Hive AprilTag";break;
                     }
                     // At the taped wall shot, a current correct far-Hive ID is
@@ -318,7 +363,7 @@ public final class TeamTwoHiveAuto implements RobotController {
                     }
                     break;
                 case SHOOTING:
-                    if(aimForShooting&&!shootingAlignment.align(s,now,out)){
+                    if(aimForShooting&&!shootingAlignment.align(s,now,out,8.0,false)){
                         spinAt=Double.NaN;lastFeeding=false;message="Feed paused: waiting for AprilTag aim to return";break;
                     }
                     // Admit a complete batch once. Counts naturally drop after each real shot;
@@ -346,7 +391,7 @@ public final class TeamTwoHiveAuto implements RobotController {
                     // The TO_FLOWER pose is exactly +90 degrees for Red and
                     // -90 degrees for Blue: straight toward the Flower. Drive
                     // only after the arm has had time to lower while stopped.
-                    if(age>=flowerIntakeSeconds){enter(State.BACK_AWAY_FROM_FLOWER);message="Flower intake complete; back straight away before raising arm";}
+                    if(age>=flowerIntakeSeconds){enter(State.BACK_AWAY_FROM_FLOWER);message="Flower movement complete; back away and raise intake immediately";}
                     else {
                         // This is deliberately time-based rather than vision- or
                         // odometry-based: every Flower visit runs the full six
@@ -355,8 +400,8 @@ public final class TeamTwoHiveAuto implements RobotController {
                         // use only a short reverse shake to release more pollen.
                         // No strafe or turn is allowed near the Flower.
                         out.intakePower=1;
-                        double wiggle=age%.55;
-                        out.forward=wiggle<.43?.40:-.16;
+                        double wiggle=age%1.10;
+                        out.forward=wiggle<.86?.40:-.16;
                         message="Flower intake active: rapid forward/back sweep ("
                                 +String.format(java.util.Locale.ROOT,"%.1f",Math.max(0,flowerIntakeSeconds-age))
                                 +" s remaining)";
@@ -368,19 +413,23 @@ public final class TeamTwoHiveAuto implements RobotController {
                     if(age>=.75){move(State.TO_FLOWER,flowerApproach());message="Flower arm down; drive straight forward toward Flower";}
                     break;
                 case BACK_AWAY_FROM_FLOWER:
-                    // Reverse straight back at the same heading; never strafe
-                    // or turn near the Flower after the collection pass.
-                    if(age>=.90){enter(State.RAISE_FLOWER_ARM);message="Clear of Flower; return intake arm to its original position";}
-                    else out.forward=-.18;
-                    break;
-                case RAISE_FLOWER_ARM:
-                    // Keep still while the positional servo returns up, then
-                    // return through fixed no-turn legs: the back-away state has
-                    // already cleared the Flower, then strafe, then drive forward.
-                    if(age>=.65){
+                    // Reverse farther while the Flower arm is still down. This
+                    // sweeps loose pollen toward the intake before the return
+                    // strafe and final wall-shot approach.
+                    if(age>=1.25){
                         Pose wall=field.teamTwoWallHive[alliance];
                         move(State.RETURN_STRAFE_TO_HIVE,new Pose(wall.x,current.y,current.heading));
-                        message="Flower arm raised; strafe into the wall-shot lane";
+                        message="Clear of Flower; keep intake down while strafing into wall-shot lane";
+                    }
+                    else out.forward=-.25;
+                    break;
+                case RAISE_FLOWER_ARM:
+                    // Raise only after the return strafe is complete, directly
+                    // before the final forward leg to the wall-shot pose.
+                    if(age>=.65){
+                        Pose wall=field.teamTwoWallHive[alliance];
+                        move(State.RETURN_FORWARD_TO_HIVE,wall);
+                        message="Flower arm raised; final straight drive to wall-shot pose";
                     }
                     break;
                 case INTAKE:
@@ -427,7 +476,9 @@ public final class TeamTwoHiveAuto implements RobotController {
             // generic collision look-ahead calls it constrained; retry/park
             // timing still protects the overall routine.
             out.pipeline=pipeline();
-            out.intakePower=running&&collecting&&s.ballCount<4&&state!=State.PARK?1:0;
+            // Keep the intake active for the whole Team Two routine. It only
+            // stops when parking (or STOP/error) disables all mechanism output.
+            out.intakePower=running&&state!=State.PARK?1:0;
             if(state==before&&colorPickupActive()){
                 ColorPickup.steer(s,now,out,collectBlue,collectRed);
                 out=guardMove(out);

@@ -63,6 +63,14 @@ public final class ShootingAim {
         }
 
         public boolean align(Sensors sensors,double now,Outputs outputs) {
+            return align(sensors,now,outputs,ALIGNMENT_TOLERANCE_DEGREES,true);
+        }
+
+        /**
+         * Check a shot aim without necessarily commanding a correction turn.
+         * Fixed starting poses use this to wait still for a valid tag frame.
+         */
+        public boolean align(Sensors sensors,double now,Outputs outputs,double toleranceDegrees,boolean allowTurn) {
             Vision vision=sensors.vision;
             outputs.shooterPower=outputs.feederPower=0;
             outputs.forward=outputs.strafeRight=0;
@@ -80,9 +88,9 @@ public final class ShootingAim {
             if(vision.targets.length==0||vision.aimTagCount<MIN_VISIBLE_TAGS||!Double.isFinite(vision.tx)){
                 return false;
             }
-            if(Math.abs(vision.tx)>ALIGNMENT_TOLERANCE_DEGREES+1e-9){
+            if(Math.abs(vision.tx)>toleranceDegrees+1e-9){
                 reset();
-                if(sensors.odometryValid&&sensors.pose!=null&&sensors.pose.finite()
+                if(allowTurn&&sensors.odometryValid&&sensors.pose!=null&&sensors.pose.finite()
                         &&now-sensors.sampledAt>=0&&now-sensors.sampledAt<=.25)
                     outputs.turnClockwise=FieldLayout.clip(vision.tx*TURN_GAIN_PER_DEGREE,MAX_TURN_POWER);
                 return false;
