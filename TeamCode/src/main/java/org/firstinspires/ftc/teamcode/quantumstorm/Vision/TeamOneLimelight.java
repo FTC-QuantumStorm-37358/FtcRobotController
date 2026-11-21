@@ -104,7 +104,11 @@ public final class TeamOneLimelight implements AutoCloseable {
             // arrived late, but never invents a detection from an old result.
             if(!Double.isFinite(age)||age<0||age>1.0||!Double.isFinite(stamp))return empty;
             if(!Double.isNaN(frameTimestamp)&&stamp<frameTimestamp)return empty;
-            if(stamp!=frameTimestamp){frameTimestamp=stamp;capturedAt=now-age;}
+            // A steady, continuously visible tag can be returned with the same
+            // Limelight timestamp. Use the reported result age for freshness so
+            // the autonomous modes keep a valid shot permission while stationary.
+            if(stamp!=frameTimestamp)frameTimestamp=stamp;
+            capturedAt=now-age;
             List<Target> targets=new ArrayList<Target>();
             if(pipeline==0&&!idleScan){
                 List<LLResultTypes.FiducialResult> tags=result.getFiducialResults();
@@ -136,7 +140,9 @@ public final class TeamOneLimelight implements AutoCloseable {
         List<LLResultTypes.ColorResult> colors=lastResult==null?null:lastResult.getColorResults();
         telemetry.addData("AprilTags seen",tags==null?0:tags.size());
         telemetry.addData("Colors seen",colors==null?0:colors.size());
-        telemetry.addData("Turn suggestion",ShootingAim.turnSuggestion(targetValid,aimingVision.tx));
+        telemetry.addData("Turn suggestion",shootingAuthorized&&!targetValid
+                ?"Shot authorization latched; continuing timed feed"
+                :ShootingAim.turnSuggestion(targetValid,aimingVision.tx));
         double angle=servo.getCommandedTiltDegrees();
         telemetry.addData("Camera servo",Double.isFinite(angle)&&Math.abs(angle)<=1.0?"NEUTRAL":"NOT NEUTRAL");
     }

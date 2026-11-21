@@ -64,6 +64,11 @@ public class Constants {
     public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.01; // 60 RPM
     public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
     public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
+    // Ordinary open-loop power, shared by autonomous and TeleOp.
+    public final static double SHOOTER_POWER = 0.59;
+    public final static double SHOOTER_POWER_INCREMENT = 0.01;
+    public final static double SHOOTER_POWER_MIN = -1.0;
+    public final static double SHOOTER_POWER_MAX = 1.0;
 
     public final static double SHOOTER_SERVO_POWER = 1;
 
@@ -118,7 +123,7 @@ public class Constants {
     public final static double FLOWER_ANGLE_MAX_DEG = 0;
 
     public final static double FLOWER_UP_DEG = 0;       // neutral, pointing up; also where it goes on INIT
-    public final static double FLOWER_DOWN_DEG = -135;  // forward and down, for intaking
+    public final static double FLOWER_DOWN_DEG = -140;  // forward and down, for intaking
     public final static double FLOWER_NUDGE_DEG = 2;    // per LB + D-pad press on gamepad 2, for tuning
 
     // =========================================================
@@ -134,10 +139,10 @@ public class Constants {
     public final static double LIMELIGHT_COLOR_PIPELINE_DWELL_SEC = 3.0;
 
     // Pipeline numbers as set up in the Limelight web UI
-    // The configured Limelight profile uses slot 1 for Hive AprilTags and
-    // slot 0 for the yellow-pollen color pipeline.
-    public final static int LIMELIGHT_APRILTAG_PIPELINE = 1;
-    public final static int LIMELIGHT_COLOR_PIPELINE = 0;
+    // The current Limelight profile uses slot 0 for Hive AprilTags and
+    // slot 1 for the yellow-pollen color pipeline.
+    public final static int LIMELIGHT_APRILTAG_PIPELINE = 0;
+    public final static int LIMELIGHT_COLOR_PIPELINE = 1;
     public final static int LIMELIGHT_YELLOW_PIPELINE = LIMELIGHT_COLOR_PIPELINE;
     // Additional color slots must match the Limelight web UI configuration.
     public final static int LIMELIGHT_BLUE_PIPELINE = 2;
@@ -150,8 +155,8 @@ public class Constants {
      * When true, Team 1 permits preload feeding from any fresh AprilTag frame.
      * Set false before a match to restore official own-Hive ID/height/pose checks.
      */
-    // Practice field / printed-tag mode. Keep false for the normal robot
-    // routine: shooting then requires the correct Hive-side AprilTag IDs.
+    // Practice field mode: a currently visible AprilTag permits feeding.
+    // Set false before a match to restore the official Hive-side tag checks.
     public final static boolean PRACTICE_ALLOW_ANY_FRESH_APRILTAG = false;
 
     // Team One preload shots require calibrated own raised-Cell tags.
@@ -278,7 +283,7 @@ public class Constants {
     public final static double AUTO_APRILTAG_TIMEOUT_SEC = 3.0;    // no tag / not aligned -> ERROR
     public final static double AUTO_SHOOTER_SPINUP_SEC = 1.0;      // flywheel spin-up before feeding
     /** Team 1 keeps feeding longer so all four preloads can clear before Garden travel. */
-    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 5.0;
+    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 7;
     /** Match Team 1's longer feed window so all four preloads can clear. */
     public final static double AUTO_TEAM_TWO_FEED_TIME_SEC = AUTO_TEAM_ONE_FEED_TIME_SEC;
     public final static double AUTO_AIM_TOLERANCE_DEG = 2.0;       // AprilTag tx within this = aligned

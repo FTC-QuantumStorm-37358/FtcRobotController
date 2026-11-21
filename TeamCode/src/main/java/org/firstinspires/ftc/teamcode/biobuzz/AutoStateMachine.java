@@ -208,15 +208,18 @@ public final class AutoStateMachine implements RobotController {
             destination=currentPose==null?null:field.parkingTarget(currentPose,alliance);resumeState=null;enter(State.PARK);
         }
         if(!sensors.odometryValid||!sensors.pose.finite()||now-sensors.sampledAt<0||now-sensors.sampledAt>.25){
-            if(movementOnly){safetyHold(readError.isEmpty()?"Odometry unavailable or stale; drive held OFF":readError,now);last=out;io.apply(out);return;}
-            fail("Odometry unavailable or stale",false);running=false;last=out;io.apply(out);return;
+            // Never end autonomous for one missed Pinpoint sample. Hold the
+            // drivetrain safely, then resume this exact state once a valid
+            // measurement returns; the normal timed parking fallback remains.
+            safetyHold(readError.isEmpty()?"Odometry unavailable or stale; drive held OFF":readError,now);
+            last=out;io.apply(out);return;
         }
         if(!movementOnly&&(sensors.ballCount<-1||sensors.ballCount>4||(useVision&&(sensors.ballCount<0||!sensors.cameraConnected)))){
             fail(sensors.ballCount<0||sensors.ballCount>4?"Ball-count sensor unavailable":"Camera disconnected",false);running=false;last=out;io.apply(out);return;
         }
         if(useVision)hiveVision.update(sensors.vision,now);
         currentPose=sensors.pose;
-        if(movementOnly&&state==State.SAFETY_HOLD){
+        if(state==State.SAFETY_HOLD){
             double held=now-holdAt;state=resumeState;resumeState=null;stateAt=resumeStateAt+held;
             if(!Double.isNaN(shooterAt))shooterAt+=held;
             navigator.reset();progressPose=currentPose;progressAt=now;error="";
