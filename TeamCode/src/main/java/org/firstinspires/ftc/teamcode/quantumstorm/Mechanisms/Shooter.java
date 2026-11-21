@@ -18,6 +18,7 @@ public class Shooter {
     private final DcMotorEx shooter;
     private double targetRpm;
     private final CRServo feeder;
+    private boolean feederPulseActive;
     private final org.firstinspires.ftc.teamcode.biobuzz.FeedCadence cadence=new org.firstinspires.ftc.teamcode.biobuzz.FeedCadence(Constants.SPINDEXER_FEED_PULSE_SEC,Constants.SPINDEXER_SHOT_GAP_SEC);
     private double now(){return System.nanoTime()/1e9;}
 
@@ -49,12 +50,17 @@ public class Shooter {
         targetRpm=Constants.SHOOTER_BASE_RPM*scale;
         // One RPM is six degrees per second; the SDK uses the configured encoder resolution.
         shooter.setVelocity(targetRpm*6.0,AngleUnit.DEGREES);
-        feeder.setPower(cadence.apply(scale>0?feedPower:0,now())*Constants.SHOOTER_SERVO_POWER);
+        double feederCommand=cadence.apply(scale>0?feedPower:0,now());
+        feederPulseActive=feederCommand>0;
+        feeder.setPower(feederCommand*Constants.SHOOTER_SERVO_POWER);
     }
 
     public double getTargetRpm() { return targetRpm; }
 
     public double getMeasuredRpm() { return shooter.getVelocity(AngleUnit.DEGREES)/6.0; }
+
+    /** True only while the current timed spindexer pulse is actually feeding a pollen. */
+    public boolean isFeederPulseActive() { return feederPulseActive; }
 
     public void feed() {
         feeder.setPower(cadence.apply(1,now())*Constants.SHOOTER_SERVO_POWER);
@@ -62,12 +68,14 @@ public class Shooter {
 
     public void stopFeed() {
         cadence.apply(0,now());
+        feederPulseActive=false;
         feeder.setPower(0);
     }
 
     public void stop() {
         targetRpm=0;
         cadence.apply(0,now());
+        feederPulseActive=false;
         SafeShutdown.run(()->shooter.setVelocity(0),()->feeder.setPower(0));
     }
 }

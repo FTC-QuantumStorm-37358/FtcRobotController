@@ -60,7 +60,8 @@ public class Constants {
     // SDK's generic GoBILDA 5202/3/4 profile instead describes the 99.5:1 gearbox.
     public final static double SHOOTER_ENCODER_TICKS_PER_REV = 28.0;
     public final static double SHOOTER_GEAR_RATIO = 1.0;
-    public final static double SHOOTER_RPM_MULTIPLIER = 0.49; // 2940 RPM
+    /** Fixed autonomous/TeleOp flywheel command: 50.5% of 6000 RPM = 3030 RPM. */
+    public final static double SHOOTER_RPM_MULTIPLIER = 0.5075;
     public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.01; // 60 RPM
     public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
     public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
@@ -283,7 +284,7 @@ public class Constants {
     public final static double AUTO_APRILTAG_TIMEOUT_SEC = 3.0;    // no tag / not aligned -> ERROR
     public final static double AUTO_SHOOTER_SPINUP_SEC = 1.0;      // flywheel spin-up before feeding
     /** Team 1 keeps feeding longer so all four preloads can clear before Garden travel. */
-    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 7;
+    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 6;
     /** Match Team 1's longer feed window so all four preloads can clear. */
     public final static double AUTO_TEAM_TWO_FEED_TIME_SEC = AUTO_TEAM_ONE_FEED_TIME_SEC;
     public final static double AUTO_AIM_TOLERANCE_DEG = 2.0;       // AprilTag tx within this = aligned
