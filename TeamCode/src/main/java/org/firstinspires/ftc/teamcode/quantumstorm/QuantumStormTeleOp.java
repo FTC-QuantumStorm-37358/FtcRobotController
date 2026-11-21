@@ -60,12 +60,20 @@ public class QuantumStormTeleOp extends LinearOpMode {
     protected void waitForDriverStart() { waitForStart(); }
     protected double updateShooterTarget(double currentSetting) { return currentSetting; }
     protected boolean manualShooterAdjustment() { return true; }
+    protected boolean feederRequiresShooterRunning() { return !manualShooterAdjustment(); }
     protected boolean shooterTargetReady() { return true; }
     protected void addShooterTargetTelemetry() { }
+    protected double initialShooterSetting() { return Constants.SHOOTER_RPM_MULTIPLIER; }
+    protected String shooterControlLabel() { return "REV Hub velocity / encoder RPM"; }
+    protected void configureShooterMotor(DcMotorEx motor) { ShooterVelocityControl.configure(motor); }
+    protected boolean applyShooterOutput(DcMotorEx motor, double multiplier) {
+        ShooterVelocityControl.setOutput(motor, multiplier);
+        return true;
+    }
 
     @Override
     public void runOpMode() {
-        shooterSetting = Constants.SHOOTER_RPM_MULTIPLIER;
+        shooterSetting = initialShooterSetting();
         previousShooterSetting = shooterSetting;
 
         // =========================================================
@@ -108,7 +116,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         shooter.setZeroPowerBehavior(
                 DcMotor.ZeroPowerBehavior.FLOAT);
-        ShooterVelocityControl.configure(shooter);
+        configureShooterMotor(shooter);
 
 
         // =========================================================
@@ -130,7 +138,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
     private void runDriverControls() {
         telemetry.addLine("Quantum Storm Two Driver Ready");
-        telemetry.addData("Shooter control", "VELOCITY / encoder RPM");
+        telemetry.addData("Shooter control", shooterControlLabel());
         telemetry.addData("Shooter encoder scale", "%.0f ticks/rev; %.1f:1; %.0f max RPM",
                 shooter.getMotorType().getTicksPerRev(), shooter.getMotorType().getGearing(),
                 shooter.getMotorType().getMaxRPM());
@@ -276,7 +284,10 @@ public class QuantumStormTeleOp extends LinearOpMode {
             previousLeftTrigger = currentLeftTrigger;
 
 
-            ShooterVelocityControl.setOutput(shooter, shooterRunning ? shooterSetting : 0);
+            if (!applyShooterOutput(shooter, shooterRunning ? shooterSetting : 0)) {
+                shooterRunning = false;
+                targetReady = false;
+            }
 
 
             // =====================================================
@@ -290,7 +301,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // your actual physical mechanism.
             // =====================================================
 
-            if (!targetReady || (!manualShooterAdjustment() && !shooterRunning)) {
+            if (!targetReady || (feederRequiresShooterRunning() && (!shooterRunning || shooterSetting == 0))) {
                 feedCadence.apply(0,System.nanoTime()/1e9);
                 shooterServo.setPower(0);
                 spindexerDpadUp = false;
@@ -345,7 +356,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
                     : "AUTOMATIC: distance calibration");
 
 
-            telemetry.addData("Shooter control", "VELOCITY / encoder RPM");
+            telemetry.addData("Shooter control", shooterControlLabel());
             telemetry.addData(
                     "Shooter 1",
                     "%s | RPM multiplier %.2f",
@@ -407,7 +418,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
         drive.stop();
 
         intake.setPower(0);
-        ShooterVelocityControl.setOutput(shooter, 0);
+        applyShooterOutput(shooter, 0);
 
         feedCadence.apply(0,System.nanoTime()/1e9);
         shooterServo.setPower(0);
@@ -417,7 +428,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
      * Keeps the adjustable RPM fraction inside [-1, 1].
      * The range spans both signs so tuning can reverse the motor if needed.
      */
-    private double clampShooterSetting(double setting) {
+    protected double clampShooterSetting(double setting) {
 
         if (setting < -1.0) {
             return -1.0;
