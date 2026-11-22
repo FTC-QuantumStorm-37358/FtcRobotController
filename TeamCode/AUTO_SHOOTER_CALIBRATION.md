@@ -1,4 +1,4 @@
-# Physics-based quadrant shooter
+# Table-based quadrant shooter
 
 Select **Biobuzz-Quantum Storm Auto-Shooter-Power** on the Driver Station. This separate TeleOp uses encoder-regulated `setVelocity()` and the calibrated 28-count, 1:1, 6000 RPM motor configuration. The regular **Biobuzz-Quantum Storm Tele-Op** retains manual RPM adjustment. Autonomous shooter behavior is unchanged.
 
@@ -24,52 +24,45 @@ The selected hive shares the robot center's quadrant. For these symmetric center
 
 This initialization assigns a known pose; it cannot discover an arbitrary starting location. Reinitializing requires returning the robot to the selected start reference. The mode may be driven from that reference to A, B, C or any other location.
 
-## Equation and calibration
+## Distance and RPM table
 
-Assumptions: launch angle 70 degrees; ball exit 8 inches above ground; target 60 inches above ground; ball exit 8 inches toward the target from robot center. Distances subtract that offset assuming the rear shooter is aimed directly at the selected hive. Robot heading is not used to project an unaligned ball exit. Air resistance and spin are omitted.
+The RPM points and FTCLib `InterpLUT` interpolation follow Stealth Robotics' [ShotCalculator.java at commit 7259c01](https://github.com/Stealth-Robotics/AutonomousPrime2026/blob/7259c012a7725d9c79e0abc5648350a549c068e2/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/util/ShotCalculator.java). The original repository's FIRST copyright and redistribution notice is retained in this repository's root `LICENSE`.
 
-For robot `(x, y)` and selected hive `(hx, hy)`:
+| Shooter-to-hive distance (in) | Target RPM |
+| ---: | ---: |
+| 24 | 2900 |
+| 30 | 3000 |
+| 40 | 3100 |
+| 47 | 3120 |
+| 50 | 3200 |
+| 60 | 3300 |
+| 70 | 3400 |
+| 80 | 3500 |
+
+FTCLib 2.1.1 performs cubic interpolation between these points. We preserve its actual curve, including a small dip from approximately 3104.5 RPM at 42 inches to 3102.4 RPM at 44 inches. As in Stealth's code, the lookup distance is clamped to **24.1–79.9 inches**, avoiding the library's excluded endpoints. Shorter or longer distances keep the corresponding endpoint command (approximately 2901.67 or 3499 RPM) and show `CLAMPED_NEAR` or `CLAMPED_FAR`. Actual distance and lookup distance appear separately in telemetry. No extrapolation is performed.
+
+These are **their calibration values**, originally paired with an adjustable hood. Our hood stays fixed at approximately 70 degrees. The table is a starting point for physical testing, not a guarantee of landing in the hive. This replaces the A/B projectile fit in this entry: the old 0.50/0.49 reference multipliers and falling-trajectory rejection are no longer used. There is no hood servo requirement or hood command.
+
+Like Stealth, we rotate the robot-to-shooter offset into field coordinates before measuring the horizontal distance. We retain our own 8-inch rear offset and centered field coordinates, rather than their turret offset and alliance coordinate frame. For robot-center `(x, y)`, front heading `h` (counterclockwise from +X), and selected hive `(hx, hy)`:
 
 ```
-d = max(0, hypot(x - hx, y - hy) - 8)           // inches from ball exit
-v = sqrt(386.09 * d^2 /
-         (2 * cos(70 deg)^2 * (d * tan(70 deg) - 52)))  // inches/second
-rpm = (v - b) / a
-multiplier = rpm / 6000
+shooterX = x - 8 * cos(h)
+shooterY = y - 8 * sin(h)
+distance = hypot(hx - shooterX, hy - shooterY)
+targetRPM = table(clamp(distance, 24.1, 79.9))
+multiplier = targetRPM / 6000
 ```
 
-The ball-speed relationship is affine: `v = a * rpm + b`. The coefficients are derived from only the two straight measurements:
-
-- A: robot `(-12.75, -62.9)`; shot distance 48.9 inches; 3000 RPM / multiplier 0.50.
-- B: robot `(-12.75, -57)`; shot distance 43 inches; 2940 RPM / multiplier 0.49.
-
-```
-a = (requiredBallSpeed(48.9) - requiredBallSpeed(43)) / 60
-  = 0.068580457043... inches/second per RPM
-b = requiredBallSpeed(43) - a * 2940
-  = 13.160922336... inches/second
-```
-
-The discarded 0.54 side measurement is not part of this fit. The last requested C position is `(-36, -62.9)`:
-
-| Position | Shot distance | Target RPM | Multiplier |
-| --- | ---: | ---: | ---: |
-| A (-12.75, -62.9) | 48.9000 in | 3000.00 | 0.5000 |
-| B (-12.75, -57) | 43.0000 in | 2940.00 | 0.4900 |
-| C (-36, -62.9) | 53.4668 in | 3059.20 | 0.5099 |
-
-Mirroring the X and/or Y signs gives the same distances and RPMs. Fractional multipliers are sent directly; they are not rounded to the old manual 0.01 button steps.
-
-The model is calibrated only between 43 and 48.9 inches. Other achievable distances use the equation with an **EXTRAPOLATED** telemetry label. Ball exit speeds were inferred from the ideal flight equation rather than directly measured; friction, compression, spin and slip can vary. Hardware validation is required, especially outside the calibration interval.
+The offset remains correct while the robot is turning; only when the rear faces the hive does this simplify to center distance minus 8 inches. Heading is read in degrees from Pinpoint and converted to radians for trigonometry. Target selection remains based on the robot center's quadrant, even if the shooter offset crosses an axis. No moving-shot/flight-time compensation is applied; aim and stop before feeding.
 
 ## Invalid solutions and controls
 
-A falling crossing requires `d > 2 * 52 / tan(70 degrees)`, approximately **37.8529 inches**. Equality is an apex-only arrival; shorter distances cannot hit the target on the descending branch at this angle. These positions stop the shooter/feed and show `TOO_CLOSE_FOR_FALLING_SHOT`. Nonfinite/out-of-field positions, invalid Pinpoint samples, and required RPM above 6000 also stop output. The equation is not clamped to a different trajectory or replaced with an arbitrary endpoint speed.
+Nonfinite position or heading, out-of-field robot-center coordinates, and invalid Pinpoint samples block shooter/feed output. A clamped lookup is still a valid RPM command and does not block feeding. There is no projectile-height or falling-arrival check with this empirical table.
 
 Gamepad 1 retains the default driving/intake controls after START. Gamepad 2 A starts the shooter; B stops it. A held through INIT/START must be released and pressed again. D-pad retains paced forward feeding and reverse control, but in this automatic mode feeding requires the shooter to be ON and the shot solution valid. The existing flower controls and D-pad release guard are preserved. Following an invalid solution, a fresh A press after recovery is required to restart. RPM adjustment through BACK + LB/LT is disabled in this entry because the target is calculated each loop. The driver still controls aiming and when to feed; this mode does not add an RPM-at-speed feeding gate.
 
-Telemetry shows pose, quadrant, hive target, ball-exit distance, calculated RPM/multiplier, actual/commanded RPM and validity/extrapolation status. Normal STOP or an exception during the control loop commands zero velocity and stops the other mechanisms.
+Telemetry shows pose, quadrant, hive target, ball-exit distance, calculated RPM/multiplier, rear shooter position, lookup distance, actual/commanded RPM and validity/clamping status. Normal STOP or an exception during the control loop commands zero velocity and stops the other mechanisms.
 
 ## Verification
 
-`DistanceShooterCalibrationChecks` verifies A/B/C in all quadrants, mirrored starting references, nearest-hive selection, deterministic axis ties, continuous RPM at axis crossings, invalid inputs and impossible shots. A field grid independently integrates the commanded trajectories to verify arrival at 60 inches while falling. Existing velocity and spindexer regression checks cover motor scale/API and feed cadence. Run the Android build before deploying; these desktop checks cannot validate physical ball flight or field placement.
+`TableShooterCalibrationChecks` runs against the real FTCLib library and checks published RPM points, cubic interpolation, endpoint clamping, mirrored A/B/C distances, heading-dependent offsets, axis ties, invalid inputs, and a field/heading sweep. The legacy `DistanceShooterCalibrationChecks` still covers the retained physics helper, which no longer supplies this entry's RPM. Android compilation verifies TeleOp integration. Desktop checks do not validate physical ball flight or odometry placement.
