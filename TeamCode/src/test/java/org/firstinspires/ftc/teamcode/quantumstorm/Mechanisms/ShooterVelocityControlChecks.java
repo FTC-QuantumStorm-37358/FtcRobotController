@@ -53,9 +53,9 @@ public final class ShooterVelocityControlChecks {
             double actualRpm=280/motorType[0].getTicksPerRev()*60;
             check(actualRpm==600,"280 measured ticks/sec displays 600 RPM");
             ShooterVelocityControl.setOutput(motor,Constants.SHOOTER_RPM_MULTIPLIER);
-            check(Math.abs(output[0]-17640)<1e-6,"Default is 2940 RPM");
+            check(Math.abs(output[0]-18270)<1e-6,"Existing default remains 3045 RPM");
             ShooterVelocityControl.setOutput(motor,Constants.SHOOTER_RPM_MULTIPLIER+Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
-            check(Math.abs(output[0]-18000)<1e-6,"One step is 60 RPM");
+            check(Math.abs(output[0]-18630)<1e-6,"One step is 60 RPM");
             check(Constants.SHOOTER_BASE_RPM==DistanceShooterCalibration.MAX_RPM,
                     "Physics RPM limit matches the motor velocity scale");
             for (int xs : new int[]{-1,1}) for (int ys : new int[]{-1,1}) {
