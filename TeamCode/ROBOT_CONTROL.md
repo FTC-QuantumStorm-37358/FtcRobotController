@@ -1,6 +1,6 @@
 # Standalone BIOBUZZ robot control
 
-The separate **Biobuzz-Quantum Storm New Shooter Power Control** manual test uses FTCLib PIDF with encoder RPM feedback, `12 / batteryVoltage` compensation and `setPower()` output. It starts at a 0.50 multiplier (3000 RPM); see [controls and provisional gain tuning](SHOOTER_PIDF_TEST.md).
+The separate **Biobuzz-Quantum Storm New Shooter Power Control** manual test uses FTCLib PIDF with encoder RPM feedback, `12 / batteryVoltage` compensation and `setPower()` output. It starts at a 0.50 multiplier (3000 RPM). Gamepad 2 BACK + A uses Pinpoint to aim the rear shooter at the same-quadrant hive; initialize at the displayed field start. See [controls, field setup and provisional gain tuning](SHOOTER_PIDF_TEST.md).
 
 The separate **Biobuzz-Quantum Storm Auto-Shooter-Power** TeleOp calculates encoder RPM from distance to the hive in the robot's quadrant using the 70-degree projectile equation calibrated to A/B. It uses mirrored hive targets at `(±12.75, ±6)` and an INIT selector for mirrored Team 1 starting poses in an absolute field frame. See [setup, equation and limits](AUTO_SHOOTER_CALIBRATION.md). The normal TeleOp retains manual RPM adjustment.
 

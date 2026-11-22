@@ -61,6 +61,13 @@ public class QuantumStormTeleOp extends LinearOpMode {
     protected double updateShooterTarget(double currentSetting) { return currentSetting; }
     protected boolean manualShooterAdjustment() { return true; }
     protected boolean feederRequiresShooterRunning() { return !manualShooterAdjustment(); }
+    protected boolean feedingAllowed() { return true; }
+    protected boolean shooterStartAllowed() { return true; }
+    protected void updateDriverAssistance(boolean freshShooterA) { }
+    protected void driveRobot(MecanumDrive drive) {
+        // This robot's tested forward/backward convention is inverted; strafe/turn retain their signs.
+        drive.drive(gamepad1.left_stick_y, gamepad1.left_stick_x, gamepad1.right_stick_x);
+    }
     protected boolean shooterTargetReady() { return true; }
     protected void addShooterTargetTelemetry() { }
     protected double initialShooterSetting() { return Constants.SHOOTER_RPM_MULTIPLIER; }
@@ -185,6 +192,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         while (opModeIsActive()) {
 
+            updateDriverAssistance(!gamepad2.start && gamepad2.a && !previousGamepad2A);
             shooterSetting = updateShooterTarget(shooterSetting);
             boolean targetReady = shooterTargetReady();
             if (!targetReady) shooterRunning = false;
@@ -193,12 +201,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // GAMEPAD 1 - MECANUM DRIVE
             // =====================================================
 
-            // This robot's tested forward/backward convention is inverted.
-            // Correct only TeleOp's Y input; keep strafe, turn and autonomous unchanged.
-            drive.drive(
-                    gamepad1.left_stick_y,
-                    gamepad1.left_stick_x,
-                    gamepad1.right_stick_x);
+            driveRobot(drive);
 
 
             // =====================================================
@@ -259,7 +262,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // Start+A/B assigns controllers in the Driver Station, not shooter commands.
             // Require a fresh A press after assignment; STOP wins if both are pressed.
             if (!gamepad2.start) {
-                if (targetReady && gamepad2.a && !previousGamepad2A) shooterRunning = true;
+                if (targetReady && shooterStartAllowed() && gamepad2.a && !previousGamepad2A) shooterRunning = true;
                 if (gamepad2.b) shooterRunning = false;
             }
 
@@ -301,7 +304,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // your actual physical mechanism.
             // =====================================================
 
-            if (!targetReady || (feederRequiresShooterRunning() && (!shooterRunning || shooterSetting == 0))) {
+            if (!targetReady || !feedingAllowed()
+                    || (feederRequiresShooterRunning() && (!shooterRunning || shooterSetting == 0))) {
                 feedCadence.apply(0,System.nanoTime()/1e9);
                 shooterServo.setPower(0);
                 spindexerDpadUp = false;
