@@ -54,8 +54,28 @@ public class Constants {
 
     public final static double INTAKE_POWER = 1.0;
 
+    // Encoder-regulated motor-shaft speed, shared by the default TeleOp and autonomous.
+    public final static double SHOOTER_BASE_RPM = 6000.0;
+    // goBILDA 5203-2402-0001: 1:1, 6000 RPM, 28 quadrature counts/output revolution.
+    // SDK's generic GoBILDA 5202/3/4 profile instead describes the 99.5:1 gearbox.
+    public final static double SHOOTER_ENCODER_TICKS_PER_REV = 28.0;
+    public final static double SHOOTER_GEAR_RATIO = 1.0;
+    /** Fixed autonomous/TeleOp flywheel command: 50.75% of 6000 RPM = 3045 RPM. */
+    public final static double SHOOTER_RPM_MULTIPLIER = 0.5075;
+    public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.01; // 60 RPM
+    public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
+    public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
+
+    // Separate New Shooter Power Control test entry: provisional FTCLib gains, output in motor-power units.
+    // kF multiplies target RPM; tune on hardware at the 12 V reference before adding I/D.
+    public final static double SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER = 0.50;
+    public final static double SHOOTER_PIDF_P = 0.0001;
+    public final static double SHOOTER_PIDF_I = 0.0;
+    public final static double SHOOTER_PIDF_D = 0.0;
+    public final static double SHOOTER_PIDF_F = 1.0 / SHOOTER_BASE_RPM;
+    public final static double SHOOTER_PIDF_REFERENCE_VOLTS = 12.0;
     // Ordinary open-loop power, shared by autonomous and TeleOp.
-    public final static double SHOOTER_POWER = 0.54;
+    public final static double SHOOTER_POWER = 0.59;
     public final static double SHOOTER_POWER_INCREMENT = 0.01;
     public final static double SHOOTER_POWER_MIN = -1.0;
     public final static double SHOOTER_POWER_MAX = 1.0;
@@ -113,7 +133,7 @@ public class Constants {
     public final static double FLOWER_ANGLE_MAX_DEG = 0;
 
     public final static double FLOWER_UP_DEG = 0;       // neutral, pointing up; also where it goes on INIT
-    public final static double FLOWER_DOWN_DEG = -135;  // forward and down, for intaking
+    public final static double FLOWER_DOWN_DEG = -140;  // forward and down, for intaking
     public final static double FLOWER_NUDGE_DEG = 2;    // per LB + D-pad press on gamepad 2, for tuning
 
     // =========================================================
@@ -129,10 +149,10 @@ public class Constants {
     public final static double LIMELIGHT_COLOR_PIPELINE_DWELL_SEC = 3.0;
 
     // Pipeline numbers as set up in the Limelight web UI
-    // The configured Limelight profile uses slot 1 for Hive AprilTags and
-    // slot 0 for the yellow-pollen color pipeline.
-    public final static int LIMELIGHT_APRILTAG_PIPELINE = 1;
-    public final static int LIMELIGHT_COLOR_PIPELINE = 0;
+    // The current Limelight profile uses slot 0 for Hive AprilTags and
+    // slot 1 for the yellow-pollen color pipeline.
+    public final static int LIMELIGHT_APRILTAG_PIPELINE = 0;
+    public final static int LIMELIGHT_COLOR_PIPELINE = 1;
     public final static int LIMELIGHT_YELLOW_PIPELINE = LIMELIGHT_COLOR_PIPELINE;
     // Additional color slots must match the Limelight web UI configuration.
     public final static int LIMELIGHT_BLUE_PIPELINE = 2;
@@ -145,8 +165,8 @@ public class Constants {
      * When true, Team 1 permits preload feeding from any fresh AprilTag frame.
      * Set false before a match to restore official own-Hive ID/height/pose checks.
      */
-    // Practice field / printed-tag mode. Keep false for the normal robot
-    // routine: shooting then requires the correct Hive-side AprilTag IDs.
+    // Practice field mode: a currently visible AprilTag permits feeding.
+    // Set false before a match to restore the official Hive-side tag checks.
     public final static boolean PRACTICE_ALLOW_ANY_FRESH_APRILTAG = false;
 
     // Team One preload shots require calibrated own raised-Cell tags.
@@ -273,7 +293,7 @@ public class Constants {
     public final static double AUTO_APRILTAG_TIMEOUT_SEC = 3.0;    // no tag / not aligned -> ERROR
     public final static double AUTO_SHOOTER_SPINUP_SEC = 1.0;      // flywheel spin-up before feeding
     /** Team 1 keeps feeding longer so all four preloads can clear before Garden travel. */
-    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 5.0;
+    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 6;
     /** Match Team 1's longer feed window so all four preloads can clear. */
     public final static double AUTO_TEAM_TWO_FEED_TIME_SEC = AUTO_TEAM_ONE_FEED_TIME_SEC;
     public final static double AUTO_AIM_TOLERANCE_DEG = 2.0;       // AprilTag tx within this = aligned

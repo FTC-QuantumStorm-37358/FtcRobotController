@@ -22,7 +22,7 @@ public abstract class SharedBioBuzzAuto extends LinearOpMode {
                     telemetry.addLine("Place robot at the calibrated start and keep still.");telemetry.update();idle();
                 }
                 if(isStopRequested())return;
-                auto.start(alliance,config.shooterPower);
+                auto.start(alliance,config.shooterRpmMultiplier);
                 while(opModeIsActive()&&auto.isRunning()){auto.tick();telemetry.addData("Autonomous",auto.status());telemetry.update();idle();}
             }finally{auto.stop();}
         }catch(java.util.concurrent.CancellationException e){/* STOP is a normal exit. */}

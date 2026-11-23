@@ -1,0 +1,80 @@
+# New Shooter Power Control test
+
+Driver Station entry: **Biobuzz-Quantum Storm New Shooter Power Control**.
+
+This separate manual TeleOp tests **FTCLib 2.1.1 `PIDFController`** with motor power output. It does not change the controller used by the regular TeleOp, the quadrant Auto-Shooter-Power entry, or autonomous modes. The test now initializes Pinpoint odometry for BACK + A rear-hive aiming and retains the existing two-driver drive/intake/flower controls. RPM remains a manual target; aiming does not enable distance-based RPM adjustment.
+
+## Controls
+
+- Default target multiplier: **0.50**, meaning **3000 RPM**. INIT leaves the motor off.
+- Gamepad 2 A alone starts the shooter; B stops it and cancels an active aim. Release A after INIT/controller assignment before pressing it to start.
+- Hold gamepad 2 BACK and tap A to turn the rear shooter toward the hive in the robot's quadrant. This chord never starts the shooter, even if BACK is released while A remains held. Move a gamepad 1 drive stick beyond 0.10, press gamepad 2 B, or hold gamepad 2 START to cancel the turn.
+- Hold BACK and tap LB/LT to increase/decrease the RPM multiplier by 0.01 (60 RPM). The test target range is 0 to 6000 RPM; it never reverses the shooter.
+- Existing D-pad/flower controls remain. In this entry, feeding requires the shooter ON at a nonzero target, a healthy controller and no active aiming turn. Feeding is also blocked on the aim completion/fault/cancellation loop, then returns to the manual D-pad controls. This is not an at-speed feed interlock.
+- A controller fault stops shooter/feed. Release A and press it again after fixing the fault to retry.
+
+## Field setup and rear-hive aiming
+
+This entry requires `odometry_1` (goBILDA Pinpoint). Its origin is field center and X/Y are in inches. Before INIT, place the robot at one of the mirrored Team 1 starting references `(±12.75, ±62.9)`, front facing the Y wall and rear shooter facing into the field. Default is `(-12.75, -62.9, -90 degrees)`.
+
+During INIT, gamepad 1 D-pad LEFT/RIGHT selects the negative/positive X starting reference, and DOWN/UP selects negative/positive Y. Heading is -90 degrees at negative Y and +90 at positive Y. Check the displayed pose, keep the robot still during Pinpoint calibration, then START. This assigns a known absolute field pose; it does not locate an arbitrarily placed robot or inherit the prior autonomous pose. Drive to your test location after START.
+
+BACK + A performs a one-shot, nonblocking turn using:
+
+```
+hiveX = x < 0 ? -12.75 : 12.75
+hiveY = y < 0 ? -6 : 6
+frontTargetDegrees = wrapDegrees(degrees(atan2(hiveY - y, hiveX - x)) + 180)
+headingError = wrapDegrees(frontTargetDegrees - measuredFrontHeading)
+```
+
+The robot's rear points along `frontTargetDegrees + 180`. The 8-inch rear shooter offset lies on that aim line, so it does not change the final heading. This assumes the shooter is centered on the robot's rear axis. The same-quadrant target is also the nearest among the four mirrored hive centers. Exact axis ties select the positive side; target selection is updated each loop.
+
+Only rotation is commanded; no translation is requested. Heading is CCW-positive while the mecanum turn input is clockwise-positive, so the turn command has the opposite sign from heading error. Proportional gain is 0.015 power/degree, with initial minimum/maximum turn effort 0.06/0.25. These values are in `DriveChain/RearHiveAim.java` and require physical turn-sign/response verification. The turn ends after the estimated heading stays within **1 degree for 0.20 seconds**. This is an odometry tolerance, not a guarantee of perfect physical aim or a camera-based alignment check.
+
+Invalid/nonfinite/out-of-field odometry, a target within the 8-inch shooter offset, or a **5-second timeout** stops the turn. Recovery does not restart it; press BACK + A again. Driver override and B/START cancellation win over a simultaneous aim request. A held through INIT or controller assignment cannot start aiming. Other mechanisms and the PIDF loop continue updating while aiming; feeding pauses and no shot is fired automatically.
+
+Telemetry adds current X/Y/heading, aiming state, selected hive, target front heading, heading error and clockwise turn power. This function does not check hive tilt or shot reachability; the driver selects when to shoot.
+
+## Motor control
+
+The REV Hub, not a chip inside the motor, implements the SDK's built-in velocity loop. This test switches to `RUN_WITHOUT_ENCODER` so that loop does not compete with software PIDF. Encoder readings are still available in this mode. The confirmed motor profile remains 28 counts/revolution, 1:1, 6000 RPM.
+
+Each active control update uses:
+
+```java
+currentRPM = motor.getVelocity(AngleUnit.DEGREES) / 6.0;
+targetRPM = 6000 * multiplier;
+calculatedPower = pidfController.calculate(currentRPM, targetRPM);
+calculatedPower *= 12.0 / batteryVoltage;
+motor.setPower(Math.max(0, Math.min(1, calculatedPower)));
+```
+
+FTCLib's feedforward contribution is **kF × targetRPM**, not a constant kF. Gains must use RPM error and motor-power output units. `getVelocity()` supplies the measured RPM; `PIDFController` calculates the command and does not read hardware itself.
+
+Battery voltage is the minimum usable reading across the Hub voltage sensors on the shared battery. Values outside 6–16.8 V and nonfinite readings are ignored. If none is usable, or RPM/target/calculated output is invalid, the motor receives zero power and feeding stops. Final clipping happens **after** voltage compensation. Overspeed reduces power toward zero rather than reversing the flywheel.
+
+On STOP, zero target, or fault, the motor receives zero power directly and the PIDF state resets. No sensor read or PID calculation is needed to stop. Saturation clears accumulated integral error. The new test entry never sends `setVelocity()` commands, including during INIT and STOP.
+
+## Initial gains and tuning
+
+`Constants.java` contains these **provisional, not hardware-tuned** values:
+
+| Setting | Value | Meaning |
+| --- | ---: | --- |
+| `SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER` | 0.50 | Initial target, 3000 RPM |
+| `SHOOTER_PIDF_P` | 0.0001 | 100 RPM error adds 0.01 power before voltage compensation |
+| `SHOOTER_PIDF_I` | 0 | Integral disabled initially |
+| `SHOOTER_PIDF_D` | 0 | Derivative disabled initially |
+| `SHOOTER_PIDF_F` | 1 / 6000 | Nominal 6000 RPM at full power and 12 V |
+| `SHOOTER_PIDF_REFERENCE_VOLTS` | 12 | Reference voltage used to define the gains |
+
+At 3000 RPM measured and requested, the provisional feedforward is 0.50 power at 12 V, approximately 0.571 at 10.5 V and 0.429 at 14 V. At startup, positive RPM error adds proportional effort, so a multiplier of 0.50 does not imply a fixed 0.50 power command.
+
+Observe steady RPM before feeding and the drop/recovery after a ball. Tune F for the steady motor load, then P for recovery without oscillation; leave I/D zero until measurements justify them. This software controller is not inherently more accurate than the Hub controller: encoder quality, loop timing, gain tuning and flywheel mechanics determine the result. Wheel RPM also does not directly measure ball exit speed.
+
+Telemetry shows target/actual RPM, PIDF status, the sampled RPM used by the controller, voltage during active control, raw/compensated/applied power and configured gains. Controller sample values are unavailable until the first active command and retain the last sample while stopped. Regular encoder telemetry remains visible while stopped.
+
+## Validation
+
+`ShooterPidfControlChecks` runs the actual FTCLib controller with instrumented FTC motor/voltage interfaces. It verifies INIT/STOP power, encoder units, the 3000 RPM default, feedback under load/overspeed, 12/V compensation, clipping order, integral reset, restart and invalid/missing sensors. It rejects any use of the Hub `setVelocity()` API by this controller. `RearHiveAimChecks` verifies rear-facing geometry in all quadrants, shortest-angle wraparound, motor turn signs, simulated closed-loop convergence, settling dwell, cancellation, invalid poses, quadrant changes and timeout. A successful Android build verifies that the dependency and new entry package together. Physical tuning and robot testing are still required.

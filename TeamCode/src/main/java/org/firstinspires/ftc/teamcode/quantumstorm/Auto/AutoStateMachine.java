@@ -25,7 +25,7 @@ import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
 import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PollenInventory;
 
 /** Team One recovers pollen; Team Two gates opposite-wall shots on live own-Hive tags.
- * Calibrate start, Pinpoint offsets/directions, waypoints and shooter power.
+ * Calibrate start, Pinpoint offsets/directions, waypoints and shooter RPM.
  * Unknown inventory uses bounded attempts, never invented ball counts.
  */
 
@@ -45,6 +45,10 @@ public final class AutoStateMachine implements AutoCloseable {
     private Sensors debugSensors;
     private Outputs debugOutputs=new Outputs();
     private String debugReadError="";
+    /** Last four real spindexer pulses: command multiplier, target RPM, actual RPM. */
+    private final double[][] lastShotLog=new double[4][3];
+    private int lastShotCount;
+    private boolean feederPulseWasActive;
     private boolean closed;
     private final boolean robotRelative;
     private final boolean teamOneBackup;
@@ -118,7 +122,13 @@ public final class AutoStateMachine implements AutoCloseable {
                 debugReadError="";return debugSensors;
             }
             public void apply(Outputs o){
+                // Every autonomous shot uses the exact same calibrated RPM
+                // multiplier.  Do not substitute a distance/odometry model
+                // part way through a four-pollen feed: that made later shots
+                // use a different flywheel target than the first shots.
+                double shooterMultiplier=o.shooterPower;
                 debugOutputs=o.copy();
+                debugOutputs.shooterPower=shooterMultiplier;
                 if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.shooterPower==0&&o.feederPower==0&&o.intakePower==0){
                     if(!stopped){stopped=true;SafeShutdown.run(drive::stop,shooter::stop,intake::stop);}
                     // Stop actuators BEFORE any camera SDK call, including a pipeline transition.
@@ -127,7 +137,17 @@ public final class AutoStateMachine implements AutoCloseable {
                 }
                 stopped=false;
                 drive.drive(o.forward*Constants.AUTO_FORWARD_POWER_SIGN,o.strafeRight,o.turnClockwise);
-                shooter.apply(o.shooterPower,o.feederPower);intake.setPower(o.intakePower*Constants.INTAKE_POWER);
+                shooter.apply(shooterMultiplier,o.feederPower);
+                boolean feederPulse=shooter.isFeederPulseActive();
+                if(feederPulse&&!feederPulseWasActive){
+                    int slot=lastShotCount%lastShotLog.length;
+                    lastShotLog[slot][0]=shooterMultiplier;
+                    lastShotLog[slot][1]=shooter.getTargetRpm();
+                    lastShotLog[slot][2]=shooter.getMeasuredRpm();
+                    lastShotCount++;
+                }
+                feederPulseWasActive=feederPulse;
+                intake.setPower(o.intakePower*Constants.INTAKE_POWER);
                 if(camera!=null&&!stopRequested())selectCamera(o);
             }
         };
@@ -142,9 +162,16 @@ public final class AutoStateMachine implements AutoCloseable {
             one.gardenAdvanceSeconds=Constants.AUTO_GARDEN_ADVANCE_SEC;
             one.gardenAdvancePower=Constants.AUTO_GARDEN_ADVANCE_POWER;
             one.gardenFirstPassSeconds=Constants.AUTO_GARDEN_FIRST_PASS_SEC;
+            // Both normal Team 1 post-shot branches need enough reserve to
+            // reach the final parking target after Garden work.
+            one.gardenTransitPower=.60;
+            one.gardenRepositionPower=.42;
             one.gardenIntakeHeadingRadians=Math.toRadians(Constants.TEAM_ONE_GARDEN_INTAKE_HEADING_DEG);
             one.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
-            one.aimForShooting=true;
+            // Team 1 begins at a taped, fixed preload-shot pose. A missing tx
+            // must not prevent its opening four-pollen feed. The backup still
+            // uses AprilTag aim at the second, Team Two wall-shot position.
+            one.aimForShooting=teamOneBackup;
             one.colorPickupEnabled=true;
             one.gardenYellowWindowEnabled=!teamOneBackup;
             one.translationPowerMultiplier=teamOneBackup?1:1.25;
@@ -156,27 +183,33 @@ public final class AutoStateMachine implements AutoCloseable {
             if(teamOneBackup){
                 one.spinUpSeconds=.60;
                 // Four pollen need at least four paced index advances.  Keep a
-                // full 3.6-second feed window before either Garden departure
+                // full paced feed window before either Garden departure
                 // or the follow-up-shot park transition.
-                one.feedSeconds=3.60;
+                one.feedSeconds=6.0;
                 // Two longer measured strokes sweep farther into the Garden,
                 // then the backup immediately starts its Team Two shot route.
-                one.gardenTransitPower=.55;
-                one.gardenRepositionPower=.38;
-                one.gardenAdvancePower=.42;
-                one.gardenPassDistanceInches=16.0;
-                one.gardenFirstPassSeconds=2.0; // timeout only if odometry drops out
+                one.gardenTransitPower=.65;
+                one.gardenRepositionPower=.45;
+                one.gardenAdvancePower=.55;
+                // Both Backup passes reach fully into the Garden before the
+                // back/right reset and Team Two shot transfer. The time value
+                // is only the stale-odometry fallback for the same full stroke.
+                one.gardenPassDistanceInches=20.0;
+                one.gardenFirstPassSeconds=2.50;
                 one.gardenRepositionSeconds=.18;
-                // Stop only six inches short of the Garden.  The two short
-                // forward intake strokes cover the remainder, avoiding the
-                // old long retreat after the preload shot.
-                one.gardenStagingOffsetInches=6.0;
+                // Use the same Garden staging distance as normal Team 1.
+                // The previous six-inch stop made the initial backward leg
+                // too long and let the following sideways move clip the Hive.
+                one.gardenStagingOffsetInches=18.0;
             }
             routine=one;
         }else if(selectedRoutine==Routine.TEAM_TWO){
             TeamTwoHiveAuto two=new TeamTwoHiveAuto(io,field);
             two.spinUpSeconds=Constants.AUTO_SHOOTER_SPINUP_SEC;two.feedSeconds=Constants.AUTO_TEAM_TWO_FEED_TIME_SEC;
             two.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
+            // Team 2 is taped at its wall-shot pose. While waiting for the
+            // Hive to be tilted, it must remain completely still; the live
+            // AprilTag check below authorizes shooting without auto-turning.
             two.aimForShooting=true;
             two.colorPickupEnabled=true;
             routine=two;
@@ -220,14 +253,11 @@ public final class AutoStateMachine implements AutoCloseable {
         if(!(routine instanceof TeamTwoHiveAuto)){flowerIntake.lift();return;}
         TeamTwoHiveAuto.State state=(TeamTwoHiveAuto.State)routine.getState();
         switch(state){
-            case RETREAT_FROM_HIVE:
-            case ALIGN_FLOWER:
+            case LOWER_FLOWER_ARM:
             case TO_FLOWER:
             case PRESS_FLOWER:
-            case CLEAR_FLOWER:
-            case TO_OUTLET_LANE:
-            case TO_PICKUP:
-            case INTAKE:
+            case BACK_AWAY_FROM_FLOWER:
+            case RETURN_STRAFE_TO_HIVE:
                 flowerIntake.drop();
                 break;
             default:
@@ -257,8 +287,14 @@ public final class AutoStateMachine implements AutoCloseable {
         opMode.telemetry.addData("Destination",target==null?"None - stationary state":String.format(java.util.Locale.US,"X %.1f, Y %.1f in, heading %.1f deg",target.x,target.y,Math.toDegrees(target.heading)));
         if(target!=null&&debugSensors!=null)opMode.telemetry.addData("Distance to target (in)","%.1f",debugSensors.pose.distance(target));
         opMode.telemetry.addData("Drive request F / right / CW","%.2f / %.2f / %.2f",debugOutputs.forward,debugOutputs.strafeRight,debugOutputs.turnClockwise);
-        opMode.telemetry.addData("Shooter power / spindexer / intake","%.2f / %.2f / %.2f",debugOutputs.shooterPower,debugOutputs.feederPower,debugOutputs.intakePower);
-        opMode.telemetry.addData("Shooter applied / requested power","%.2f / %.2f",shooter.getAppliedPower(),shooter.getTargetPower());
+        opMode.telemetry.addData("Shooter RPM multiplier / spindexer / intake","%.2f / %.2f / %.2f",debugOutputs.shooterPower,debugOutputs.feederPower,debugOutputs.intakePower);
+        opMode.telemetry.addData("Shooter RPM actual / target","%.0f / %.0f",shooter.getMeasuredRpm(),shooter.getTargetRpm());
+        opMode.telemetry.addData("Auto shot command","Fixed %.2f multiplier / %.0f RPM",Constants.SHOOTER_RPM_MULTIPLIER,Constants.SHOOTER_RPM_MULTIPLIER*Constants.SHOOTER_BASE_RPM);
+        for(int i=0;i<Math.min(lastShotCount,lastShotLog.length);i++){
+            int slot=(lastShotCount-Math.min(lastShotCount,lastShotLog.length)+i)%lastShotLog.length;
+            double[] shot=lastShotLog[slot];
+            opMode.telemetry.addData("Shot "+(i+1)+" command / target / actual","%.2f / %.0f / %.0f RPM",shot[0],shot[1],shot[2]);
+        }
         opMode.telemetry.addData("Flower intake","%s %.0f deg",flowerIntake.isDown()?"DOWN":"UP",flowerIntake.getAngle());
         opMode.telemetry.addData("Measured pieces",debugSensors==null||debugSensors.ballCount<0?"UNKNOWN":debugSensors.ballCount+" / 4");
         opMode.telemetry.addData("Measured pollen",debugSensors==null||debugSensors.pollenCount<0?"UNKNOWN":debugSensors.pollenCount+" / 4");
@@ -288,7 +324,7 @@ public final class AutoStateMachine implements AutoCloseable {
         if(routine instanceof TeamOnePollenAuto)return ((TeamOnePollenAuto)routine).getState()==TeamOnePollenAuto.State.WAITING;
         if(routine instanceof TeamTwoHiveAuto){
             TeamTwoHiveAuto.State state=((TeamTwoHiveAuto)routine).getState();
-            return state==TeamTwoHiveAuto.State.WAITING||state==TeamTwoHiveAuto.State.SETTLING||state==TeamTwoHiveAuto.State.RECOVERING;
+            return state==TeamTwoHiveAuto.State.WAITING||state==TeamTwoHiveAuto.State.SETTLING;
         }
 
         return false;
@@ -315,7 +351,7 @@ public final class AutoStateMachine implements AutoCloseable {
         try {
             if(camera!=null)camera.reset();
             if(mirroredTags!=null)mirroredTags.reset();
-            routine.start(alliance,Constants.SHOOTER_POWER);
+            routine.start(alliance,Constants.SHOOTER_RPM_MULTIPLIER);
             // Bounded, stationary wait; included in the match's 26/30-second clock.
             while(opMode.opModeIsActive()&&clock.seconds()<2){
                 odometry.update();
@@ -324,10 +360,18 @@ public final class AutoStateMachine implements AutoCloseable {
                 opMode.idle();
             }
             while(opMode.opModeIsActive()&&routine.isRunning()){
+                // Independent match-time guard: no autonomous output can run past
+                // the FTC autonomous period even if a routine fails to transition.
+                if(clock.seconds()>=30.0){
+                    routine.stop();
+                    break;
+                }
                 routine.tick();
                 updateFlowerIntakeArm();
                 opMode.telemetry.addData("Autonomous",label());
-                opMode.telemetry.addData("State",routine.getState());
+                opMode.telemetry.addData("Current state",routine.getState());
+                opMode.telemetry.addData("Auto time","%.1f / 30.0 s",clock.seconds());
+                opMode.telemetry.addData("Time remaining","%.1f s",Math.max(0,30.0-clock.seconds()));
                 opMode.telemetry.addData("Last error",lastError().isEmpty()?"None":lastError());
                 opMode.telemetry.addData("Navigation",routine instanceof TeamTwoHiveAuto?"Opposite-wall shot route":camera==null?"Fixed simulator route; no route search":"Garden pickup + collision-checked start-side-half park");
                 opMode.telemetry.addData("Mechanisms",inventory==null?"LIVE hardware outputs; unknown inventory":inventory.status());
