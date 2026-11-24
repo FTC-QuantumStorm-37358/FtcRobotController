@@ -110,7 +110,14 @@ public final class AutoStateMachine implements AutoCloseable {
                     // check at the Team Two wall pose. Do not discard those raw
                     // IDs merely because the optional family diagnostic is not
                     // yet locked.
-                    if(!Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG&&!teamOneBackup&&selectedRoutine!=Routine.TEAM_TWO)vision=normalized;
+                    // Normal Team 1's post-shot branch intentionally decides
+                    // from any live centered tag (or five-plus tags), not a
+                    // family-filtered replacement. Keep the raw camera frame
+                    // there so its tx/ty and tag count remain usable.
+                    boolean normalTeamOnePostShot=routine instanceof TeamOnePollenAuto
+                            &&((TeamOnePollenAuto)routine).getState()==TeamOnePollenAuto.State.POST_SHOT_TAG_WAIT;
+                    if(!Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG&&!teamOneBackup
+                            &&selectedRoutine!=Routine.TEAM_TWO&&!normalTeamOnePostShot)vision=normalized;
                 }
                 if(shootingAlignmentActive()){
                     boolean farCell=routine instanceof TeamTwoHiveAuto
@@ -160,12 +167,15 @@ public final class AutoStateMachine implements AutoCloseable {
             one.surveyBeforePickup=false;
             one.gardenAdvanceInches=Constants.AUTO_GARDEN_ADVANCE_IN;
             one.gardenAdvanceSeconds=Constants.AUTO_GARDEN_ADVANCE_SEC;
-            one.gardenAdvancePower=Constants.AUTO_GARDEN_ADVANCE_POWER;
+            one.gardenAdvancePower=.60;
             one.gardenFirstPassSeconds=Constants.AUTO_GARDEN_FIRST_PASS_SEC;
             // Both normal Team 1 post-shot branches need enough reserve to
             // reach the final parking target after Garden work.
-            one.gardenTransitPower=.60;
-            one.gardenRepositionPower=.42;
+            // Shorter initial reverse keeps the following strafe clear of the
+            // Flower; higher transit power preserves time for the return shot.
+            one.gardenStagingOffsetInches=12.0;
+            one.gardenTransitPower=.70;
+            one.gardenRepositionPower=.60;
             one.gardenIntakeHeadingRadians=Math.toRadians(Constants.TEAM_ONE_GARDEN_INTAKE_HEADING_DEG);
             one.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
             // Team 1 begins at a taped, fixed preload-shot pose. A missing tx
@@ -173,8 +183,6 @@ public final class AutoStateMachine implements AutoCloseable {
             // uses AprilTag aim at the second, Team Two wall-shot position.
             one.aimForShooting=teamOneBackup;
             one.colorPickupEnabled=true;
-            one.gardenYellowWindowEnabled=!teamOneBackup;
-            one.translationPowerMultiplier=teamOneBackup?1:1.25;
             one.useTeamTwoFollowUpShot=teamOneBackup;
             one.gardenPassLimit=teamOneBackup?2:0;
             // The contingency route crosses to the opposite wall after Garden.
@@ -188,9 +196,9 @@ public final class AutoStateMachine implements AutoCloseable {
                 one.feedSeconds=6.0;
                 // Two longer measured strokes sweep farther into the Garden,
                 // then the backup immediately starts its Team Two shot route.
-                one.gardenTransitPower=.65;
-                one.gardenRepositionPower=.45;
-                one.gardenAdvancePower=.55;
+                one.gardenTransitPower=.70;
+                one.gardenRepositionPower=.60;
+                one.gardenAdvancePower=.60;
                 // Both Backup passes reach fully into the Garden before the
                 // back/right reset and Team Two shot transfer. The time value
                 // is only the stale-odometry fallback for the same full stroke.
@@ -289,7 +297,7 @@ public final class AutoStateMachine implements AutoCloseable {
         opMode.telemetry.addData("Drive request F / right / CW","%.2f / %.2f / %.2f",debugOutputs.forward,debugOutputs.strafeRight,debugOutputs.turnClockwise);
         opMode.telemetry.addData("Shooter RPM multiplier / spindexer / intake","%.2f / %.2f / %.2f",debugOutputs.shooterPower,debugOutputs.feederPower,debugOutputs.intakePower);
         opMode.telemetry.addData("Shooter RPM actual / target","%.0f / %.0f",shooter.getMeasuredRpm(),shooter.getTargetRpm());
-        opMode.telemetry.addData("Auto shot command","Fixed %.2f multiplier / %.0f RPM",Constants.SHOOTER_RPM_MULTIPLIER,Constants.SHOOTER_RPM_MULTIPLIER*Constants.SHOOTER_BASE_RPM);
+        opMode.telemetry.addData("Auto shot command","%.2f multiplier / %.0f RPM",debugOutputs.shooterPower,debugOutputs.shooterPower*Constants.SHOOTER_BASE_RPM);
         for(int i=0;i<Math.min(lastShotCount,lastShotLog.length);i++){
             int slot=(lastShotCount-Math.min(lastShotCount,lastShotLog.length)+i)%lastShotLog.length;
             double[] shot=lastShotLog[slot];
@@ -298,10 +306,6 @@ public final class AutoStateMachine implements AutoCloseable {
         opMode.telemetry.addData("Flower intake","%s %.0f deg",flowerIntake.isDown()?"DOWN":"UP",flowerIntake.getAngle());
         opMode.telemetry.addData("Measured pieces",debugSensors==null||debugSensors.ballCount<0?"UNKNOWN":debugSensors.ballCount+" / 4");
         opMode.telemetry.addData("Measured pollen",debugSensors==null||debugSensors.pollenCount<0?"UNKNOWN":debugSensors.pollenCount+" / 4");
-        if(routine instanceof TeamOnePollenAuto&&!teamOneBackup){
-            opMode.telemetry.addData("Leave authorized",((TeamOnePollenAuto)routine).leaveAuthorized());
-            opMode.telemetry.addData("Garden vision",((TeamOnePollenAuto)routine).status());
-        }
         if(camera!=null)opMode.telemetry.addData("Camera status",camera.cachedStatus());
         if(!debugReadError.isEmpty())opMode.telemetry.addData("Sensor read error",debugReadError);
         odometry.addTelemetry(opMode.telemetry);
@@ -334,7 +338,6 @@ public final class AutoStateMachine implements AutoCloseable {
         if(routine instanceof TeamOnePollenAuto){
             TeamOnePollenAuto one=(TeamOnePollenAuto)routine;
             if(one.getState()==TeamOnePollenAuto.State.PARK){camera.select(1);return;}
-            if(one.gardenYellowWindowEnabled&&one.colorPickupActive()){camera.select(1);return;}
             camera.select(outputs.pipeline,idleCameraScan(),one.colorPickupActive());
         }else if(routine instanceof TeamTwoHiveAuto){
             TeamTwoHiveAuto two=(TeamTwoHiveAuto)routine;

@@ -97,7 +97,12 @@ public final class TeamOneLimelight implements AutoCloseable {
             LLResult result=servo.getLatestResult();
             lastResult=result;
             int expected=selectedPipeline();
-            if(now-changedAt<.20||!servo.isFreshFrame(result)||result.getPipelineIndex()!=expected)return empty;
+            // Do not discard an otherwise current frame just because the SDK's
+            // staleness value exceeds LimeServo's short 250 ms UI threshold.
+            // Autonomous accepts a verified AprilTag frame through one second;
+            // this matches RobotIO.Vision.fresh() and prevents tx/ty from
+            // becoming N/A while the robot is stationary at its shot pose.
+            if(now-changedAt<.20||result==null||result.getPipelineIndex()!=expected)return empty;
             double age=(result.getStaleness()+result.getCaptureLatency()+result.getTargetingLatency())/1000;
             double stamp=result.getTimestamp();
             // Match RobotIO.Vision freshness: this accepts a live frame that
@@ -121,7 +126,13 @@ public final class TeamOneLimelight implements AutoCloseable {
                 if(target!=null)targets.add(new Target(-1,target.getTargetXDegrees(),target.getTargetYDegrees(),Double.NaN,target.getTargetArea(),color));
             }
             problem="";
-            lastVision=new Vision(result.isValid()&&!targets.isEmpty(),idleScan?2:pipeline,capturedAt,targets.toArray(new Target[0]),result.getTx(),-1,true);
+            Target[] observed=targets.toArray(new Target[0]);
+            Target centered=closestTag(observed);
+            // Do not use LLResult's aggregate tx here: with multiple AprilTags
+            // it may be absent or refer to a non-centered target. Team 1 aim
+            // and telemetry both use the actual tag closest to the crosshair.
+            double tx=centered==null?Double.NaN:centered.tx;
+            lastVision=new Vision(result.isValid()&&!targets.isEmpty(),idleScan?2:pipeline,capturedAt,observed,tx,-1,true);
             return lastVision;
         }catch(java.util.concurrent.CancellationException e){throw e;}
         catch(RuntimeException e){problem="Camera read failed: "+e.getMessage();return empty;}
@@ -129,12 +140,16 @@ public final class TeamOneLimelight implements AutoCloseable {
 
     /** Report the already sampled frame; telemetry must not resample camera hardware. */
     public void addTelemetry(Telemetry telemetry,double now,boolean shootingAuthorized,Vision aimingVision){
+        // Telemetry is diagnostic: show the direct camera sample, even if a
+        // later autonomous tag-family filter rejects it for a strict shot.
+        Vision live=lastVision;
         boolean targetValid=lastConnected&&lastResult!=null
                 &&lastResult.getPipelineIndex()==selectedPipeline()
-                &&aimingVision.fresh(now,aimingVision.pipeline)&&now-aimingVision.capturedAt<=.25;
+                &&live.fresh(now,live.pipeline)&&now-live.capturedAt<=1.0;
         telemetry.addData("tv",lastResult!=null&&lastResult.isValid()?"1":"0");
-        telemetry.addData("tx",!Double.isFinite(aimingVision.tx)?"N/A":String.format(java.util.Locale.US,"%.2f deg",aimingVision.tx));
-        telemetry.addData("ty",lastResult==null?"N/A":String.format(java.util.Locale.US,"%.2f deg",lastResult.getTy()));
+        telemetry.addData("tx",!Double.isFinite(live.tx)?"N/A":String.format(java.util.Locale.US,"%.2f deg",live.tx));
+        Target centered=closestTag(live.targets);
+        telemetry.addData("ty",centered==null?"N/A":String.format(java.util.Locale.US,"%.2f deg",centered.ty));
         telemetry.addData("Shooting authorized",shootingAuthorized?"YES":"NO");
         List<LLResultTypes.FiducialResult> tags=lastResult==null?null:lastResult.getFiducialResults();
         List<LLResultTypes.ColorResult> colors=lastResult==null?null:lastResult.getColorResults();
@@ -142,7 +157,7 @@ public final class TeamOneLimelight implements AutoCloseable {
         telemetry.addData("Colors seen",colors==null?0:colors.size());
         telemetry.addData("Turn suggestion",shootingAuthorized&&!targetValid
                 ?"Shot authorization latched; continuing timed feed"
-                :ShootingAim.turnSuggestion(targetValid,aimingVision.tx));
+                :ShootingAim.turnSuggestion(targetValid,live.tx));
         double angle=servo.getCommandedTiltDegrees();
         telemetry.addData("Camera servo",Double.isFinite(angle)&&Math.abs(angle)<=1.0?"NEUTRAL":"NOT NEUTRAL");
     }
@@ -152,6 +167,13 @@ public final class TeamOneLimelight implements AutoCloseable {
         LLResultTypes.ColorResult largest=null;
         if(blobs!=null)for(LLResultTypes.ColorResult blob:blobs)if(largest==null||blob.getTargetArea()>largest.getTargetArea())largest=blob;
         return largest;
+    }
+    private static Target closestTag(Target[] targets){
+        Target best=null;
+        if(targets!=null)for(Target target:targets)
+            if(target.id>=0&&Double.isFinite(target.tx)
+                    &&(best==null||Math.abs(target.tx)<Math.abs(best.tx)))best=target;
+        return best;
     }
     private double height(LLResultTypes.FiducialResult tag){
         if(!calibrated()||tag.getTargetPoseRobotSpace()==null)return Double.NaN;

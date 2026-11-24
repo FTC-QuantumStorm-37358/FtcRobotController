@@ -60,15 +60,15 @@ public class Constants {
     // SDK's generic GoBILDA 5202/3/4 profile instead describes the 99.5:1 gearbox.
     public final static double SHOOTER_ENCODER_TICKS_PER_REV = 28.0;
     public final static double SHOOTER_GEAR_RATIO = 1.0;
-    /** Fixed autonomous/TeleOp flywheel command: 50.75% of 6000 RPM = 3045 RPM. */
-    public final static double SHOOTER_RPM_MULTIPLIER = 0.5075;
-    public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.01; // 60 RPM
+    /** Preserved local autonomous/TeleOp flywheel command: 50% of 6000 RPM = 3000 RPM. */
+    public final static double SHOOTER_RPM_MULTIPLIER = 0.50;
+    public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.005; // 30 RPM
     public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
     public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
 
     // Separate New Shooter Power Control test entry: provisional FTCLib gains, output in motor-power units.
     // kF multiplies target RPM; tune on hardware at the 12 V reference before adding I/D.
-    public final static double SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER = 0.50;
+    public final static double SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER = 0.49;
     public final static double SHOOTER_PIDF_P = 0.0001;
     public final static double SHOOTER_PIDF_I = 0.0;
     public final static double SHOOTER_PIDF_D = 0.0;
@@ -129,11 +129,11 @@ public class Constants {
     public final static boolean FLOWER_SERVO_REVERSED = true;
 
     // Hard limits: the arm is never commanded outside these
-    public final static double FLOWER_ANGLE_MIN_DEG = -135;
+    public final static double FLOWER_ANGLE_MIN_DEG = -160;
     public final static double FLOWER_ANGLE_MAX_DEG = 0;
 
     public final static double FLOWER_UP_DEG = 0;       // neutral, pointing up; also where it goes on INIT
-    public final static double FLOWER_DOWN_DEG = -140;  // forward and down, for intaking
+    public final static double FLOWER_DOWN_DEG = -160;  // forward and down, for intaking
     public final static double FLOWER_NUDGE_DEG = 2;    // per LB + D-pad press on gamepad 2, for tuning
 
     // =========================================================
@@ -176,7 +176,7 @@ public class Constants {
     // Real robot Garden stroke: enough forward command to pull pollen into the intake.
     public final static double AUTO_GARDEN_ADVANCE_POWER = .30;
     /** First straight Garden pass before the back-right-forward second pass. */
-    public final static double AUTO_GARDEN_FIRST_PASS_SEC = 2.0;
+    public final static double AUTO_GARDEN_FIRST_PASS_SEC = 1.5;
     /** Pinpoint heading required for every Team 1 straight Garden intake pass. */
     public final static double TEAM_ONE_GARDEN_INTAKE_HEADING_DEG = 90.0;
     public final static boolean TEAM_ONE_HIVE_HEIGHT_CALIBRATED = true;
@@ -293,7 +293,7 @@ public class Constants {
     public final static double AUTO_APRILTAG_TIMEOUT_SEC = 3.0;    // no tag / not aligned -> ERROR
     public final static double AUTO_SHOOTER_SPINUP_SEC = 1.0;      // flywheel spin-up before feeding
     /** Team 1 keeps feeding longer so all four preloads can clear before Garden travel. */
-    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 6;
+    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 4.5;
     /** Match Team 1's longer feed window so all four preloads can clear. */
     public final static double AUTO_TEAM_TWO_FEED_TIME_SEC = AUTO_TEAM_ONE_FEED_TIME_SEC;
     public final static double AUTO_AIM_TOLERANCE_DEG = 2.0;       // AprilTag tx within this = aligned

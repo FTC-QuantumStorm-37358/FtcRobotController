@@ -13,6 +13,7 @@ public final class AutoStateMachine implements RobotController {
     private final RobotIO io;
     private final FieldLayout field;
     private final Navigator navigator;
+    private final AutonomousShooter shooter=new AutonomousShooter();
     private final boolean useVision;
     private final Routine routine;
     private final boolean movementOnly;
@@ -272,7 +273,7 @@ public final class AutoStateMachine implements RobotController {
                     if(!useVision){
                         // Fixed routine: always execute this bounded shot attempt,
                         // even with zero/unknown balls. Never infer shots or inventory.
-                        out.shooterPower=power;
+                        out.shooterPower=shooter.command(currentPose,power);
                         if(Double.isNaN(shooterAt))shooterAt=now;
                         if(shootStep==ShootStep.CHECK_BALLS){shootStep=ShootStep.AIM;stateAt=now;age=0;}
                         if(shootStep==ShootStep.AIM&&now-shooterAt>=1){shootStep=ShootStep.FIRE;stateAt=now;age=0;}
@@ -290,7 +291,7 @@ public final class AutoStateMachine implements RobotController {
                     if(shootStep==ShootStep.CHECK_BALLS){
                         if(sensors.ballCount==0){pickup();break;}shootStep=ShootStep.AIM;stateAt=now;age=0;
                     }
-                    out.shooterPower=power;
+                    out.shooterPower=shooter.command(currentPose,power);
                     if(Double.isNaN(shooterAt))shooterAt=now;
                     if(shootStep==ShootStep.AIM){
                         Target t=tag(sensors.vision,now);
@@ -381,7 +382,7 @@ public final class AutoStateMachine implements RobotController {
         if(!running||state==State.ERROR||state!=before)out=new Outputs();
         // Start intake while approaching a pickup spot, before the chassis pushes the balls away.
         if(running&&state==State.MOVING&&(afterMove==State.INTAKE||afterMove==State.EXTRA_PICKUP)&&sensors.ballCount<4&&sensors.pose.distance(destination)<24){out.intakePower=1;out.pipeline=1;}
-        if(running&&state==State.MOVING&&afterMove==State.SHOOTING){out.shooterPower=power;if(Double.isNaN(shooterAt))shooterAt=now;}
+        if(running&&state==State.MOVING&&afterMove==State.SHOOTING){out.shooterPower=shooter.command(currentPose,power);if(Double.isNaN(shooterAt))shooterAt=now;}
         // Preserve state timers and chassis motion; never energize a mechanism in a dry run.
         if(movementOnly){out.shooterPower=out.feederPower=out.intakePower=0;out.pipeline=0;}
         if(io.stopRequested()){stop();return;}
