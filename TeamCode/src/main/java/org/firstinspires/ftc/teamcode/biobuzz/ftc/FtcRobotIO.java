@@ -10,7 +10,7 @@ import com.qualcomm.robotcore.hardware.*;
 import org.firstinspires.ftc.robotcore.external.navigation.*;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO;
 import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
-import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.ShooterMotorConfiguration;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.ShooterVelocityControl;
 
 /** FTC SDK adapter. No socket, desktop Java or browser dependency is deployed to the robot. */
 public final class FtcRobotIO implements RobotIO,AutoCloseable {
@@ -48,8 +48,7 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         intake.setDirection(DcMotor.Direction.FORWARD);shooter.setDirection(DcMotor.Direction.FORWARD);
         for(DcMotor motor:new DcMotor[]{fl,fr,bl,br,intake})motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         for(DcMotor motor:new DcMotor[]{fl,fr,bl,br,intake})motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        ShooterMotorConfiguration.apply(shooter);
-        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        ShooterVelocityControl.configure(shooter);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         feeder.setDirection(CRServo.Direction.REVERSE);
         apply(new Outputs());
@@ -96,7 +95,7 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         fl.setPower(w[0]);fr.setPower(w[1]);bl.setPower(w[2]);br.setPower(w[3]);
         intake.setPower(o.intakePower);
         double rpmMultiplier=Double.isFinite(o.shooterPower)?Math.max(-1,Math.min(1,o.shooterPower)):0;
-        shooter.setVelocity(Constants.SHOOTER_BASE_RPM*rpmMultiplier*6.0,AngleUnit.DEGREES);
+        ShooterVelocityControl.setOutput(shooter,rpmMultiplier);
         feeder.setPower(cadence.apply(rpmMultiplier>0?o.feederPower:0,nowSeconds()));
         if(pipeline!=o.pipeline){
             pipeline=o.pipeline;pipelineChangedAt=nowSeconds();frameTimestamp=Double.NaN;

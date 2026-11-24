@@ -10,6 +10,7 @@ public final class TeamTwoHiveAuto implements RobotController {
     private final RobotIO io;
     private final FieldLayout field;
     private final Navigator nav;
+    private final AutonomousShooter shooter=new AutonomousShooter();
     private final ShootingAim.Alignment shootingAlignment=new ShootingAim.Alignment();
     private HiveVision hive,shotGate;
     private HiveShotGate centeredShotGate;
@@ -71,6 +72,7 @@ public final class TeamTwoHiveAuto implements RobotController {
             // its forward/back commands once the Flower has been reached.
             &&state==State.INTAKE;}
     public String lastError(){return error;}
+    public double shooterTargetRpm(){return shooter.targetRpm();}
     public String status(){return state+String.format(java.util.Locale.ROOT," · %.1f / 30 s · ",io.nowSeconds()-startAt)+message
             +" · measured "+measuredPollen+" pollen / "+measuredBalls+" total · feed attempts "+batches+" / 2 · require FOUR pollen and own far Cell UP · park by 26 s; stop at 30 s";}
     public Pose destination(){return running&&(state==State.TO_HIVE||state==State.RETURN_STRAFE_TO_HIVE||state==State.RETURN_FORWARD_TO_HIVE||state==State.RETREAT_FROM_HIVE||state==State.ALIGN_FLOWER||state==State.TO_FLOWER||state==State.CLEAR_FLOWER||state==State.TO_OUTLET_LANE||state==State.TO_PICKUP||state==State.PARK)?destination:null;}
@@ -383,7 +385,7 @@ public final class TeamTwoHiveAuto implements RobotController {
                         break;
                     }
                     if(Double.isNaN(spinAt))spinAt=now;
-                    out.shooterPower=power;
+                    out.shooterPower=shooter.command(current,power);
                     if(now-spinAt>=spinUpSeconds)out.feederPower=1;
                     message="Fresh own far Cell UP; "+(out.feederPower>0?"timed feeding":"spinning up");
                     break;
