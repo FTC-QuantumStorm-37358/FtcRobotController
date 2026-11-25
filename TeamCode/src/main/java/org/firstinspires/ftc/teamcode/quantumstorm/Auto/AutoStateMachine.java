@@ -173,8 +173,9 @@ public final class AutoStateMachine implements AutoCloseable {
             // uses AprilTag aim at the second, Team Two wall-shot position.
             one.aimForShooting=teamOneBackup;
             one.colorPickupEnabled=true;
-            one.gardenYellowWindowEnabled=!teamOneBackup;
-            one.translationPowerMultiplier=teamOneBackup?1:1.25;
+            // Ryan's Limelight options stay off until joeliao tunes them with the Auto.
+            one.gardenYellowWindowEnabled=false;
+            one.translationPowerMultiplier=1;
             one.useTeamTwoFollowUpShot=teamOneBackup;
             one.gardenPassLimit=teamOneBackup?2:0;
             // The contingency route crosses to the opposite wall after Garden.

@@ -85,8 +85,8 @@ public final class TeamOnePollenAuto implements RobotController {
             throw new IllegalArgumentException("Invalid Team One configuration");
         this.alliance=alliance;this.power=power;startAt=lastNow=io.nowSeconds();spinAt=Double.NaN;
         shootingAlignment.reset();
-        running=true;tiltConfirmed=survey=false;avoidUntil=0;current=destination=gardenEntry=parkVia=teamTwoShotExit=teamTwoShotVia=teamTwoShotLane=gardenLegStart=null;gardenBackDistance=gardenRightDistance=0;gardenIntakeHeading=Double.NaN;message=error="";
-        collecting=lastFeeding=false;feedElapsed=0;lastCommandAt=startAt;
+        running=true;tiltConfirmed=survey=false;avoidUntil=0;current=destination=gardenEntry=parkVia=parkRetreat=parkSide=teamTwoShotExit=teamTwoShotVia=teamTwoShotLane=gardenLegStart=null;gardenBackDistance=gardenRightDistance=0;gardenIntakeHeading=Double.NaN;message=error="";
+        collecting=lastFeeding=preloadTagLatched=false;feedElapsed=0;lastCommandAt=startAt;repeatStartShotAfterGarden=postShotDecisionMade=postShotMissingTagFrame=false;
         leaveAuthorized=false;
         shotGate=new HiveShotGate(field,alliance,false);
         hive=new HiveVision(field,alliance);nav.useScriptedRoute(true,alliance);enter(State.SHOOTING);io.apply(new Outputs());
@@ -119,7 +119,7 @@ public final class TeamOnePollenAuto implements RobotController {
             &&(state==State.INTAKE_GARDEN||state==State.GARDEN_FORWARD_RETRY);}
     public String lastError(){return error;}
     public boolean leaveAuthorized(){return leaveAuthorized;}
-    private boolean gardenYellowWindowActive(double elapsed){return gardenYellowWindowEnabled&&!useTeamTwoFollowUpShot
+    private boolean gardenYellowWindowActive(double elapsed){return gardenYellowWindowEnabled&&!fixedGardenPasses()
             &&elapsed>=10&&elapsed<=18&&(state==State.INTAKE_GARDEN||state==State.GARDEN_BACK_UP
             ||state==State.GARDEN_RIGHT_SHIFT||state==State.GARDEN_RESTORE_HEADING||state==State.GARDEN_FORWARD_RETRY);}
     public String status(){return state+String.format(java.util.Locale.ROOT," · %.1f / 30 s · ",io.nowSeconds()-startAt)+message
@@ -491,9 +491,9 @@ public final class TeamOnePollenAuto implements RobotController {
                     // The contingency routine deliberately completes both
                     // physical strokes.  A noisy/full inventory reading must
                     // not cancel its second forward-and-intake pass.
-                    if(s.ballCount>=4&&!useTeamTwoFollowUpShot){followUpShotOrPark();break;}
+                    if(s.ballCount>=4&&!fixedGardenPasses()){followUpShotOrPark();break;}
                     if(!yellowWindow&&gardenPassDone(age)){
-                        if(useTeamTwoFollowUpShot&&gardenPassLimit<=1){followUpShotOrPark();break;}
+                        if(fixedGardenPasses()&&gardenPassLimit<=1){finishFixedGardenPasses();break;}
                         enter(State.GARDEN_BACK_UP);
                         message="Garden intake pass complete; back up slightly before the next pass";
                         break;
@@ -502,12 +502,16 @@ public final class TeamOnePollenAuto implements RobotController {
                     Target gardenBall=pollen(s.vision,now);
                     if(!fixedGardenPasses()&&gardenBall!=null)
                         out.strafeRight=Math.abs(gardenBall.tx)>6?FieldLayout.clip(gardenBall.tx*.012,.12):0;
-                    }
-                    // Preserve arrival heading while collecting; the yellow window
-                    // above can end pickup without inventing an inventory count.
+                    // On the real robot, keep driving the intake forward until it has
+                    // actually measured four pieces or the 26-second park command
+                    // takes over. Do not use camera, simulated-clearance, distance,
+                    // or timer cutoffs for this straight, no-turn collection phase.
+                    // The optional yellow window above may still end pickup early.
                     double headingError=Double.isFinite(gardenIntakeHeading)?Pose.angle(gardenIntakeHeading-current.heading):0;
-                    out.turnClockwise=-FieldLayout.clip(Math.toDegrees(headingError)*.05,.22);
-                    message=yellowWindow?"Leave authorized: false; yellow visible, continue forward Garden collection":"Garden intake: hold first-pass heading; drive until four pieces or 26-second parking";
+                    if(!fixedGardenPasses())
+                        out.turnClockwise=-FieldLayout.clip(Math.toDegrees(headingError)*.05,.22);
+                    message=fixedGardenPasses()?"Fixed Garden pass: full forward wall push; no turn or strafe"
+                            :yellowWindow?"Leave authorized: false; yellow visible, continue forward Garden collection":"Garden intake: hold first-pass heading; drive until four pieces or 26-second parking";
                     break;
                 case GARDEN_BACK_UP:
                     out.forward=-gardenRepositionPower;out.intakePower=1;
