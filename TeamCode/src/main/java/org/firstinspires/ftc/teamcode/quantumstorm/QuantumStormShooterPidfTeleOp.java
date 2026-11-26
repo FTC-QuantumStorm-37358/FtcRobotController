@@ -24,6 +24,10 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
     // A Y held through INIT/START must be released before it can start aiming.
     private boolean previousGamepad2Y;
     private boolean manualDriveOverride;
+    // Preserve the failure sample even if Pinpoint recovers before telemetry is transmitted.
+    private String aimFaultPinpointStatus;
+    private double aimFaultX, aimFaultY, aimFaultHeading;
+    private boolean aimFaultPoseValid;
 
     @Override protected void initializeShooterTarget() {
         odometry = new PinpointOdometry(hardwareMap, startPose());
@@ -62,12 +66,20 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
         odometry.update();
         boolean freshY = gamepad2.y && !previousGamepad2Y;
         previousGamepad2Y = gamepad2.y;
+        if (freshY) aimFaultPinpointStatus = null;
         manualDriveOverride = Math.max(Math.abs(gamepad1.left_stick_y),
                 Math.max(Math.abs(gamepad1.left_stick_x), Math.abs(gamepad1.right_stick_x)))
                 > RearHiveAim.MANUAL_OVERRIDE_DEADBAND;
         aim.update(odometry.getX(), odometry.getY(), odometry.getHeading(), odometry.isValid(),
                 System.nanoTime() / 1e9, freshY,
                 manualDriveOverride || gamepad2.b || gamepad2.start);
+        if (aim.getState() == RearHiveAim.State.INVALID_POSE && aimFaultPinpointStatus == null) {
+            aimFaultPinpointStatus = String.valueOf(odometry.getStatus());
+            aimFaultPoseValid = odometry.isValid();
+            aimFaultX = odometry.getX();
+            aimFaultY = odometry.getY();
+            aimFaultHeading = odometry.getHeading();
+        }
     }
 
     @Override protected void driveRobot(MecanumDrive drive) {
@@ -79,6 +91,12 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
     }
 
     @Override protected boolean feedingAllowed() { return !aim.controlsDriveThisLoop(); }
+
+    // The normal TeleOp now selects RPM from distance. This separate manual entry
+    // owns its odometry only for aiming and must not inherit that target/readiness gate.
+    @Override protected double updateShooterTarget(double currentSetting) { return currentSetting; }
+    @Override protected boolean manualShooterAdjustment() { return true; }
+    @Override protected boolean shooterTargetReady() { return true; }
 
     @Override protected double initialShooterSetting() {
         return Constants.SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER;
@@ -104,6 +122,14 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
         telemetry.addLine("A starts shooter; tap Y aims rear at quadrant hive; B stops/cancels");
         telemetry.addLine("Drive sticks cancel aim; BACK + LB/LT adjusts target by 60 RPM");
         telemetry.addData("Rear hive aim", aim.getState());
+        if (aim.getState() == RearHiveAim.State.INVALID_POSE) {
+            telemetry.addData("Aim blocked reason", aim.getInvalidPoseReason());
+            telemetry.addData("Pinpoint at aim fault", "%s; sample valid: %s",
+                    aimFaultPinpointStatus, aimFaultPoseValid);
+            telemetry.addData("Pose at aim fault (in / deg)", "%.2f, %.2f / %.1f",
+                    aimFaultX, aimFaultY, aimFaultHeading);
+            telemetry.addLine("If sample invalid, pose above is LAST KNOWN; correct fault then tap Y again");
+        }
         if (aim.getQuadrant() != null) {
             telemetry.addData("Aim hive (in)", "%.2f, %.2f",
                     aim.getQuadrant().hiveX, aim.getQuadrant().hiveY);
