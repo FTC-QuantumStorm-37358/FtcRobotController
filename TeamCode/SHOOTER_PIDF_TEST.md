@@ -1,19 +1,19 @@
-# New Shooter Power Control test
+# Latest shooter power control
 
-Driver Station entry: **Biobuzz-Quantum Storm New Shooter Power Control**.
+Driver Station entry: **Biobuzz-Quantum Storm Auto Power Control-latest 11/25**.
 
-This separate manual TeleOp tests **FTCLib 2.1.1 `PIDFController`** with motor power output. It does not change the controller used by the regular TeleOp, the quadrant Auto-Shooter-Power entry, or autonomous modes. The test now initializes Pinpoint odometry for gamepad 2 Y rear-hive aiming and retains the existing two-driver drive/intake/flower controls. RPM remains a manual target; aiming does not enable distance-based RPM adjustment.
+This TeleOp combines location-based targeting with **FTCLib 2.1.1 `PIDFController`**, encoder RPM feedback, battery-compensated `setPower()`, and gamepad 2 Y rear-hive aiming. The previous standard TeleOp remains available as **Biobuzz-Quantum Storm Tele-Op-old** with its existing table/SDK velocity behavior. The redundant Auto-Shooter-Power entry is removed. Autonomous preselects the latest entry; its shooting algorithm and table are unchanged.
 
-The manual entry explicitly preserves its requested multiplier, enables BACK + LB/LT adjustment, and makes its target available to the A-button start gate. It does not use the normal TeleOp's distance-target readiness: that superclass owns a separate odometry object which this entry does not initialize. Invalid aiming odometry stops the aim assist; PIDF motor/voltage faults still stop the shooter and feeder and require a fresh A press.
+The latest entry uses its own Pinpoint sample for both aiming and shooter targeting, once per loop. Its A-button/readiness gate uses that same distance solution, rather than the old superclass's uninitialized odometry. Invalid aiming odometry or an invalid shot pose stops the automatic target, shooter and feeder. PIDF motor/voltage faults also stop shooter/feed. Recovery requires a fresh A press; it never starts the shooter automatically.
 
 ## Controls
 
-- Default target multiplier: **0.48**, meaning **2880 RPM**. INIT leaves the motor off.
+- At the default starting pose, the automatic multiplier is **0.495**, meaning **2970 RPM**, with zero driver trim. INIT leaves the motor off. The distance curve is offset to this reference; see [distance calibration](AUTO_SHOOTER_CALIBRATION.md).
 - Gamepad 2 A alone starts the shooter; B stops it and cancels an active aim. Release A after INIT/controller assignment before pressing it to start.
 - Tap gamepad 2 Y to turn the rear shooter toward the hive in the robot's quadrant. Y never starts the shooter. Move a gamepad 1 drive stick beyond 0.10, press gamepad 2 B, or hold gamepad 2 START to cancel the turn.
-- Hold BACK and tap LB/LT to increase/decrease the RPM multiplier by 0.01 (60 RPM). The test target range is 0 to 6000 RPM; it never reverses the shooter.
+- Hold BACK and tap LB/LT to add/subtract **0.005** (30 RPM) of relative trim. The trim remains added to the automatic distance target as the robot moves, during A/B stops, and across sensor recovery; a new INIT resets it to zero. Trim storage is bounded to +/-1.0 and the final target to 0–6000 RPM. Holding a shoulder does not repeat; LB+LT cancels, START suppresses adjustment, and releasing START/pressing BACK while a shoulder is held does not apply a step. A shoulder held through START must be released first.
 - Existing D-pad/flower controls remain. In this entry, feeding requires the shooter ON at a nonzero target, a healthy controller and no active aiming turn. Feeding is also blocked on the aim completion/fault/cancellation loop, then returns to the manual D-pad controls. This is not an at-speed feed interlock.
-- A controller fault stops shooter/feed. Release A and press it again after fixing the fault to retry.
+- Invalid odometry or a controller fault stops shooter/feed. Release A and press it again after fixing the fault to retry.
 
 ## Field setup and rear-hive aiming
 
@@ -46,13 +46,14 @@ If aiming stops with `INVALID_POSE`, `Aim blocked reason` distinguishes `ODOMETR
 
 ## Motor control
 
-The REV Hub, not a chip inside the motor, implements the SDK's built-in velocity loop. This test switches to `RUN_WITHOUT_ENCODER` so that loop does not compete with software PIDF. Encoder readings are still available in this mode. The confirmed motor profile remains 28 counts/revolution, 1:1, 6000 RPM.
+The REV Hub, not a chip inside the motor, implements the SDK's built-in velocity loop. This entry uses `RUN_WITHOUT_ENCODER` so that loop does not compete with software PIDF. Encoder readings are still available in this mode. The confirmed motor profile remains 28 counts/revolution, 1:1, 6000 RPM.
 
 Each active control update uses:
 
 ```java
 currentRPM = motor.getVelocity(AngleUnit.DEGREES) / 6.0;
-targetRPM = 6000 * multiplier;
+baseRPM = table(distance) + (2970 - table(51.9));
+targetRPM = Math.max(0, Math.min(6000, baseRPM + 6000 * driverTrim));
 calculatedPower = pidfController.calculate(currentRPM, targetRPM);
 calculatedPower *= 12.0 / batteryVoltage;
 motor.setPower(Math.max(0, Math.min(1, calculatedPower)));
@@ -62,9 +63,9 @@ FTCLib's feedforward contribution is **kF × targetRPM**, not a constant kF. Gai
 
 Battery voltage is the minimum usable reading across the Hub voltage sensors on the shared battery. Values outside 6–16.8 V and nonfinite readings are ignored. If none is usable, or RPM/target/calculated output is invalid, the motor receives zero power and feeding stops. Final clipping happens **after** voltage compensation. Overspeed reduces power toward zero rather than reversing the flywheel.
 
-Integral correction addresses persistent RPM shortfall, such as the reported 2880 target / 2700 actual and 3180 target / 3000 actual. With I=0, a repeated proportional calculation can settle below target. The test entry now uses `kI=0.0002` power per RPM-second. Accumulation is enabled only within 400 RPM of target, with the I contribution bounded to +/-0.15 power **before voltage compensation**. Outside that zone the accumulator is clamped to zero, avoiding buildup during spin-up or large target changes. FTCLib's default +/-1 bound is in accumulated-error units; the code sets explicit bounds of +/-750 RPM-seconds for this gain. Reaching the target retains the learned correction; overspeed reduces it. This is feedback correction, not an automatic change of the RPM multiplier or an added 180 RPM to the target.
+Integral correction addresses persistent RPM shortfall, such as the reported 2880 target / 2700 actual and 3180 target / 3000 actual. With I=0, a repeated proportional calculation can settle below target. The latest entry uses `kI=0.0002` power per RPM-second. Accumulation is enabled only within 400 RPM of target, with the I contribution bounded to +/-0.15 power **before voltage compensation**. Outside that zone the accumulator is clamped to zero, avoiding buildup during spin-up or large target changes. FTCLib's default +/-1 bound is in accumulated-error units; the code sets explicit bounds of +/-750 RPM-seconds for this gain. Reaching the target retains the learned correction; overspeed reduces it. This is feedback correction, not an automatic change of the RPM multiplier or an added 180 RPM to the target.
 
-On STOP, zero target, or fault, the motor receives zero power directly and the PIDF state resets. No sensor read or PID calculation is needed to stop. Saturation clears accumulated integral error. The new test entry never sends `setVelocity()` commands, including during INIT and STOP.
+On STOP, zero target, or fault, the motor receives zero power directly and the PIDF state resets. No sensor read or PID calculation is needed to stop. Saturation clears accumulated integral error. The latest entry never sends `setVelocity()` commands, including during INIT and STOP.
 
 ## Initial gains and tuning
 
@@ -72,7 +73,8 @@ On STOP, zero target, or fault, the motor receives zero power directly and the P
 
 | Setting | Value | Meaning |
 | --- | ---: | --- |
-| `SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER` | 0.48 | Initial target, 2880 RPM |
+| `SHOOTER_AUTO_START_MULTIPLIER` | 0.495 | Default-pose target, 2970 RPM |
+| `SHOOTER_AUTO_TRIM_INCREMENT` | 0.005 | Relative driver adjustment, 30 RPM per press |
 | `SHOOTER_PIDF_P` | 0.0001 | 100 RPM error adds 0.01 power before voltage compensation |
 | `SHOOTER_PIDF_I` | 0.0002 | Accumulates persistent RPM error near target |
 | `SHOOTER_PIDF_INTEGRAL_ZONE_RPM` | 400 | Clear I outside this error range |
@@ -85,8 +87,10 @@ At 3000 RPM measured and requested, the provisional feedforward is 0.50 power at
 
 Observe steady RPM before feeding and the drop/recovery after a ball. Tune F for the steady motor load, P for recovery, and I for persistent error; D remains zero. The new I gain is a starting value validated with synthetic motor models, not a completed physical tuning result. If I remains at its limit with a persistent error, further F/load calibration is needed; if final power is already 1.0, the controller cannot request more voltage. This software controller is not inherently more accurate than the Hub controller: encoder quality, loop timing, gain tuning and flywheel mechanics determine the result. Wheel RPM also does not directly measure ball exit speed.
 
-Telemetry shows target/actual RPM, PIDF status, the sampled RPM used by the controller, voltage during active control, raw/compensated/applied power, integral contribution/limit and configured gains. Controller sample values are unavailable until the first active command and retain the last sample while stopped. Regular encoder telemetry remains visible while stopped.
+Telemetry separates automatic base RPM/multiplier, persistent driver trim, final trimmed RPM/multiplier, distance and lookup clamping. It also shows target/actual RPM, PIDF status, the sampled RPM used by the controller, voltage during active control, raw/compensated/applied power, integral contribution/limit and configured gains. Controller sample values are unavailable until the first active command and retain the last sample while stopped. Regular encoder telemetry remains visible while stopped.
 
 ## Validation
 
-`ShooterTeleOpTargetChecks` exercises the real TeleOp target hooks through the base class to verify that the PIDF manual target and A-button readiness survive the normal TeleOp's automatic targeting behavior, speed adjustments persist, and the automatic entries retain their own readiness gates. `ShooterPidfControlChecks` runs the actual FTCLib controller with instrumented FTC motor/voltage interfaces. It verifies INIT/STOP power, encoder units, the 2880 RPM default and 3000 RPM test target, feedback under load/overspeed, 12/V compensation, clipping order, integral reset, restart and invalid/missing sensors. It rejects any use of the Hub `setVelocity()` API by this controller. `RearHiveAimChecks` verifies rear-facing geometry in all quadrants, shortest-angle wraparound, motor turn signs, simulated closed-loop convergence, settling dwell, cancellation, invalid poses, quadrant changes and timeout. `ShooterPidfSteadyStateChecks` runs the actual FTCLib/controller against synthetic motor models: it reproduces both reported 180 RPM deficits with I disabled, verifies recovery at 10.5/12/14 V and another load, and checks I bounds, spin-up suppression, saturation, STOP and fault reset. Test-only reflection advances FTCLib's internal clock without sleeping or replacing its control algorithm. These simulated results do not establish physical convergence time. A successful Android build verifies that the dependency and new entry package together. Physical tuning and robot testing are still required.
+`AutoShooterTargetChecks` verifies the 51.9-inch/2970-RPM starting reference in all four quadrants, A/B/C geometry, preservation of the existing table's RPM differences, persistent trim across movement, bounds, reset, and invalid-pose rejection. `ShooterTeleOpTargetChecks` exercises the real TeleOp hooks and gamepad edges, own-solution readiness, precise +/-0.005 trim, movement/fault/STOP persistence, PIDF output wiring, voltage compensation and menu/autonomous preselection names. These checks run on the desktop without starting an OpMode or motors.
+
+`ShooterPidfControlChecks` verifies the real FTCLib controller's encoder units, feedback, 12/V compensation, clipping, STOP/reset and sensor faults, and rejects any `setVelocity()` call. `ShooterPidfSteadyStateChecks` reproduces the reported 180-RPM deficits with I disabled, then checks synthetic recovery across voltages/loads, bounded I, saturation and reset. `RearHiveAimChecks` covers quadrant geometry, turn signs, simulated convergence, cancellation and faults. Table/interpolation, spindexer and retained SDK velocity checks also run against production classes. An Android build verifies packaging. Physical shot calibration, PIDF tuning and robot verification remain required; simulated convergence does not establish hardware performance.

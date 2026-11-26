@@ -14,7 +14,8 @@ public class Constants {
     // Autonomous preselectTeleOp must match the TeleOp name exactly
     // =========================================================
 
-    public final static String TELEOP_NAME = "Biobuzz-Quantum Storm Tele-Op";
+    public final static String TELEOP_NAME = "Biobuzz-Quantum Storm Auto Power Control-latest 11/25";
+    public final static String OLD_TELEOP_NAME = "Biobuzz-Quantum Storm Tele-Op-old";
 
     // =========================================================
     // DEVICE NAMES
@@ -66,9 +67,10 @@ public class Constants {
     public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
     public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
 
-    // Separate New Shooter Power Control test entry: provisional FTCLib gains, output in motor-power units.
+    // Latest TeleOp: distance target plus driver trim, with FTCLib feedback and battery compensation.
     // kF multiplies target RPM; bounded integral removes the observed persistent speed shortfall.
-    public final static double SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER = 0.48;
+    public final static double SHOOTER_AUTO_START_MULTIPLIER = 0.495; // 2970 RPM at the start pose
+    public final static double SHOOTER_AUTO_TRIM_INCREMENT = 0.005; // 30 RPM per press
     public final static double SHOOTER_PIDF_P = 0.0001;
     public final static double SHOOTER_PIDF_I = 0.0002;
     public final static double SHOOTER_PIDF_D = 0.0;

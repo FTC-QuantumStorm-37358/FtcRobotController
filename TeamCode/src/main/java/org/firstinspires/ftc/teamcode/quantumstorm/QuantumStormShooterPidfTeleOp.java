@@ -7,20 +7,21 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.RearHiveAim;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.AutoShooterTarget;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.DistanceShooterCalibration;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.DistanceShooterCalibration.Quadrant;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.ShooterPidfControl;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.TableShooterCalibration;
 import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
 
-/** Manual RPM test with optional gamepad 2 Y rear-shooter aiming from absolute field odometry. */
-@TeleOp(name = "Biobuzz-Quantum Storm New Shooter Power Control", group = "Quantum Storm Test")
+/** Distance target plus driver trim, external PIDF/battery control, and gamepad 2 Y rear aiming. */
+@TeleOp(name = Constants.TELEOP_NAME, group = "Quantum Storm")
 public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
     private ShooterPidfControl shooterPidf;
     private PinpointOdometry odometry;
     private Quadrant start = Quadrant.SOUTHWEST;
     private final RearHiveAim aim = new RearHiveAim();
-    private final TableShooterCalibration distance = new TableShooterCalibration();
+    private final AutoShooterTarget shooterTarget = new AutoShooterTarget();
     // A Y held through INIT/START must be released before it can start aiming.
     private boolean previousGamepad2Y;
     private boolean manualDriveOverride;
@@ -30,6 +31,7 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
     private boolean aimFaultPoseValid;
 
     @Override protected void initializeShooterTarget() {
+        shooterTarget.reset();
         odometry = new PinpointOdometry(hardwareMap, startPose());
     }
 
@@ -49,7 +51,7 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
                 start = selected;
                 odometry.setPose(startPose());
             }
-            odometry.update();
+            updateOdometryAndTarget();
             telemetry.addLine("INIT: gamepad 1 D-pad LEFT/RIGHT = X sign; DOWN/UP = Y sign");
             telemetry.addData("Place robot at (in / deg)", "%.2f, %.2f / %.0f",
                     start.startX, start.startY, start.startHeadingDegrees);
@@ -63,7 +65,7 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
     }
 
     @Override protected void updateDriverAssistance(boolean freshShooterA) {
-        odometry.update();
+        updateOdometryAndTarget();
         boolean freshY = gamepad2.y && !previousGamepad2Y;
         previousGamepad2Y = gamepad2.y;
         if (freshY) aimFaultPinpointStatus = null;
@@ -92,17 +94,34 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
 
     @Override protected boolean feedingAllowed() { return !aim.controlsDriveThisLoop(); }
 
-    // The normal TeleOp now selects RPM from distance. This separate manual entry
-    // owns its odometry only for aiming and must not inherit that target/readiness gate.
-    @Override protected double updateShooterTarget(double currentSetting) { return currentSetting; }
-    @Override protected boolean manualShooterAdjustment() { return true; }
-    @Override protected boolean shooterTargetReady() { return true; }
-
-    @Override protected double initialShooterSetting() {
-        return Constants.SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER;
+    private void updateOdometryAndTarget() {
+        odometry.update();
+        shooterTarget.updatePose(odometry.isValid(),
+                odometry.getX(), odometry.getY(), odometry.getHeading());
     }
 
-    @Override protected String shooterControlLabel() { return "FTCLib PIDF / voltage-compensated power"; }
+    // Use this entry's own pose and readiness, not the old TeleOp's separate odometry.
+    // updateDriverAssistance (or the INIT loop) already sampled Pinpoint once this loop.
+    @Override protected double updateShooterTarget(double currentSetting) {
+        return shooterTarget.getMultiplier();
+    }
+    @Override protected boolean manualShooterAdjustment() { return true; }
+    @Override protected boolean shooterTargetReady() { return shooterTarget.ready(); }
+
+    @Override protected String shooterAdjustmentInstructions() {
+        return "Hold BACK + tap LB/LT = distance target trim +0.005/-0.005 (+30/-30 RPM)";
+    }
+
+    @Override protected double adjustShooterSetting(double currentSetting, int direction) {
+        shooterTarget.adjustTrim(direction);
+        return shooterTarget.getMultiplier();
+    }
+
+    @Override protected double initialShooterSetting() {
+        return Constants.SHOOTER_AUTO_START_MULTIPLIER;
+    }
+
+    @Override protected String shooterControlLabel() { return "Distance + trim / FTCLib PIDF / battery compensation"; }
 
     @Override protected void configureShooterMotor(DcMotorEx motor) {
         shooterPidf = new ShooterPidfControl(motor, hardwareMap.voltageSensor);
@@ -114,13 +133,9 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
 
     @Override protected boolean feederRequiresShooterRunning() { return true; }
 
-    @Override protected double clampShooterSetting(double setting) {
-        return Math.max(0, super.clampShooterSetting(setting));
-    }
-
     @Override protected void addShooterTargetTelemetry() {
         telemetry.addLine("A starts shooter; tap Y aims rear at quadrant hive; B stops/cancels");
-        telemetry.addLine("Drive sticks cancel aim; BACK + LB/LT adjusts target by 60 RPM");
+        telemetry.addLine("Drive sticks cancel aim; BACK + LB/LT trims distance target by 30 RPM");
         telemetry.addData("Rear hive aim", aim.getState());
         if (aim.getState() == RearHiveAim.State.INVALID_POSE) {
             telemetry.addData("Aim blocked reason", aim.getInvalidPoseReason());
@@ -137,15 +152,27 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
                     aim.getTargetHeading(), aim.getHeadingError());
         }
         telemetry.addData("Aim clockwise turn power", "%.3f", aim.getTurnPower());
-        if (odometry.isValid()) {
-            TableShooterCalibration.Solution shot = distance.atPose(
-                    odometry.getX(), odometry.getY(), odometry.getHeading());
-            if (shot.ready()) {
-                telemetry.addData("Shooter-to-hive distance (in) / table RPM", "%.1f / %.0f",
-                        shot.distanceInches, shot.rpm);
-            }
+        TableShooterCalibration.Solution shot = shooterTarget.getSolution();
+        telemetry.addData("Start reference", start);
+        telemetry.addData("Shot solution", shot == null ? "NO VALID ODOMETRY" : shot.status);
+        if (shooterTarget.ready()) {
+            telemetry.addData("Hive quadrant / target (in)", "%s / %.2f, %.2f",
+                    shot.quadrant, shot.quadrant.hiveX, shot.quadrant.hiveY);
+            telemetry.addData("Rear shooter position (in)", "%.2f, %.2f", shot.shooterX, shot.shooterY);
+            telemetry.addData("Shooter-to-hive / lookup distance (in)", "%.2f / %.2f",
+                    shot.distanceInches, shot.lookupDistanceInches);
+            telemetry.addData("Auto base RPM / multiplier", "%.0f / %.4f",
+                    shooterTarget.getBaseMultiplier() * Constants.SHOOTER_BASE_RPM,
+                    shooterTarget.getBaseMultiplier());
+            telemetry.addData("Trimmed RPM / multiplier (when ON)", "%.0f / %.4f",
+                    shooterTarget.getMultiplier() * Constants.SHOOTER_BASE_RPM,
+                    shooterTarget.getMultiplier());
+        } else {
+            telemetry.addLine("Shooter/feed blocked; press A again after a valid shot solution returns");
         }
-        odometry.addTelemetry(telemetry);
+        telemetry.addData("Driver trim multiplier / RPM", "%+.3f / %+.0f",
+                shooterTarget.getTrimMultiplier(), shooterTarget.getTrimMultiplier() * Constants.SHOOTER_BASE_RPM);
+        if (odometry != null) odometry.addTelemetry(telemetry);
         telemetry.addLine("PIDF: bounded I corrects persistent RPM error near target; D is zero");
         telemetry.addData("Shooter PIDF state", shooterPidf.getStatus());
         telemetry.addData("PIDF sampled / target RPM", "%.0f / %.0f",

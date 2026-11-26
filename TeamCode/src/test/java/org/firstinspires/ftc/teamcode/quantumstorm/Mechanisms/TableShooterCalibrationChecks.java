@@ -18,28 +18,27 @@ public final class TableShooterCalibrationChecks {
     public static void main(String[] args) {
         TableShooterCalibration table = new TableShooterCalibration();
         double[] distances = {30, 40, 47, 50, 60, 70};
-        double[] rpms = {3000, 3100, 3120, 3200, 3300, 3400};
+        double[] rpms = {3000, 3100, 3120, 2910, 2935, 3300};
         for (int i = 0; i < distances.length; i++) {
-            near(table.rpmForDistance(distances[i]), rpms[i], "Published interior table point");
+            near(table.rpmForDistance(distances[i]), rpms[i], "Current team interior table point");
         }
-        // Independent Hermite calculations with endpoint tangent slopes from the published table.
+        // Independent Hermite calculations using the team's revised 50/60/70/80-inch points.
         near(table.rpmForDistance(24.1), 2901.6721296296296, "Lower boundary interpolation");
-        near(table.rpmForDistance(79.9), 3499, "Upper boundary interpolation");
-        near(table.rpmForDistance(55), 3260.4166666666665, "Cubic interpolation, not linear");
-        // Preserve the upstream library/table behavior, including its small dip around 42-44 in.
-        near(table.rpmForDistance(42), 3104.499514091351, "Upstream curve at 42 in");
-        near(table.rpmForDistance(44), 3102.3906705539357, "Upstream curve at 44 in");
+        near(table.rpmForDistance(79.9), 3399.0131175, "Upper boundary interpolation");
+        double tangentScale = 3 / Math.hypot(-33.75 / 2.5, 19.5 / 2.5);
+        near(table.rpmForDistance(55), 2922.5 + 1.25 * (-33.75 - 19.5) * tangentScale,
+                "Cubic midpoint with FTCLib tangent limiting, not a linear average");
         for (double d : new double[]{0, 1, 24, 24.1}) {
             near(table.rpmForDistance(d), table.rpmForDistance(24.1), "Near clamp");
         }
         for (double d : new double[]{79.9, 80, 120, Double.MAX_VALUE}) {
-            near(table.rpmForDistance(d), 3499, "Far clamp");
+            near(table.rpmForDistance(d), 3399.0131175, "Far clamp");
         }
         double previousRpm = table.rpmForDistance(0);
         for (int i = 0; i <= 10000; i++) {
             double rpm = table.rpmForDistance(i / 100.0);
-            check(Math.abs(rpm - previousRpm) < 1 && rpm >= 2900 && rpm <= 3500,
-                    "Sweep is continuous, bounded and never throws at endpoints");
+            check(Math.abs(rpm - previousRpm) < 1.5 && rpm >= 2900 && rpm <= 3500,
+                    "Sweep is continuous and bounded, including the steep 47-to-50-inch drop at " + i / 100.0);
             previousRpm = rpm;
         }
         double exit = DistanceShooterCalibration.BALL_EXIT_OFFSET_INCHES;
