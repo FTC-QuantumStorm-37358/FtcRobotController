@@ -1,6 +1,6 @@
 # Standalone BIOBUZZ robot control
 
-The separate **Biobuzz-Quantum Storm New Shooter Power Control** manual test uses FTCLib PIDF with encoder RPM feedback, `12 / batteryVoltage` compensation and `setPower()` output. It starts at a 0.50 multiplier (3000 RPM). Gamepad 2 BACK + A uses Pinpoint to aim the rear shooter at the same-quadrant hive; initialize at the displayed field start. See [controls, field setup and provisional gain tuning](SHOOTER_PIDF_TEST.md).
+The separate **Biobuzz-Quantum Storm New Shooter Power Control** manual test uses FTCLib PIDF with encoder RPM feedback, `12 / batteryVoltage` compensation and `setPower()` output. It starts at a 0.48 multiplier (2880 RPM). Gamepad 2 Y uses Pinpoint to aim the rear shooter at the same-quadrant hive; initialize at the displayed field start. See [controls, field setup and provisional gain tuning](SHOOTER_PIDF_TEST.md).
 
 The separate **Biobuzz-Quantum Storm Auto-Shooter-Power** TeleOp calculates encoder RPM from distance to the hive in the robot's quadrant using the 70-degree projectile equation calibrated to A/B. It uses mirrored hive targets at `(±12.75, ±6)` and an INIT selector for mirrored Team 1 starting poses in an absolute field frame. See [setup, equation and limits](AUTO_SHOOTER_CALIBRATION.md). The normal TeleOp retains manual RPM adjustment.
 
@@ -89,6 +89,7 @@ Select **Biobuzz-Quantum Storm Tele-Op** for encoder RPM control using the contr
 | B | Intake OFF; overrides A and all modifier combinations |
 | Hold Back, then tap A, with Start released | Intake reverse ON; stays on after releasing the buttons |
 | Start + A | Driver Station gamepad 1 assignment; no intake direction command |
+| Tap X | Flower arm toggle: down if up, up if down |
 
 A is no longer a toggle. Tapping A alone again leaves forward intake on. Hold Back before pressing A to reverse; changing Back while A remains held does not change direction. Start suppresses all A direction commands, even with Back held, and releasing Start while A remains held does not activate the intake. Release A before issuing a new direction command. B always stops the intake, including while Start or Back is held. Assign the controller before starting TeleOp, then release A. An A held across the TeleOp start is ignored until released and pressed again. On the Logitech F310, use the Back button: Mode changes stick/D-pad behavior internally and is not available as a normal FTC button.
 

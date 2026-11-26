@@ -53,7 +53,7 @@ public final class ShooterVelocityChecks {
         check(mode[0]==DcMotor.RunMode.RUN_USING_ENCODER,"Encoder velocity mode on INIT");
         check(velocity[0]==0 && feedPower[0]==0,"INIT stops both mechanisms");
         shooter.spinUp();
-        check(near(shooter.getTargetRpm(),3045) && near(velocity[0],18270),"Existing default 3045 RPM converted to deg/s");
+        check(near(shooter.getTargetRpm(),2880) && near(velocity[0],17280),"Existing default 2880 RPM converted to deg/s");
         check(shooter.getMeasuredRpm()==3000,"Telemetry reports measured RPM, not requested speed");
         shooter.apply(.50,0);
         check(near(shooter.getTargetRpm(),3000) && near(velocity[0],18000),"Explicit .50 target requests 3000 RPM");

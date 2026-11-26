@@ -17,8 +17,8 @@ The supplied hive back target `(-12.75, -6)` is mirrored into all four quadrants
 
 The selected hive shares the robot center's quadrant. For these symmetric centers this is also the closest hive. Exactly on an axis, ties use the positive side. Crossing an axis recomputes the selected hive each loop; the driver must aim at the new hive. The code assumes that hive is tilted up and ready, and does not detect its tilt or aim the robot.
 
-1. Place the robot at one of the mirrored Team 1 start references `(±12.75, ±62.9)`, with its front facing the Y wall and its rear shooter facing into the field.
-2. Press INIT. Default start is `(-12.75, -62.9, -90 degrees)`.
+1. Place the robot at one of the mirrored Team 1 start references `(±12.75, ±63.25)`, with its front facing the Y wall and its rear shooter facing into the field.
+2. Press INIT. Default start is `(-12.75, -63.25, -90 degrees)`.
 3. On gamepad 1, D-pad LEFT/RIGHT selects negative/positive X; DOWN/UP selects negative/positive Y. Both opposite buttons together leave that axis unchanged. The chosen coordinates and heading appear in telemetry. Heading is -90 degrees at negative Y, +90 degrees at positive Y.
 4. Keep the robot still while Pinpoint calibrates, then START. The shooter and feeder remain off during INIT. The selector is disabled after START.
 
@@ -43,17 +43,17 @@ FTCLib 2.1.1 performs cubic interpolation between these points. We preserve its 
 
 These are **their calibration values**, originally paired with an adjustable hood. Our hood stays fixed at approximately 70 degrees. The table is a starting point for physical testing, not a guarantee of landing in the hive. This replaces the A/B projectile fit in this entry: the old 0.50/0.49 reference multipliers and falling-trajectory rejection are no longer used. There is no hood servo requirement or hood command.
 
-Like Stealth, we rotate the robot-to-shooter offset into field coordinates before measuring the horizontal distance. We retain our own 8-inch rear offset and centered field coordinates, rather than their turret offset and alliance coordinate frame. For robot-center `(x, y)`, front heading `h` (counterclockwise from +X), and selected hive `(hx, hy)`:
+Like Stealth, we rotate the robot-to-shooter offset into field coordinates before measuring the horizontal distance. We retain our own 5.35-inch rear offset (ball center 3.4 in inside the rear edge) and centered field coordinates, rather than their turret offset and alliance coordinate frame. For robot-center `(x, y)`, front heading `h` (counterclockwise from +X), and selected hive `(hx, hy)`:
 
 ```
-shooterX = x - 8 * cos(h)
-shooterY = y - 8 * sin(h)
+shooterX = x - 5.35 * cos(h)
+shooterY = y - 5.35 * sin(h)
 distance = hypot(hx - shooterX, hy - shooterY)
 targetRPM = table(clamp(distance, 24.1, 79.9))
 multiplier = targetRPM / 6000
 ```
 
-The offset remains correct while the robot is turning; only when the rear faces the hive does this simplify to center distance minus 8 inches. Heading is read in degrees from Pinpoint and converted to radians for trigonometry. Target selection remains based on the robot center's quadrant, even if the shooter offset crosses an axis. No moving-shot/flight-time compensation is applied; aim and stop before feeding.
+The offset remains correct while the robot is turning; only when the rear faces the hive does this simplify to center distance minus 5.35 inches. Heading is read in degrees from Pinpoint and converted to radians for trigonometry. Target selection remains based on the robot center's quadrant, even if the shooter offset crosses an axis. No moving-shot/flight-time compensation is applied; aim and stop before feeding.
 
 ## Invalid solutions and controls
 

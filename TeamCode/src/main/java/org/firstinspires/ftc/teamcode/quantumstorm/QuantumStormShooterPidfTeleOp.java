@@ -7,17 +7,22 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.RearHiveAim;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.DistanceShooterCalibration;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.DistanceShooterCalibration.Quadrant;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.ShooterPidfControl;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.TableShooterCalibration;
 import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
 
-/** Manual RPM test with optional BACK+A rear-shooter aiming from absolute field odometry. */
+/** Manual RPM test with optional gamepad 2 Y rear-shooter aiming from absolute field odometry. */
 @TeleOp(name = "Biobuzz-Quantum Storm New Shooter Power Control", group = "Quantum Storm Test")
 public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
     private ShooterPidfControl shooterPidf;
     private PinpointOdometry odometry;
     private Quadrant start = Quadrant.SOUTHWEST;
     private final RearHiveAim aim = new RearHiveAim();
+    private final TableShooterCalibration distance = new TableShooterCalibration();
+    // A Y held through INIT/START must be released before it can start aiming.
+    private boolean previousGamepad2Y;
     private boolean manualDriveOverride;
 
     @Override protected void initializeShooterTarget() {
@@ -33,7 +38,8 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
         while (!isStarted() && !isStopRequested()) {
             double x = start.startX, y = start.startY;
             if (gamepad1.dpad_left != gamepad1.dpad_right) x = gamepad1.dpad_left ? -12.75 : 12.75;
-            if (gamepad1.dpad_down != gamepad1.dpad_up) y = gamepad1.dpad_down ? -62.9 : 62.9;
+            if (gamepad1.dpad_down != gamepad1.dpad_up) y = gamepad1.dpad_down ? -DistanceShooterCalibration.START_Y_INCHES
+                    : DistanceShooterCalibration.START_Y_INCHES;
             Quadrant selected = Quadrant.at(x, y);
             if (selected != start) {
                 start = selected;
@@ -46,17 +52,21 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
             telemetry.addLine("Keep still for Pinpoint; front faces Y wall, rear shooter into field");
             addShooterTargetTelemetry();
             telemetry.update();
+            previousGamepad2Y = gamepad2.y;
             idle();
         }
+        previousGamepad2Y = gamepad2.y;
     }
 
     @Override protected void updateDriverAssistance(boolean freshShooterA) {
         odometry.update();
+        boolean freshY = gamepad2.y && !previousGamepad2Y;
+        previousGamepad2Y = gamepad2.y;
         manualDriveOverride = Math.max(Math.abs(gamepad1.left_stick_y),
                 Math.max(Math.abs(gamepad1.left_stick_x), Math.abs(gamepad1.right_stick_x)))
                 > RearHiveAim.MANUAL_OVERRIDE_DEADBAND;
         aim.update(odometry.getX(), odometry.getY(), odometry.getHeading(), odometry.isValid(),
-                System.nanoTime() / 1e9, freshShooterA && gamepad2.back,
+                System.nanoTime() / 1e9, freshY,
                 manualDriveOverride || gamepad2.b || gamepad2.start);
     }
 
@@ -68,7 +78,6 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
         }
     }
 
-    @Override protected boolean shooterStartAllowed() { return !gamepad2.back; }
     @Override protected boolean feedingAllowed() { return !aim.controlsDriveThisLoop(); }
 
     @Override protected double initialShooterSetting() {
@@ -92,7 +101,7 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
     }
 
     @Override protected void addShooterTargetTelemetry() {
-        telemetry.addLine("A starts shooter; BACK + tap A aims rear at quadrant hive; B stops/cancels");
+        telemetry.addLine("A starts shooter; tap Y aims rear at quadrant hive; B stops/cancels");
         telemetry.addLine("Drive sticks cancel aim; BACK + LB/LT adjusts target by 60 RPM");
         telemetry.addData("Rear hive aim", aim.getState());
         if (aim.getQuadrant() != null) {
@@ -102,6 +111,14 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
                     aim.getTargetHeading(), aim.getHeadingError());
         }
         telemetry.addData("Aim clockwise turn power", "%.3f", aim.getTurnPower());
+        if (odometry.isValid()) {
+            TableShooterCalibration.Solution shot = distance.atPose(
+                    odometry.getX(), odometry.getY(), odometry.getHeading());
+            if (shot.ready()) {
+                telemetry.addData("Shooter-to-hive distance (in) / table RPM", "%.1f / %.0f",
+                        shot.distanceInches, shot.rpm);
+            }
+        }
         odometry.addTelemetry(telemetry);
         telemetry.addLine("Provisional gains: tune P/F on hardware; I/D initially zero");
         telemetry.addData("Shooter PIDF state", shooterPidf.getStatus());

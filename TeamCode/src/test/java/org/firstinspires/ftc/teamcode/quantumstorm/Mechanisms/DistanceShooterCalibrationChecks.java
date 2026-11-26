@@ -42,7 +42,7 @@ public final class DistanceShooterCalibrationChecks {
             near(c.rpm / 6000, .50986677994, 1e-9, "Physics prediction at C");
             check(a.calibratedRange() && b.calibratedRange() && !c.calibratedRange(), "Extrapolation flag");
             near(a.quadrant.startX, xs * 12.75, 0, "Start X");
-            near(a.quadrant.startY, ys * 62.9, 0, "Start Y");
+            near(a.quadrant.startY, ys * 63.25, 0, "Start Y");
             near(a.quadrant.startHeadingDegrees, ys * 90, 0, "Wall-facing heading");
         }
         check(Quadrant.at(0, 0) == Quadrant.NORTHEAST, "Origin tie is positive");

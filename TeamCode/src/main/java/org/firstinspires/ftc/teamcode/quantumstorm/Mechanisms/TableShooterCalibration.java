@@ -11,7 +11,7 @@ import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.DistanceShooterCal
 public final class TableShooterCalibration {
     public static final double MIN_LOOKUP_DISTANCE = 24.1;
     public static final double MAX_LOOKUP_DISTANCE = 79.9;
-    private static final double REAR_OFFSET_INCHES = DistanceShooterCalibration.SHOOTER_OFFSET_INCHES;
+    private static final double REAR_OFFSET_INCHES = DistanceShooterCalibration.BALL_EXIT_OFFSET_INCHES;
     private final InterpLUT rpmTable = new InterpLUT();
 
     public TableShooterCalibration() {

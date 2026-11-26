@@ -53,7 +53,7 @@ public final class RearHiveAim {
         if (next != quadrant) settledSince = Double.NaN;
         quadrant = next;
         double dx = quadrant.hiveX - x, dy = quadrant.hiveY - y;
-        if (Math.hypot(dx, dy) <= DistanceShooterCalibration.SHOOTER_OFFSET_INCHES) {
+        if (Math.hypot(dx, dy) <= DistanceShooterCalibration.BALL_EXIT_OFFSET_INCHES) {
             state = State.TOO_CLOSE;
             return 0;
         }
