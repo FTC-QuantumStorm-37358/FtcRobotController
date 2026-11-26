@@ -129,11 +129,11 @@ public class Constants {
     public final static boolean FLOWER_SERVO_REVERSED = true;
 
     // Hard limits: the arm is never commanded outside these
-    public final static double FLOWER_ANGLE_MIN_DEG = -135;
+    public final static double FLOWER_ANGLE_MIN_DEG = -160;
     public final static double FLOWER_ANGLE_MAX_DEG = 0;
 
     public final static double FLOWER_UP_DEG = 0;       // neutral, pointing up; also where it goes on INIT
-    public final static double FLOWER_DOWN_DEG = -140;  // forward and down, for intaking
+    public final static double FLOWER_DOWN_DEG = -160;  // forward and down, for intaking
     public final static double FLOWER_NUDGE_DEG = 2;    // per LB + D-pad press on gamepad 2, for tuning
 
     // =========================================================
@@ -176,7 +176,7 @@ public class Constants {
     // Real robot Garden stroke: enough forward command to pull pollen into the intake.
     public final static double AUTO_GARDEN_ADVANCE_POWER = .30;
     /** First straight Garden pass before the back-right-forward second pass. */
-    public final static double AUTO_GARDEN_FIRST_PASS_SEC = 2.0;
+    public final static double AUTO_GARDEN_FIRST_PASS_SEC = 1.5;
     /** Pinpoint heading required for every Team 1 straight Garden intake pass. */
     public final static double TEAM_ONE_GARDEN_INTAKE_HEADING_DEG = 90.0;
     public final static boolean TEAM_ONE_HIVE_HEIGHT_CALIBRATED = true;
@@ -294,7 +294,7 @@ public class Constants {
     public final static double AUTO_APRILTAG_TIMEOUT_SEC = 3.0;    // no tag / not aligned -> ERROR
     public final static double AUTO_SHOOTER_SPINUP_SEC = 1.0;      // flywheel spin-up before feeding
     /** Team 1 keeps feeding longer so all four preloads can clear before Garden travel. */
-    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 6;
+    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 4.5;
     /** Match Team 1's longer feed window so all four preloads can clear. */
     public final static double AUTO_TEAM_TWO_FEED_TIME_SEC = AUTO_TEAM_ONE_FEED_TIME_SEC;
     public final static double AUTO_AIM_TOLERANCE_DEG = 2.0;       // AprilTag tx within this = aligned

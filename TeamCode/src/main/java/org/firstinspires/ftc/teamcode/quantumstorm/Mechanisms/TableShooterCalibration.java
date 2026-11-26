@@ -19,10 +19,14 @@ public final class TableShooterCalibration {
         rpmTable.add(30, 3000);
         rpmTable.add(40, 3100);
         rpmTable.add(47, 3120);
-        rpmTable.add(50, 3200);
-        rpmTable.add(60, 3300);
-        rpmTable.add(70, 3400);
-        rpmTable.add(80, 3500);
+        // Team One's starting shot is about 57.5 in from the rear shooter.
+        // These neighboring values command about 2,930 RPM at that pose,
+        // reducing the launch height without changing the motor's configured
+        // maximum speed.
+        rpmTable.add(50, 2910);
+        rpmTable.add(60, 2935);
+        rpmTable.add(70, 3300);
+        rpmTable.add(80, 3400);
         rpmTable.createLUT();
     }
 

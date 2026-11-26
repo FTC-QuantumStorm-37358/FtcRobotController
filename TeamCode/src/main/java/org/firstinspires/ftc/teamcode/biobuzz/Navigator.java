@@ -125,7 +125,10 @@ public final class Navigator {
     private Outputs driveRoute(Pose p,Pose target,double heading){
         while(route.size()>1&&(p.distance(route.get(0))<(scripted?.05:.6)||!scripted&&field.clear(p,route.get(1),heading))){checkStop();route.remove(0);}
         Pose q=route.get(0);double dx=q.x-p.x,dy=q.y-p.y,c=Math.cos(p.heading),s=Math.sin(p.heading);
-        double gain=scripted?.45:.35;
+        // Scripted autonomous routes use fixed, validated corridors. A higher
+        // gain lets the no-tilt Team 1 Garden-to-shot return use available
+        // drivetrain speed instead of spending its scoring time crawling.
+        double gain=scripted?.55:.35;
         Outputs o=new Outputs();o.forward=(dx*c+dy*s)*gain;o.strafeRight=(dx*s-dy*c)*gain;
         double mag=Math.hypot(o.forward,o.strafeRight);if(mag>field.drivePower){o.forward*=field.drivePower/mag;o.strafeRight*=field.drivePower/mag;}
         o.turnClockwise=-FieldLayout.clip(Math.toDegrees(Pose.angle(heading-p.heading))*.08,field.turnPower);return o;

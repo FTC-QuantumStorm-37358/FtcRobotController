@@ -12,6 +12,12 @@ import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.FlowerIntake;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.ShooterVelocityControl;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.SpindexerControls;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.DistanceShooterCalibration.Quadrant;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.TableShooterCalibration;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.TableShooterCalibration.Solution;
+import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
 @TeleOp(name = Constants.TELEOP_NAME, group = "Quantum Storm")
 public class QuantumStormTeleOp extends LinearOpMode {
@@ -58,12 +64,43 @@ public class QuantumStormTeleOp extends LinearOpMode {
     // Setting before the most recent change, for tuning telemetry.
     private double previousShooterSetting;
 
-    // Optional automatic target source; default TeleOp retains manual RPM adjustment.
-    protected void initializeShooterTarget() { }
-    protected void waitForDriverStart() { waitForStart(); }
-    protected double updateShooterTarget(double currentSetting) { return currentSetting; }
-    protected boolean manualShooterAdjustment() { return true; }
-    protected boolean feederRequiresShooterRunning() { return !manualShooterAdjustment(); }
+    // Standard TeleOp uses the same rear-shooter distance/RPM table as autonomous.
+    private final TableShooterCalibration distanceShooter=new TableShooterCalibration();
+    private PinpointOdometry shooterOdometry;
+    private Quadrant shooterStart=Quadrant.SOUTHWEST;
+    private Solution distanceShot;
+
+    protected void initializeShooterTarget() {
+        shooterOdometry=new PinpointOdometry(hardwareMap,shooterStartPose());
+    }
+    private Pose2D shooterStartPose(){
+        return new Pose2D(DistanceUnit.INCH,shooterStart.startX,shooterStart.startY,
+                AngleUnit.DEGREES,shooterStart.startHeadingDegrees);
+    }
+    protected void waitForDriverStart() {
+        while(!isStarted()&&!isStopRequested()){
+            double x=shooterStart.startX,y=shooterStart.startY;
+            if(gamepad1.dpad_left!=gamepad1.dpad_right)x=gamepad1.dpad_left?-12.75:12.75;
+            if(gamepad1.dpad_down!=gamepad1.dpad_up)y=gamepad1.dpad_down?-62.9:62.9;
+            Quadrant selected=Quadrant.at(x,y);
+            if(selected!=shooterStart){shooterStart=selected;shooterOdometry.setPose(shooterStartPose());}
+            updateShooterTarget(0);
+            telemetry.addLine("INIT: D-pad LEFT/RIGHT selects field X; DOWN/UP selects field Y.");
+            telemetry.addData("Shooter start reference",shooterStart);
+            telemetry.addLine("Keep the robot still while Pinpoint initializes. Shooter and feeder stay OFF.");
+            addShooterTargetTelemetry();telemetry.update();idle();
+        }
+    }
+    protected double updateShooterTarget(double currentSetting) {
+        distanceShot=null;
+        if(shooterOdometry==null)return 0;
+        shooterOdometry.update();
+        if(!shooterOdometry.isValid())return 0;
+        distanceShot=distanceShooter.atPose(shooterOdometry.getX(),shooterOdometry.getY(),shooterOdometry.getHeading());
+        return shooterTargetReady()?distanceShot.rpm/Constants.SHOOTER_BASE_RPM:0;
+    }
+    protected boolean manualShooterAdjustment() { return false; }
+    protected boolean feederRequiresShooterRunning() { return true; }
     protected boolean feedingAllowed() { return true; }
     protected boolean shooterStartAllowed() { return true; }
     protected void updateDriverAssistance(boolean freshShooterA) { }
@@ -71,10 +108,18 @@ public class QuantumStormTeleOp extends LinearOpMode {
         // This robot's tested forward/backward convention is inverted; strafe/turn retain their signs.
         drive.drive(gamepad1.left_stick_y, gamepad1.left_stick_x, gamepad1.right_stick_x);
     }
-    protected boolean shooterTargetReady() { return true; }
-    protected void addShooterTargetTelemetry() { }
+    protected boolean shooterTargetReady() { return distanceShot!=null&&distanceShot.ready(); }
+    protected void addShooterTargetTelemetry() {
+        telemetry.addLine("AUTO SHOOTER: Pinpoint distance selects RPM; A starts, B stops, D-pad feeds.");
+        if(distanceShot!=null&&distanceShot.quadrant!=null){
+            telemetry.addData("Shooter-to-Hive distance (in)","%.1f",distanceShot.distanceInches);
+            telemetry.addData("Auto shooter RPM / multiplier","%.0f / %.3f",distanceShot.rpm,distanceShot.rpm/Constants.SHOOTER_BASE_RPM);
+            telemetry.addData("Shot solution",distanceShot.status);
+        }else telemetry.addData("Shot solution","WAITING FOR VALID PINPOINT POSE");
+        if(shooterOdometry!=null)shooterOdometry.addTelemetry(telemetry);
+    }
     protected double initialShooterSetting() { return Constants.SHOOTER_RPM_MULTIPLIER; }
-    protected String shooterControlLabel() { return "REV Hub velocity / encoder RPM"; }
+    protected String shooterControlLabel() { return "Automatic Pinpoint distance / RPM table"; }
     protected void configureShooterMotor(DcMotorEx motor) { ShooterVelocityControl.configure(motor); }
     protected boolean applyShooterOutput(DcMotorEx motor, double multiplier) {
         ShooterVelocityControl.setOutput(motor, multiplier);
