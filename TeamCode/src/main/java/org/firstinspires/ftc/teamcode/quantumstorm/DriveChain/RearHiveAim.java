@@ -8,14 +8,16 @@ public final class RearHiveAim {
     public static final double TOLERANCE_DEGREES = 1;
     public static final double SETTLE_SECONDS = .20;
     public static final double TIMEOUT_SECONDS = 5;
-    public static final double KP = .015;
+    public static final double KP = .020;
     public static final double MIN_TURN_POWER = .06;
-    public static final double MAX_TURN_POWER = .25;
+    public static final double MAX_TURN_POWER = .40;
     public static final double MANUAL_OVERRIDE_DEADBAND = .10;
 
     public enum State { IDLE, TURNING, SETTLING, ALIGNED, CANCELLED, INVALID_POSE, TOO_CLOSE, TIMED_OUT }
+    public enum InvalidPoseReason { NONE, ODOMETRY_SAMPLE_INVALID, NONFINITE_POSE, OUTSIDE_FIELD, INVALID_CLOCK }
 
     private State state = State.IDLE;
+    private InvalidPoseReason invalidPoseReason = InvalidPoseReason.NONE;
     private Quadrant quadrant;
     private double targetHeading = Double.NaN, headingError = Double.NaN, turnPower;
     private double startedAt, lastUpdate, settledSince = Double.NaN;
@@ -37,10 +39,18 @@ public final class RearHiveAim {
             lastUpdate = now;
             settledSince = Double.NaN;
             quadrant = null;
+            invalidPoseReason = InvalidPoseReason.NONE;
+            targetHeading = headingError = Double.NaN;
         }
         if (!active()) return 0;
-        if (!validPose || !Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(heading)
-                || Math.abs(x) > 72 || Math.abs(y) > 72 || !Double.isFinite(now) || now < lastUpdate) {
+        if (!validPose) invalidPoseReason = InvalidPoseReason.ODOMETRY_SAMPLE_INVALID;
+        else if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(heading))
+            invalidPoseReason = InvalidPoseReason.NONFINITE_POSE;
+        else if (Math.abs(x) > 72 || Math.abs(y) > 72)
+            invalidPoseReason = InvalidPoseReason.OUTSIDE_FIELD;
+        else if (!Double.isFinite(now) || now < lastUpdate)
+            invalidPoseReason = InvalidPoseReason.INVALID_CLOCK;
+        if (invalidPoseReason != InvalidPoseReason.NONE) {
             state = State.INVALID_POSE;
             return 0;
         }
@@ -87,6 +97,7 @@ public final class RearHiveAim {
     // Includes the completion/fault/cancel loop so the previous turn command is explicitly cleared.
     public boolean controlsDriveThisLoop() { return controlsDrive; }
     public State getState() { return state; }
+    public InvalidPoseReason getInvalidPoseReason() { return invalidPoseReason; }
     public Quadrant getQuadrant() { return quadrant; }
     public double getTargetHeading() { return targetHeading; }
     public double getHeadingError() { return headingError; }

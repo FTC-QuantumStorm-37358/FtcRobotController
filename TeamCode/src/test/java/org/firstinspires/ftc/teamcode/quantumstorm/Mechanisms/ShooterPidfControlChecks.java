@@ -19,7 +19,8 @@ public final class ShooterPidfControlChecks {
     }
     private static final class TrackingPidf extends PIDFController {
         int resets, clears, calculations;
-        TrackingPidf() { super(Constants.SHOOTER_PIDF_P, Constants.SHOOTER_PIDF_I,
+        // Isolate instantaneous P/F and voltage behavior here; the steady-state suite exercises I over time.
+        TrackingPidf() { super(Constants.SHOOTER_PIDF_P, 0,
                 Constants.SHOOTER_PIDF_D, Constants.SHOOTER_PIDF_F); }
         @Override public void reset() { super.reset(); resets++; }
         @Override public void clearTotalError() { super.clearTotalError(); clears++; }

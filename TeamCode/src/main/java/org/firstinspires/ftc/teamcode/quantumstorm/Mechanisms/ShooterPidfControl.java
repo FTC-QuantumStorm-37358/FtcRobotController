@@ -16,7 +16,7 @@ public final class ShooterPidfControl {
     private final PIDFController controller;
     private Status status = Status.STOPPED;
     private double currentRpm = Double.NaN, targetRpm, batteryVolts = Double.NaN;
-    private double rawPower, compensatedPower, appliedPower;
+    private double rawPower, compensatedPower, appliedPower, integralPower;
 
     public ShooterPidfControl(DcMotorEx motor, Iterable<VoltageSensor> voltageSensors) {
         this(motor, voltageSensors, new PIDFController(Constants.SHOOTER_PIDF_P,
@@ -49,7 +49,15 @@ public final class ShooterPidfControl {
         batteryVolts = readBatteryVoltage();
         if (!Double.isFinite(batteryVolts)) return fault(Status.INVALID_VOLTAGE);
 
+        // FTCLib's default +/-1 accumulated-error bound is in RPM-seconds, not motor power.
+        // Limit I's contribution explicitly and suppress accumulation during spin-up/large steps.
+        double integralLimit = controller.getI() > 0
+                && Math.abs(targetRpm - currentRpm) <= Constants.SHOOTER_PIDF_INTEGRAL_ZONE_RPM
+                ? Constants.SHOOTER_PIDF_MAX_INTEGRAL_POWER / controller.getI() : 0;
+        controller.setIntegrationBounds(-integralLimit, integralLimit);
         rawPower = controller.calculate(currentRpm, targetRpm);
+        integralPower = rawPower - controller.getP() * controller.getPositionError()
+                - controller.getD() * controller.getVelocityError() - controller.getF() * targetRpm;
         compensatedPower = rawPower * Constants.SHOOTER_PIDF_REFERENCE_VOLTS / batteryVolts;
         if (!Double.isFinite(compensatedPower)) return fault(Status.INVALID_OUTPUT);
         // This entry shoots forward only. Excess speed reduces power to zero rather than reversing.
@@ -80,7 +88,7 @@ public final class ShooterPidfControl {
     public void stop() {
         motor.setPower(0);
         controller.reset();
-        targetRpm = rawPower = compensatedPower = appliedPower = 0;
+        targetRpm = rawPower = compensatedPower = appliedPower = integralPower = 0;
         if (status == Status.RUNNING) status = Status.STOPPED;
         // Retain a fault message while stopped; a successful fresh start clears it.
     }
@@ -92,4 +100,6 @@ public final class ShooterPidfControl {
     public double getRawPower() { return rawPower; }
     public double getCompensatedPower() { return compensatedPower; }
     public double getAppliedPower() { return appliedPower; }
+    /** I contribution in the last calculated command, before voltage compensation. */
+    public double getIntegralPower() { return integralPower; }
 }

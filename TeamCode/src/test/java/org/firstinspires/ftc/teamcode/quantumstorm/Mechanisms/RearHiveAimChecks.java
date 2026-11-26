@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms;
 
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.RearHiveAim;
 import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.RearHiveAim.State;
+import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.RearHiveAim.InvalidPoseReason;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.DistanceShooterCalibration.Quadrant;
 
 /** Pure geometry and timed state-machine checks; no robot or blocking waits. */
@@ -37,7 +38,7 @@ public final class RearHiveAimChecks {
                 double power = aim.update(x, y, heading, true, 0, true, false);
                 double error = RearHiveAim.wrapDegrees(target - heading);
                 check(power * error < 0, "Convert CCW heading error to clockwise wheel command");
-                check(Math.abs(power) <= .25, "Turn power capped");
+                check(Math.abs(power) <= .40, "Turn power capped");
                 // Simulated heading update: the drive mixer's positive power turns clockwise.
                 double nextHeading = heading - power * 90 * .02;
                 check(Math.abs(RearHiveAim.wrapDegrees(target - nextHeading)) < Math.abs(error),
@@ -54,6 +55,15 @@ public final class RearHiveAimChecks {
             check(aim.getState() == State.ALIGNED, "Mirrored turn settles before timeout");
             check(Math.abs(RearHiveAim.wrapDegrees(target - heading)) <= 1, "Settled heading tolerance");
         }
+        // Faster large/medium turns retain gentle minimum effort near the target.
+        near(new RearHiveAim().update(-12.75, -63.25, -170, true, 0, true, false), -.40,
+                "Large CCW turn uses the new 40 percent cap");
+        near(new RearHiveAim().update(-12.75, -63.25, -10, true, 0, true, false), .40,
+                "Large clockwise turn uses the same cap");
+        near(new RearHiveAim().update(-12.75, -63.25, -100, true, 0, true, false), -.20,
+                "Ten-degree error uses the faster proportional response");
+        near(new RearHiveAim().update(-12.75, -63.25, -92, true, 0, true, false), -.06,
+                "Two-degree error retains the existing fine-turn minimum");
         RearHiveAim aim = started();
         double target = aim.getTargetHeading();
         near(aim.update(-36, -62.9, target, true, .1, false, false), 0, "Stop turning inside tolerance");
@@ -76,14 +86,38 @@ public final class RearHiveAimChecks {
         aim = started();
         near(aim.update(-36, -62.9, -90, false, .1, false, false), 0, "Invalid odometry stops");
         check(aim.getState() == State.INVALID_POSE, "Pose fault visible");
+        check(aim.getInvalidPoseReason() == InvalidPoseReason.ODOMETRY_SAMPLE_INVALID,
+                "Sensor rejection distinguished from coordinate bounds");
         aim.update(-36, -62.9, -90, true, .2, false, false);
         check(!aim.active(), "Pose recovery needs fresh request");
+        check(aim.getInvalidPoseReason() == InvalidPoseReason.ODOMETRY_SAMPLE_INVALID,
+                "Fault reason survives sensor recovery until new request");
+        aim.update(-36, -62.9, -90, true, .3, true, false);
+        check(aim.active() && aim.getInvalidPoseReason() == InvalidPoseReason.NONE,
+                "Fresh request clears the previous diagnostic and can aim");
         for (double[] bad : new double[][]{{Double.NaN, -57, 0}, {-36, Double.POSITIVE_INFINITY, 0},
                 {-36, -57, Double.NaN}, {73, -57, 0}}) {
             aim = new RearHiveAim();
             near(aim.update(bad[0], bad[1], bad[2], true, 0, true, false), 0, "Nonfinite/outside pose rejected");
             check(aim.getState() == State.INVALID_POSE, "Invalid geometry status");
+            check(aim.getInvalidPoseReason() == (bad[0] == 73
+                    ? InvalidPoseReason.OUTSIDE_FIELD : InvalidPoseReason.NONFINITE_POSE),
+                    "Report the actual geometry rejection");
         }
+        aim = started();
+        aim.update(-36, -62.9, -90, true, -.1, false, false);
+        check(aim.getState() == State.INVALID_POSE
+                && aim.getInvalidPoseReason() == InvalidPoseReason.INVALID_CLOCK
+                && aim.getTurnPower() == 0, "Backward clock stops with a distinct reason");
+        aim = new RearHiveAim();
+        near(aim.update(-12.1, -89.2, -77.3, true, 0, true, false), 0,
+                "Reported READY sensor with impossible field Y must not turn");
+        check(aim.getInvalidPoseReason() == InvalidPoseReason.OUTSIDE_FIELD,
+                "User's valid sensor sample rejected specifically for field coordinates");
+        near(aim.update(-12.75, -63.25, -77.3, true, 1, true, false), .254,
+                "Corrected field reference and fresh Y permit normal turn output");
+        check(aim.getState() == State.TURNING && aim.getInvalidPoseReason() == InvalidPoseReason.NONE,
+                "Valid field pose recovers on a new request");
         aim = started();
         near(aim.update(-36, -62.9, -90, true, 5, false, false), 0, "Timeout stops a stalled/reversed robot");
         check(aim.getState() == State.TIMED_OUT, "Timeout visible");

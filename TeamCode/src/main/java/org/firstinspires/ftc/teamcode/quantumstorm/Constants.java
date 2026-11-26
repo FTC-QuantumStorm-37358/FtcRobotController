@@ -67,13 +67,16 @@ public class Constants {
     public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
 
     // Separate New Shooter Power Control test entry: provisional FTCLib gains, output in motor-power units.
-    // kF multiplies target RPM; tune on hardware at the 12 V reference before adding I/D.
+    // kF multiplies target RPM; bounded integral removes the observed persistent speed shortfall.
     public final static double SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER = 0.48;
     public final static double SHOOTER_PIDF_P = 0.0001;
-    public final static double SHOOTER_PIDF_I = 0.0;
+    public final static double SHOOTER_PIDF_I = 0.0002;
     public final static double SHOOTER_PIDF_D = 0.0;
     public final static double SHOOTER_PIDF_F = 1.0 / SHOOTER_BASE_RPM;
     public final static double SHOOTER_PIDF_REFERENCE_VOLTS = 12.0;
+    // Accumulate only near target, not throughout spin-up or a large speed change.
+    public final static double SHOOTER_PIDF_INTEGRAL_ZONE_RPM = 400;
+    public final static double SHOOTER_PIDF_MAX_INTEGRAL_POWER = 0.15;
     // Ordinary open-loop power, shared by autonomous and TeleOp.
     public final static double SHOOTER_POWER = 0.59;
     public final static double SHOOTER_POWER_INCREMENT = 0.01;
@@ -214,10 +217,13 @@ public class Constants {
     // Pod offsets from the robot's center (tracking point), in mm.
     // X pod (forward-counting): sideways distance, LEFT of center = positive.
     // Y pod (strafe-counting):  forward distance, FORWARD of center = positive.
-    // Measured 2026-11-25 on the 17.5" long x 17.25" wide robot:
-    // X pod 4.125" left of center, Y pod 7" behind center.
-    public final static double PINPOINT_X_POD_OFFSET_MM = 4.125 * 25.4;
-    public final static double PINPOINT_Y_POD_OFFSET_MM = -7.0 * 25.4;
+    // Measured 2026-11-25 on the 17.5" long x 17.2" wide robot, facing the intake:
+    // Forward-measuring X pod is 6" RIGHT of the centered shooter/robot centerline.
+    // Strafe-measuring Y pod is 1" inside the rear edge: 17.5/2 - 1 = 7.75" BEHIND center.
+    // The Y pod's 4" LEFT displacement is not its setOffsets Y value; use its fore/aft distance.
+    // Distances refer to the tracking wheels' ground contact points, not the pod housings.
+    public final static double PINPOINT_X_POD_OFFSET_MM = -6.0 * 25.4;
+    public final static double PINPOINT_Y_POD_OFFSET_MM = -(17.5 / 2 - 1.0) * 25.4;
 
     // Robot uses the goBILDA 4-Bar Odometry Pack (2 pods + 1 Pinpoint computer)
     public final static GoBildaPinpointDriver.GoBildaOdometryPods PINPOINT_POD_TYPE =
