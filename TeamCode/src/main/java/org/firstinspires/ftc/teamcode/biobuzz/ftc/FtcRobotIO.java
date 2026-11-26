@@ -9,21 +9,18 @@ import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.robotcore.hardware.*;
 import org.firstinspires.ftc.robotcore.external.navigation.*;
 import org.firstinspires.ftc.teamcode.biobuzz.RobotIO;
-import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
-import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.ShooterVelocityControl;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Shooter;
 
 /** FTC SDK adapter. No socket, desktop Java or browser dependency is deployed to the robot. */
 public final class FtcRobotIO implements RobotIO,AutoCloseable {
     private final FtcHardwareConfig config;
     private final DcMotor fl,fr,bl,br,intake;
-    private final DcMotorEx shooter;
-    private final CRServo feeder;
+    private final Shooter shooter;
     private final GoBildaPinpointDriver pinpoint;
     private final Limelight3A limelight;
     private final Servo cameraTilt;
     private final FtcHardwareConfig.BallCounter counter;
     private final long epoch=System.nanoTime();
-    private final org.firstinspires.ftc.teamcode.biobuzz.FeedCadence cadence=new org.firstinspires.ftc.teamcode.biobuzz.FeedCadence();
     private int pipeline=-1;
     private double frameTimestamp=Double.NaN,frameCapturedAt,pipelineChangedAt;
     private final java.util.function.BooleanSupplier stopRequested;
@@ -37,20 +34,18 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
         config.validate();this.config=config;counter=config.createBallCounter(map);
         fl=map.get(DcMotor.class,config.frontLeft);fr=map.get(DcMotor.class,config.frontRight);
         bl=map.get(DcMotor.class,config.backLeft);br=map.get(DcMotor.class,config.backRight);
-        intake=map.get(DcMotor.class,config.intake);shooter=map.get(DcMotorEx.class,config.shooter);
-        feeder=map.get(CRServo.class,config.feeder);
+        intake=map.get(DcMotor.class,config.intake);
+        shooter=new Shooter(map.get(DcMotorEx.class,config.shooter),
+                map.get(CRServo.class,config.feeder),map.voltageSensor);
         pinpoint=map.get(GoBildaPinpointDriver.class,config.pinpoint);
         checkStop();
         limelight=config.useVision?map.get(Limelight3A.class,config.limelight):null;
         cameraTilt=!config.useVision||config.cameraTilt==null||config.cameraTilt.trim().isEmpty()?null:map.tryGet(Servo.class,config.cameraTilt);
         fl.setDirection(DcMotor.Direction.REVERSE);bl.setDirection(DcMotor.Direction.REVERSE);
         fr.setDirection(DcMotor.Direction.FORWARD);br.setDirection(DcMotor.Direction.FORWARD);
-        intake.setDirection(DcMotor.Direction.FORWARD);shooter.setDirection(DcMotor.Direction.FORWARD);
+        intake.setDirection(DcMotor.Direction.FORWARD);
         for(DcMotor motor:new DcMotor[]{fl,fr,bl,br,intake})motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         for(DcMotor motor:new DcMotor[]{fl,fr,bl,br,intake})motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        ShooterVelocityControl.configure(shooter);
-        shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-        feeder.setDirection(CRServo.Direction.REVERSE);
         apply(new Outputs());
         checkStop();
         pinpoint.setOffsets(config.podXOffsetMm,config.podYOffsetMm,DistanceUnit.MM);
@@ -89,14 +84,12 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
     }
     public void apply(Outputs o) {
         o=o.copy();if(config.movementOnly){o.intakePower=o.shooterPower=o.feederPower=0;o.pipeline=0;}
-        if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.intakePower==0&&o.shooterPower==0&&o.feederPower==0){cadence.apply(0,nowSeconds());stopActuators();return;}
+        if(stopRequested()||o.forward==0&&o.strafeRight==0&&o.turnClockwise==0&&o.intakePower==0&&o.shooterPower==0&&o.feederPower==0){stopActuators();return;}
         actuatorsStopped=false;
         double[] w=o.wheelPowers();
         fl.setPower(w[0]);fr.setPower(w[1]);bl.setPower(w[2]);br.setPower(w[3]);
         intake.setPower(o.intakePower);
-        double rpmMultiplier=Double.isFinite(o.shooterPower)?Math.max(-1,Math.min(1,o.shooterPower)):0;
-        ShooterVelocityControl.setOutput(shooter,rpmMultiplier);
-        feeder.setPower(cadence.apply(rpmMultiplier>0?o.feederPower:0,nowSeconds()));
+        shooter.apply(o.shooterPower,o.feederPower);
         if(pipeline!=o.pipeline){
             pipeline=o.pipeline;pipelineChangedAt=nowSeconds();frameTimestamp=Double.NaN;
             if(cameraTilt!=null)cameraTilt.setPosition(pipeline==0?config.tiltUp:config.tiltDown);
@@ -106,7 +99,8 @@ public final class FtcRobotIO implements RobotIO,AutoCloseable {
     private void stopActuators(){
         if(actuatorsStopped)return;actuatorsStopped=true;
         SafeShutdown.run(()->fl.setPower(0),()->fr.setPower(0),()->bl.setPower(0),()->br.setPower(0),
-            ()->intake.setPower(0),()->shooter.setVelocity(0),()->feeder.setPower(0));
+            ()->intake.setPower(0),shooter::stop);
     }
+    public void addShooterTelemetry(org.firstinspires.ftc.robotcore.external.Telemetry telemetry){shooter.addTelemetry(telemetry);}
     public void close() { if(closed)return;closed=true;stopActuators();if(limelight!=null)SafeShutdown.run(limelight::stop); }
 }

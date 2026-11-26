@@ -4,7 +4,7 @@ import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.DistanceShooterCalibration.Quadrant;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.TableShooterCalibration.Solution;
 
-/** Latest TeleOp target policy; the shared table and autonomous calibration are unchanged. */
+/** Shared distance target with a calibrated start reference; optional trim is used only by TeleOp. */
 public final class AutoShooterTarget {
     private final TableShooterCalibration table = new TableShooterCalibration();
     private final double startTableRpm;
@@ -14,8 +14,15 @@ public final class AutoShooterTarget {
     private static final int MAX_TRIM_STEPS = (int) Math.round(1 / Constants.SHOOTER_AUTO_TRIM_INCREMENT);
 
     public AutoShooterTarget() {
-        Quadrant start = Quadrant.SOUTHWEST;
-        startTableRpm = table.atPose(start.startX, start.startY, start.startHeadingDegrees).rpm;
+        this(Quadrant.SOUTHWEST.startX, Quadrant.SOUTHWEST.startY,
+                Quadrant.SOUTHWEST.startHeadingDegrees);
+    }
+
+    /** Autonomous supplies its own wall-shot reference without changing its navigation coordinates. */
+    public AutoShooterTarget(double startX, double startY, double startHeadingDegrees) {
+        Solution reference = table.atPose(startX, startY, startHeadingDegrees);
+        if (!reference.ready()) throw new IllegalArgumentException("Invalid shooter reference pose");
+        startTableRpm = reference.rpm;
     }
 
     public void reset() {

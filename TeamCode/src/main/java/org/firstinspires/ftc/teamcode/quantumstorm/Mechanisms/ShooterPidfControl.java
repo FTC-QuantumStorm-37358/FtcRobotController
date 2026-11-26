@@ -7,7 +7,7 @@ import com.qualcomm.robotcore.hardware.VoltageSensor;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.teamcode.quantumstorm.Constants;
 
-/** Software RPM feedback for the separate manual shooter test; the Hub supplies raw motor power. */
+/** Shared TeleOp/autonomous RPM feedback; the Hub supplies raw motor power. */
 public final class ShooterPidfControl {
     public enum Status { STOPPED, RUNNING, INVALID_TARGET, INVALID_RPM, INVALID_VOLTAGE, INVALID_OUTPUT }
 
@@ -34,7 +34,7 @@ public final class ShooterPidfControl {
         stop();
     }
 
-    /** Call once each active TeleOp loop. Returns false on a fault so the caller also stops feeding. */
+    /** Call once each active control loop. Returns false on a fault so the caller also stops feeding. */
     public boolean update(double multiplier) {
         if (!Double.isFinite(multiplier) || multiplier < 0 || multiplier > 1) {
             return fault(Status.INVALID_TARGET);

@@ -9,7 +9,7 @@ public final class TeamOnePollenAuto implements RobotController {
     private final RobotIO io;
     private final FieldLayout field;
     private final Navigator nav;
-    private final AutonomousShooter shooter=new AutonomousShooter();
+    private final AutonomousShooter shooter;
     private final ShootingAim.Alignment shootingAlignment=new ShootingAim.Alignment();
     private HiveVision hive;
     private HiveShotGate shotGate;
@@ -75,7 +75,7 @@ public final class TeamOnePollenAuto implements RobotController {
     private double surveyAngle,surveyHeading,bestHeading,bestArea;
     private double avoidUntil,avoidStrafe;
 
-    public TeamOnePollenAuto(RobotIO io,FieldLayout field){this.io=io;this.field=field;nav=new Navigator(field,io::stopRequested);}
+    public TeamOnePollenAuto(RobotIO io,FieldLayout field){this.io=io;this.field=field;shooter=new AutonomousShooter(field.hive[0]);nav=new Navigator(field,io::stopRequested);}
     public void start(int alliance,double power){
         if(alliance<0||alliance>1||!Double.isFinite(power)||power<0||power>1
                 ||!Double.isFinite(spinUpSeconds)||spinUpSeconds<0||!Double.isFinite(feedSeconds)||feedSeconds<=0

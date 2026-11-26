@@ -21,6 +21,7 @@ import org.firstinspires.ftc.teamcode.quantumstorm.DriveChain.MecanumDrive;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.FlowerIntake;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Intake;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.Shooter;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.TableShooterCalibration;
 import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
 import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PollenInventory;
 
@@ -35,6 +36,7 @@ public final class AutoStateMachine implements AutoCloseable {
     private final MecanumDrive drive;
     private final PinpointOdometry odometry;
     private final Shooter shooter;
+    private final TableShooterCalibration shotGeometry=new TableShooterCalibration();
     private final Intake intake;
     private final FlowerIntake flowerIntake;
     private final ElapsedTime clock=new ElapsedTime();
@@ -129,10 +131,8 @@ public final class AutoStateMachine implements AutoCloseable {
                 debugReadError="";return debugSensors;
             }
             public void apply(Outputs o){
-                // Every autonomous shot uses the exact same calibrated RPM
-                // multiplier.  Do not substitute a distance/odometry model
-                // part way through a four-pollen feed: that made later shots
-                // use a different flywheel target than the first shots.
+                // The routine selects distance-based target RPM. Update motor feedback
+                // every loop; battery compensation changes output power, not target RPM.
                 double shooterMultiplier=o.shooterPower;
                 debugOutputs=o.copy();
                 debugOutputs.shooterPower=shooterMultiplier;
@@ -144,7 +144,9 @@ public final class AutoStateMachine implements AutoCloseable {
                 }
                 stopped=false;
                 drive.drive(o.forward*Constants.AUTO_FORWARD_POWER_SIGN,o.strafeRight,o.turnClockwise);
-                shooter.apply(shooterMultiplier,o.feederPower);
+                if(!shooter.apply(shooterMultiplier,o.feederPower)){
+                    debugOutputs.shooterPower=debugOutputs.feederPower=0;
+                }
                 boolean feederPulse=shooter.isFeederPulseActive();
                 if(feederPulse&&!feederPulseWasActive){
                     int slot=lastShotCount%lastShotLog.length;
@@ -299,13 +301,22 @@ public final class AutoStateMachine implements AutoCloseable {
         opMode.telemetry.addData("Destination",target==null?"None - stationary state":String.format(java.util.Locale.US,"X %.1f, Y %.1f in, heading %.1f deg",target.x,target.y,Math.toDegrees(target.heading)));
         if(target!=null&&debugSensors!=null)opMode.telemetry.addData("Distance to target (in)","%.1f",debugSensors.pose.distance(target));
         opMode.telemetry.addData("Drive request F / right / CW","%.2f / %.2f / %.2f",debugOutputs.forward,debugOutputs.strafeRight,debugOutputs.turnClockwise);
-        opMode.telemetry.addData("Shooter RPM multiplier / spindexer / intake","%.2f / %.2f / %.2f",debugOutputs.shooterPower,debugOutputs.feederPower,debugOutputs.intakePower);
+        opMode.telemetry.addData("Shooter RPM multiplier / spindexer / intake","%.3f / %.2f / %.2f",debugOutputs.shooterPower,debugOutputs.feederPower,debugOutputs.intakePower);
         opMode.telemetry.addData("Shooter RPM actual / target","%.0f / %.0f",shooter.getMeasuredRpm(),shooter.getTargetRpm());
-        opMode.telemetry.addData("Auto shot command","%.2f multiplier / %.0f RPM",debugOutputs.shooterPower,debugOutputs.shooterPower*Constants.SHOOTER_BASE_RPM);
+        opMode.telemetry.addData("Auto shot command","%.3f multiplier / %.0f RPM",debugOutputs.shooterPower,debugOutputs.shooterPower*Constants.SHOOTER_BASE_RPM);
+        shooter.addTelemetry(opMode.telemetry);
+        if(debugSensors!=null&&debugSensors.odometryValid&&debugSensors.pose!=null){
+            Pose pose=debugSensors.pose;
+            TableShooterCalibration.Solution shot=shotGeometry.atPose(pose.x,pose.y,Math.toDegrees(pose.heading));
+            if(shot.ready()){
+                opMode.telemetry.addData("Shooter-to-hive / lookup distance (in)","%.2f / %.2f",shot.distanceInches,shot.lookupDistanceInches);
+                opMode.telemetry.addData("Shot hive (in)","%.2f, %.2f",shot.quadrant.hiveX,shot.quadrant.hiveY);
+            }
+        }
         for(int i=0;i<Math.min(lastShotCount,lastShotLog.length);i++){
             int slot=(lastShotCount-Math.min(lastShotCount,lastShotLog.length)+i)%lastShotLog.length;
             double[] shot=lastShotLog[slot];
-            opMode.telemetry.addData("Shot "+(i+1)+" command / target / actual","%.2f / %.0f / %.0f RPM",shot[0],shot[1],shot[2]);
+            opMode.telemetry.addData("Shot "+(i+1)+" command / target / actual","%.3f / %.0f / %.0f RPM",shot[0],shot[1],shot[2]);
         }
         opMode.telemetry.addData("Flower intake","%s %.0f deg",flowerIntake.isDown()?"DOWN":"UP",flowerIntake.getAngle());
         opMode.telemetry.addData("Measured pieces",debugSensors==null||debugSensors.ballCount<0?"UNKNOWN":debugSensors.ballCount+" / 4");
@@ -358,7 +369,7 @@ public final class AutoStateMachine implements AutoCloseable {
         try {
             if(camera!=null)camera.reset();
             if(mirroredTags!=null)mirroredTags.reset();
-            routine.start(alliance,Constants.SHOOTER_RPM_MULTIPLIER);
+            routine.start(alliance,Constants.SHOOTER_AUTO_START_MULTIPLIER);
             // Bounded, stationary wait; included in the match's 26/30-second clock.
             while(opMode.opModeIsActive()&&clock.seconds()<2){
                 odometry.update();
