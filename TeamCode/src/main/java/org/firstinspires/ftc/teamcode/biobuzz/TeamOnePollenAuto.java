@@ -65,6 +65,8 @@ public final class TeamOnePollenAuto implements RobotController {
     /** Backup mode: after two Garden passes, use Team Two's taped wall shot and fire only on a live tag. */
     public boolean useTeamTwoFollowUpShot=false;
     public int gardenPassLimit=0;
+    /** Completed full Garden intake strokes in the fixed two-pass routines. */
+    private int gardenPassesCompleted;
     /** Normal Team 1 branch when the first shot did not tilt the Hive. */
     private boolean repeatStartShotAfterGarden,postShotDecisionMade,postShotMissingTagFrame,postShotTagAuthorized;
     /** Optional old spilled-pollen test; normal mode uses the Garden. */
@@ -94,7 +96,7 @@ public final class TeamOnePollenAuto implements RobotController {
         this.alliance=alliance;this.power=power;startAt=lastNow=io.nowSeconds();spinAt=Double.NaN;
         shootingAlignment.reset();
         running=true;tiltConfirmed=survey=false;avoidUntil=0;current=destination=gardenEntry=parkVia=parkRetreat=parkSide=parkEntry=teamTwoShotExit=teamTwoShotVia=teamTwoShotLane=gardenLegStart=returnBack=returnSide=null;gardenBackDistance=gardenRightDistance=returnSideDistance=returnForwardDistance=parkFirstStrafe=parkSecondStrafe=parkFinalStrafe=0;parkLegAt=startAt;gardenIntakeHeading=Double.NaN;message=error="";
-        collecting=lastFeeding=preloadTagLatched=false;feedElapsed=0;lastCommandAt=startAt;repeatStartShotAfterGarden=postShotDecisionMade=postShotMissingTagFrame=postShotTagAuthorized=false;
+        collecting=lastFeeding=preloadTagLatched=false;feedElapsed=0;lastCommandAt=startAt;gardenPassesCompleted=0;repeatStartShotAfterGarden=postShotDecisionMade=postShotMissingTagFrame=postShotTagAuthorized=false;
         shotGate=new HiveShotGate(field,alliance,false);
         hive=new HiveVision(field,alliance);nav.useScriptedRoute(true,alliance);enter(State.SHOOTING);io.apply(new Outputs());
     }
@@ -172,6 +174,12 @@ public final class TeamOnePollenAuto implements RobotController {
         returnForwardDistance=Math.abs((destination.x-returnSide.x)*c+(destination.y-returnSide.y)*s);
     }
     private boolean fixedGardenPasses(){return useTeamTwoFollowUpShot||repeatStartShotAfterGarden;}
+    private int requiredGardenPasses(){return Math.max(1,gardenPassLimit);}
+    private boolean returningAfterFixedPasses(){
+        return fixedGardenPasses()&&gardenPassesCompleted>=requiredGardenPasses()
+                &&(state==State.TO_TEAM_TWO_SHOT||state==State.RETURN_BACK_FROM_GARDEN
+                ||state==State.RETURN_STRAFE_TO_SHOT_LANE||state==State.RETURN_FORWARD_TO_SHOT);
+    }
     /** A centered live tag, or five-plus tags, authorizes the normal Team 1 retry. */
     private boolean normalRetryTagReady(Sensors sensors,double now){
         if(!sensors.cameraConnected||sensors.vision==null||!sensors.vision.fresh(now,0))return false;
@@ -442,7 +450,11 @@ public final class TeamOnePollenAuto implements RobotController {
             lastFeeding=false;lastCommandAt=now;
             if(s.ballCount>=4)collecting=false;
             double elapsed=now-startAt;
-            if(elapsed>=26.0&&state!=State.PARK)park();
+            // Let a completed fixed two-pass routine actually leave the Garden
+            // before the parking cutoff takes over.  Otherwise the second pass
+            // can finish exactly at the cutoff and be replaced by PARK before
+            // the return-to-shot state receives a drive command.
+            if(elapsed>=26.0&&state!=State.PARK&&!returningAfterFixedPasses())park();
             // Normal Team 1 uses a three-leg Flower-clear parking route. Keep
             // collecting through 23 seconds, then reserve about five seconds
             // for the faster route to finish at the final target around 28–29.
@@ -551,7 +563,10 @@ public final class TeamOnePollenAuto implements RobotController {
                     // not cancel its second forward-and-intake pass.
                     if(s.ballCount>=4&&!fixedGardenPasses()){followUpShotOrPark();break;}
                     if(gardenPassDone(age)){
-                        if(fixedGardenPasses()&&gardenPassLimit<=1){finishFixedGardenPasses();break;}
+                        if(fixedGardenPasses()){
+                            gardenPassesCompleted++;
+                            if(gardenPassesCompleted>=requiredGardenPasses()){finishFixedGardenPasses();break;}
+                        }
                         enter(State.GARDEN_BACK_UP);
                         message="Garden intake pass complete; back up slightly before the next pass";
                         break;
@@ -588,8 +603,11 @@ public final class TeamOnePollenAuto implements RobotController {
                     double retryHeadingError=Double.isFinite(gardenIntakeHeading)?Pose.angle(gardenIntakeHeading-current.heading):0;
                     if(!fixedGardenPasses())out.turnClockwise=-FieldLayout.clip(Math.toDegrees(retryHeadingError)*.05,.22);
                     if((fixedGardenPasses()?gardenPassDone(age):age>=.60)){
-                        if(fixedGardenPasses()&&gardenPassLimit<=2)finishFixedGardenPasses();
-                        else if(fixedGardenPasses()){enter(State.GARDEN_BACK_UP);message="Garden pass complete; reset for the next measured intake pass";}
+                        if(fixedGardenPasses()){
+                            gardenPassesCompleted++;
+                            if(gardenPassesCompleted>=requiredGardenPasses())finishFixedGardenPasses();
+                            else {enter(State.GARDEN_BACK_UP);message="Garden pass complete; reset for the next measured intake pass";}
+                        }
                         else {enter(State.INTAKE_GARDEN);message="Garden retry complete; repeat forward intake cycle until four pieces or parking";}
                     }
                     break;
