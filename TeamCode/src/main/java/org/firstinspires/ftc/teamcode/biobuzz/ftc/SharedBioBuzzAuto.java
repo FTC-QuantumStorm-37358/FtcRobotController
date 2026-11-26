@@ -19,11 +19,11 @@ public abstract class SharedBioBuzzAuto extends LinearOpMode {
                     telemetry.addData("Vision",config.useVision?"Limelight required":"Camera-free: fixed poses, tilt unverified");
                     telemetry.addData("Mechanisms",config.movementOnly?"DISABLED: simulator-timed movement only":"Enabled");
                     telemetry.addData("Odometry / camera / balls",s.odometryValid+" / "+s.cameraConnected+" / "+s.ballCount);
-                    telemetry.addLine("Place robot at the calibrated start and keep still.");telemetry.update();idle();
+                    telemetry.addLine("Place robot at the calibrated start and keep still.");io.addShooterTelemetry(telemetry);telemetry.update();idle();
                 }
                 if(isStopRequested())return;
                 auto.start(alliance,config.shooterRpmMultiplier);
-                while(opModeIsActive()&&auto.isRunning()){auto.tick();telemetry.addData("Autonomous",auto.status());telemetry.update();idle();}
+                while(opModeIsActive()&&auto.isRunning()){auto.tick();telemetry.addData("Autonomous",auto.status());io.addShooterTelemetry(telemetry);telemetry.update();idle();}
             }finally{auto.stop();}
         }catch(java.util.concurrent.CancellationException e){/* STOP is a normal exit. */}
     }

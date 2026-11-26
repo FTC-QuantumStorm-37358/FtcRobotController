@@ -61,13 +61,14 @@ public class Constants {
     // SDK's generic GoBILDA 5202/3/4 profile instead describes the 99.5:1 gearbox.
     public final static double SHOOTER_ENCODER_TICKS_PER_REV = 28.0;
     public final static double SHOOTER_GEAR_RATIO = 1.0;
-    /** Fixed autonomous/TeleOp flywheel command: 48% of 6000 RPM = 2880 RPM. */
+    /** Legacy TeleOp initial setting before distance targeting; latest/auto use the reference below. */
     public final static double SHOOTER_RPM_MULTIPLIER = 0.48;
     public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.01; // 60 RPM
     public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
     public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
 
-    // Latest TeleOp: distance target plus driver trim, with FTCLib feedback and battery compensation.
+    // Latest TeleOp and autonomous: distance target, FTCLib feedback and battery compensation.
+    // Driver trim is available only in TeleOp.
     // kF multiplies target RPM; bounded integral removes the observed persistent speed shortfall.
     public final static double SHOOTER_AUTO_START_MULTIPLIER = 0.495; // 2970 RPM at the start pose
     public final static double SHOOTER_AUTO_TRIM_INCREMENT = 0.005; // 30 RPM per press

@@ -13,7 +13,7 @@ public final class AutoStateMachine implements RobotController {
     private final RobotIO io;
     private final FieldLayout field;
     private final Navigator navigator;
-    private final AutonomousShooter shooter=new AutonomousShooter();
+    private final AutonomousShooter shooter;
     private final boolean useVision;
     private final Routine routine;
     private final boolean movementOnly;
@@ -69,7 +69,7 @@ public final class AutoStateMachine implements RobotController {
         this.movementOnly=movementOnly;
         this.collectAfterRoutine=collectAfterRoutine;
         this.routine=routine;
-        this.io=io;this.field=field;this.useVision=useVision;this.navigator=new Navigator(field,io::stopRequested);
+        this.io=io;this.field=field;shooter=new AutonomousShooter(field.hive[0]);this.useVision=useVision;this.navigator=new Navigator(field,io::stopRequested);
     }
     public void start(int alliance,double power) {
         if(alliance<0||alliance>1||!Double.isFinite(power)||power<0||power>1)throw new IllegalArgumentException("Invalid alliance or shooter power");

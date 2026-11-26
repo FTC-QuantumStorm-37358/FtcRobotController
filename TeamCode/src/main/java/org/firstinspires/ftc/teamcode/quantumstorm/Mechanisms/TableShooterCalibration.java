@@ -20,7 +20,7 @@ public final class TableShooterCalibration {
         rpmTable.add(40, 3100);
         rpmTable.add(47, 3120);
         // Team calibration lowered these neighbors from the original Stealth table.
-        // The latest TeleOp applies its own start-reference bias in AutoShooterTarget.
+        // Latest TeleOp and autonomous apply their start-reference bias in AutoShooterTarget.
         rpmTable.add(50, 2910);
         rpmTable.add(60, 2935);
         rpmTable.add(70, 3300);

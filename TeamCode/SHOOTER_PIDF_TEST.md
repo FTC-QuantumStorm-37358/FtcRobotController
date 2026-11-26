@@ -2,7 +2,7 @@
 
 Driver Station entry: **Biobuzz-Quantum Storm Auto Power Control-latest 11/25**.
 
-This TeleOp combines location-based targeting with **FTCLib 2.1.1 `PIDFController`**, encoder RPM feedback, battery-compensated `setPower()`, and gamepad 2 Y rear-hive aiming. The previous standard TeleOp remains available as **Biobuzz-Quantum Storm Tele-Op-old** with its existing table/SDK velocity behavior. The redundant Auto-Shooter-Power entry is removed. Autonomous preselects the latest entry; its shooting algorithm and table are unchanged.
+This TeleOp combines location-based targeting with **FTCLib 2.1.1 `PIDFController`**, encoder RPM feedback, battery-compensated `setPower()`, and gamepad 2 Y rear-hive aiming. The previous standard TeleOp remains available as **Biobuzz-Quantum Storm Tele-Op-old** with its existing table/SDK velocity behavior. The redundant Auto-Shooter-Power entry is removed. Autonomous preselects the latest entry and now shares its distance-target/PIDF/battery approach; see [autonomous reference and behavior](AUTONOMOUS_SHOOTER_CONTROL.md).
 
 The latest entry uses its own Pinpoint sample for both aiming and shooter targeting, once per loop. Its A-button/readiness gate uses that same distance solution, rather than the old superclass's uninitialized odometry. Invalid aiming odometry or an invalid shot pose stops the automatic target, shooter and feeder. PIDF motor/voltage faults also stop shooter/feed. Recovery requires a fresh A press; it never starts the shooter automatically.
 
@@ -65,7 +65,7 @@ Battery voltage is the minimum usable reading across the Hub voltage sensors on 
 
 Integral correction addresses persistent RPM shortfall, such as the reported 2880 target / 2700 actual and 3180 target / 3000 actual. With I=0, a repeated proportional calculation can settle below target. The latest entry uses `kI=0.0002` power per RPM-second. Accumulation is enabled only within 400 RPM of target, with the I contribution bounded to +/-0.15 power **before voltage compensation**. Outside that zone the accumulator is clamped to zero, avoiding buildup during spin-up or large target changes. FTCLib's default +/-1 bound is in accumulated-error units; the code sets explicit bounds of +/-750 RPM-seconds for this gain. Reaching the target retains the learned correction; overspeed reduces it. This is feedback correction, not an automatic change of the RPM multiplier or an added 180 RPM to the target.
 
-On STOP, zero target, or fault, the motor receives zero power directly and the PIDF state resets. No sensor read or PID calculation is needed to stop. Saturation clears accumulated integral error. The latest entry never sends `setVelocity()` commands, including during INIT and STOP.
+On STOP, zero target, or fault, the motor receives zero power directly and the PIDF state resets. No sensor read or PID calculation is needed to stop. Saturation clears accumulated integral error. The latest entry and autonomous never send `setVelocity()` commands, including during INIT and STOP.
 
 ## Initial gains and tuning
 

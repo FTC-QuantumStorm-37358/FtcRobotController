@@ -2,7 +2,7 @@
 
 Select **Biobuzz-Quantum Storm Auto Power Control-latest 11/25**. This entry consolidates automatic distance targeting, FTCLib PIDF RPM feedback, battery compensation, relative driver trim and Y rear-hive aiming. It sends `setPower()` in `RUN_WITHOUT_ENCODER` while still reading the encoder. See [PIDF and aiming details](SHOOTER_PIDF_TEST.md).
 
-**Biobuzz-Quantum Storm Tele-Op-old** retains the previous table/SDK `setVelocity()` behavior. The separate **Auto-Shooter-Power** entry has been removed. Autonomous shooting is unchanged; its preselected TeleOp is now the latest entry.
+**Biobuzz-Quantum Storm Tele-Op-old** retains the previous table/SDK `setVelocity()` behavior. The separate **Auto-Shooter-Power** entry has been removed. Autonomous also uses the shared distance target and PIDF/battery power control, with its own start-reference calibration; see [autonomous shooter control](AUTONOMOUS_SHOOTER_CONTROL.md).
 
 ## Field coordinates and initialization
 
@@ -60,7 +60,7 @@ finalMultiplier = clamp(baseMultiplier + driverTrim, 0, 1)
 targetRPM = 6000 * finalMultiplier
 ```
 
-This makes the default-location base multiplier **0.495**, preserving the table's RPM differences at other distances. The shared table used by the old entry and autonomous is unchanged. Our fixed hood remains approximately 70 degrees; this is a calibration starting point, not a guarantee of landing in the hive.
+This makes the default-location base multiplier **0.495**, preserving the table's RPM differences at other distances. The shared lookup points remain unchanged. Autonomous applies the same bias method at its own 51.55-inch reference; the old TeleOp keeps the original unshifted table. Our fixed hood remains approximately 70 degrees; this is a calibration starting point, not a guarantee of landing in the hive.
 
 ## Controls and compensation
 

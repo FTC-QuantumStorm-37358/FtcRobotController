@@ -27,8 +27,8 @@ public class FtcHardwareConfig {
     /** Robot-space vertical axis: 2 for Z-up. Set only after verifying the pose convention. */
     public int tagHeightAxis=2;
     public double robotOriginHeightInches=0;
-    /** Target speed as a fraction of Constants.SHOOTER_BASE_RPM (default 2940 RPM). */
-    public double shooterRpmMultiplier=Constants.SHOOTER_RPM_MULTIPLIER;
+    /** Reference-position target as a fraction of SHOOTER_BASE_RPM (default 2970 RPM). */
+    public double shooterRpmMultiplier=Constants.SHOOTER_AUTO_START_MULTIPLIER;
     /** Configure four occupied-slot signals, or override createBallCounter with your actual sensing mechanism. */
     public String[] ballSlotNames={};
     public boolean occupiedSignalLow=true;
