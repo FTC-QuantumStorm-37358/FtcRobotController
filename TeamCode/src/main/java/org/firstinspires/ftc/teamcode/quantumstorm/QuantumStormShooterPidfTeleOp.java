@@ -146,13 +146,15 @@ public class QuantumStormShooterPidfTeleOp extends QuantumStormTeleOp {
             }
         }
         odometry.addTelemetry(telemetry);
-        telemetry.addLine("Provisional gains: tune P/F on hardware; I/D initially zero");
+        telemetry.addLine("PIDF: bounded I corrects persistent RPM error near target; D is zero");
         telemetry.addData("Shooter PIDF state", shooterPidf.getStatus());
         telemetry.addData("PIDF sampled / target RPM", "%.0f / %.0f",
                 shooterPidf.getCurrentRpm(), shooterPidf.getTargetRpm());
         telemetry.addData("Battery voltage during control (V)", "%.2f", shooterPidf.getBatteryVolts());
         telemetry.addData("PIDF / compensated / applied power", "%.3f / %.3f / %.3f",
                 shooterPidf.getRawPower(), shooterPidf.getCompensatedPower(), shooterPidf.getAppliedPower());
+        telemetry.addData("PIDF integral power / limit", "%.3f / %.2f",
+                shooterPidf.getIntegralPower(), Constants.SHOOTER_PIDF_MAX_INTEGRAL_POWER);
         telemetry.addData("PIDF P / I / D / F", "%.6f / %.6f / %.6f / %.6f",
                 Constants.SHOOTER_PIDF_P, Constants.SHOOTER_PIDF_I,
                 Constants.SHOOTER_PIDF_D, Constants.SHOOTER_PIDF_F);

@@ -67,13 +67,16 @@ public class Constants {
     public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
 
     // Separate New Shooter Power Control test entry: provisional FTCLib gains, output in motor-power units.
-    // kF multiplies target RPM; tune on hardware at the 12 V reference before adding I/D.
+    // kF multiplies target RPM; bounded integral removes the observed persistent speed shortfall.
     public final static double SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER = 0.48;
     public final static double SHOOTER_PIDF_P = 0.0001;
-    public final static double SHOOTER_PIDF_I = 0.0;
+    public final static double SHOOTER_PIDF_I = 0.0002;
     public final static double SHOOTER_PIDF_D = 0.0;
     public final static double SHOOTER_PIDF_F = 1.0 / SHOOTER_BASE_RPM;
     public final static double SHOOTER_PIDF_REFERENCE_VOLTS = 12.0;
+    // Accumulate only near target, not throughout spin-up or a large speed change.
+    public final static double SHOOTER_PIDF_INTEGRAL_ZONE_RPM = 400;
+    public final static double SHOOTER_PIDF_MAX_INTEGRAL_POWER = 0.15;
     // Ordinary open-loop power, shared by autonomous and TeleOp.
     public final static double SHOOTER_POWER = 0.59;
     public final static double SHOOTER_POWER_INCREMENT = 0.01;
