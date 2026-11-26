@@ -42,15 +42,16 @@ public final class TableShooterCalibrationChecks {
                     "Sweep is continuous, bounded and never throws at endpoints");
             previousRpm = rpm;
         }
+        double exit = DistanceShooterCalibration.BALL_EXIT_OFFSET_INCHES;
         for (int xs : new int[]{-1, 1}) for (int ys : new int[]{-1, 1}) {
             Solution a = table.atPose(xs * 12.75, ys * 62.9, ys * 90);
             Solution b = table.atPose(xs * 12.75, ys * 57, ys * 90);
             double cx = xs * 36, cy = ys * 62.9;
             double aimedHeading = Math.toDegrees(Math.atan2(ys * 6 - cy, xs * 12.75 - cx)) + 180;
             Solution c = table.atPose(cx, cy, aimedHeading);
-            near(a.distanceInches, 48.9, "A rear distance in mirrored quadrant");
-            near(b.distanceInches, 43, "B rear distance in mirrored quadrant");
-            near(c.distanceInches, 53.466840654128, "C aimed rear distance");
+            near(a.distanceInches, 56.9 - exit, "A rear distance in mirrored quadrant");
+            near(b.distanceInches, 51 - exit, "B rear distance in mirrored quadrant");
+            near(c.distanceInches, Math.hypot(23.25, 56.9) - exit, "C aimed rear distance");
             for (Solution shot : new Solution[]{a, b, c}) {
                 check(shot.ready() && shot.status == Status.READY, "Reference shot has table command");
                 near(shot.quadrant.hiveX, xs * 12.75, "Hive X sign");
@@ -59,13 +60,13 @@ public final class TableShooterCalibrationChecks {
             }
         }
         Solution side = table.atPose(-12.75, -57, 0);
-        near(side.shooterX, -20.75, "Rear offset at zero heading");
+        near(side.shooterX, -12.75 - exit, "Rear offset at zero heading");
         near(side.shooterY, -57, "Rear offset Y at zero heading");
-        near(side.distanceInches, Math.hypot(8, 51), "Unaligned distance uses actual shooter point");
-        near(table.atPose(-12.75, -57, 90).distanceInches, 59, "Facing away puts exit farther away");
-        near(table.atPose(-12.75, -57, 270).distanceInches, 43, "Wrapped heading");
+        near(side.distanceInches, Math.hypot(exit, 51), "Unaligned distance uses actual shooter point");
+        near(table.atPose(-12.75, -57, 90).distanceInches, 51 + exit, "Facing away puts exit farther away");
+        near(table.atPose(-12.75, -57, 270).distanceInches, 51 - exit, "Wrapped heading");
         check(table.atPose(0, 0, 0).quadrant == Quadrant.NORTHEAST, "Axis tie uses positive side");
-        Solution close = table.atPose(-12.75, -14, -90);
+        Solution close = table.atPose(-12.75, -6 - exit, -90);
         check(close.ready() && close.status == Status.CLAMPED_NEAR, "Close shots use table clamp");
         near(close.distanceInches, 0, "Coincident exit has finite distance");
         Solution far = table.atPose(-72, -72, 45);
@@ -88,7 +89,7 @@ public final class TableShooterCalibrationChecks {
             for (int heading = -180; heading < 180; heading += 45) {
                 Solution shot = table.atPose(x, y, heading);
                 check(shot.ready() && shot.rpm >= 2900 && shot.rpm <= 3500, "Field command bounds");
-                near(Math.hypot(shot.shooterX - x, shot.shooterY - y), 8, "Rotated exit stays 8 in away");
+                near(Math.hypot(shot.shooterX - x, shot.shooterY - y), exit, "Rotated exit stays at the measured offset");
             }
         }
         System.out.println("RPM table, cubic interpolation, clamps, A/B/C, headings, quadrants, invalid poses and field sweep passed.");

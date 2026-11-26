@@ -60,15 +60,15 @@ public class Constants {
     // SDK's generic GoBILDA 5202/3/4 profile instead describes the 99.5:1 gearbox.
     public final static double SHOOTER_ENCODER_TICKS_PER_REV = 28.0;
     public final static double SHOOTER_GEAR_RATIO = 1.0;
-    /** Preserved local autonomous/TeleOp flywheel command: 50% of 6000 RPM = 3000 RPM. */
-    public final static double SHOOTER_RPM_MULTIPLIER = 0.50;
-    public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.005; // 30 RPM
+    /** Fixed autonomous/TeleOp flywheel command: 48% of 6000 RPM = 2880 RPM. */
+    public final static double SHOOTER_RPM_MULTIPLIER = 0.48;
+    public final static double SHOOTER_RPM_MULTIPLIER_INCREMENT = 0.01; // 60 RPM
     public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
     public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
 
     // Separate New Shooter Power Control test entry: provisional FTCLib gains, output in motor-power units.
     // kF multiplies target RPM; tune on hardware at the 12 V reference before adding I/D.
-    public final static double SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER = 0.49;
+    public final static double SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER = 0.48;
     public final static double SHOOTER_PIDF_P = 0.0001;
     public final static double SHOOTER_PIDF_I = 0.0;
     public final static double SHOOTER_PIDF_D = 0.0;
@@ -214,9 +214,10 @@ public class Constants {
     // Pod offsets from the robot's center (tracking point), in mm.
     // X pod (forward-counting): sideways distance, LEFT of center = positive.
     // Y pod (strafe-counting):  forward distance, FORWARD of center = positive.
-    // TODO: measure on the robot
-    public final static double PINPOINT_X_POD_OFFSET_MM = -170;
-    public final static double PINPOINT_Y_POD_OFFSET_MM = - 150;
+    // Measured 2026-11-25 on the 17.5" long x 17.25" wide robot:
+    // X pod 4.125" left of center, Y pod 7" behind center.
+    public final static double PINPOINT_X_POD_OFFSET_MM = 4.125 * 25.4;
+    public final static double PINPOINT_Y_POD_OFFSET_MM = -7.0 * 25.4;
 
     // Robot uses the goBILDA 4-Bar Odometry Pack (2 pods + 1 Pinpoint computer)
     public final static GoBildaPinpointDriver.GoBildaOdometryPods PINPOINT_POD_TYPE =

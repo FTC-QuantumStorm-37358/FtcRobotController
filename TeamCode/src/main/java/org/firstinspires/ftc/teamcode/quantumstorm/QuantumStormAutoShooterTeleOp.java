@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.DistanceShooterCalibration;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.DistanceShooterCalibration.Quadrant;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.TableShooterCalibration;
 import org.firstinspires.ftc.teamcode.quantumstorm.Mechanisms.TableShooterCalibration.Solution;
@@ -31,7 +32,8 @@ public class QuantumStormAutoShooterTeleOp extends QuantumStormTeleOp {
             // INIT only: left/right choose the X sign, down/up choose the Y sign.
             double x = start.startX, y = start.startY;
             if (gamepad1.dpad_left != gamepad1.dpad_right) x = gamepad1.dpad_left ? -12.75 : 12.75;
-            if (gamepad1.dpad_down != gamepad1.dpad_up) y = gamepad1.dpad_down ? -62.9 : 62.9;
+            if (gamepad1.dpad_down != gamepad1.dpad_up) y = gamepad1.dpad_down ? -DistanceShooterCalibration.START_Y_INCHES
+                    : DistanceShooterCalibration.START_Y_INCHES;
             Quadrant selected = Quadrant.at(x, y);
             if (selected != start) {
                 start = selected;

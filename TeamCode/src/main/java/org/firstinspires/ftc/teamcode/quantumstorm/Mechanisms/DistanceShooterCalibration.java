@@ -6,8 +6,13 @@ public final class DistanceShooterCalibration {
     public static final double LAUNCH_ANGLE_RADIANS = Math.toRadians(70);
     public static final double LAUNCH_HEIGHT_INCHES = 8;
     public static final double TARGET_HEIGHT_INCHES = 60;
+    /** Legacy A/B physics fit only: its calibration shots were measured with this 8" offset. */
     public static final double SHOOTER_OFFSET_INCHES = 8;
+    /** Measured ball center at exit: 3.4" inside the rear edge of the 17.5" robot. */
+    public static final double BALL_EXIT_OFFSET_INCHES = 17.5 / 2 - 3.4;
     public static final double MAX_RPM = 6000;
+    /** TeleOp start: robot front against the Y wall; center is half the 17.5" length from it. */
+    public static final double START_Y_INCHES = 72 - 17.5 / 2;
     public static final double MIN_CALIBRATED_DISTANCE = 43;
     public static final double MAX_CALIBRATED_DISTANCE = 48.9;
     public static final double MIN_FALLING_DISTANCE = 2 * (TARGET_HEIGHT_INCHES - LAUNCH_HEIGHT_INCHES)
@@ -28,7 +33,7 @@ public final class DistanceShooterCalibration {
             hiveX = xSign * 12.75;
             hiveY = ySign * 6;
             startX = xSign * 12.75;
-            startY = ySign * 62.9;
+            startY = ySign * START_Y_INCHES;
             // Rear-mounted shooter faces into the field; robot front faces the Y wall.
             startHeadingDegrees = ySign * 90;
         }

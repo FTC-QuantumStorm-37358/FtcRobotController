@@ -54,6 +54,9 @@ public class QuantumStormTeleOp extends LinearOpMode {
     // Track even during controller assignment so releasing Start cannot start a shooter.
     private boolean previousGamepad2A = false;
 
+    // Gamepad 1 X toggles the flower arm down/up, once per press.
+    private boolean previousFlowerX = false;
+
     // For the shoulder buttons and triggers used as speed steps
     private boolean previousLeftBumper = false;
     private boolean previousLeftTrigger = false;
@@ -203,6 +206,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
         telemetry.addLine("B = Intake OFF (also with START held)");
         telemetry.addLine("Hold BACK + tap A = Intake Reverse ON (release START)");
         telemetry.addLine("START + A = Assign gamepad 1; no intake direction command");
+        telemetry.addLine("X = Flower Intake toggle DROP / UP");
 
         telemetry.addLine("");
 
@@ -229,6 +233,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
         // A held through INIT/START must be released before it can command either motor.
         previousA = gamepad1.a;
         previousGamepad2A = gamepad2.a;
+        previousFlowerX = gamepad1.x;
 
 
         // =========================================================
@@ -285,6 +290,13 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
             // Gamepad 2: BACK + D-pad UP/DOWN = lift/drop, LB + D-pad = nudge
             flowerIntake.handleGamepad(gamepad2);
+
+            // Gamepad 1 X: drop if the arm is up, lift if it is down.
+            boolean currentFlowerX = gamepad1.x;
+            if (currentFlowerX && !previousFlowerX) {
+                if (flowerIntake.isDown()) flowerIntake.lift(); else flowerIntake.drop();
+            }
+            previousFlowerX = currentFlowerX;
 
             // A flower-arm press stays reserved until the D-pad is released,
             // even if BACK/LB is released first.
