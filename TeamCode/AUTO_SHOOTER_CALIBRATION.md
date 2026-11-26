@@ -1,68 +1,90 @@
-# Table-based quadrant shooter
+# Latest distance-based shooter
 
-Select **Biobuzz-Quantum Storm Auto-Shooter-Power** on the Driver Station. This separate TeleOp uses encoder-regulated `setVelocity()` and the calibrated 28-count, 1:1, 6000 RPM motor configuration. The regular **Biobuzz-Quantum Storm Tele-Op** retains manual RPM adjustment. Autonomous shooter behavior is unchanged.
+Select **Biobuzz-Quantum Storm Auto Power Control-latest 11/25**. This entry consolidates automatic distance targeting, FTCLib PIDF RPM feedback, battery compensation, relative driver trim and Y rear-hive aiming. It sends `setPower()` in `RUN_WITHOUT_ENCODER` while still reading the encoder. See [PIDF and aiming details](SHOOTER_PIDF_TEST.md).
+
+**Biobuzz-Quantum Storm Tele-Op-old** retains the previous table/SDK `setVelocity()` behavior. The separate **Auto-Shooter-Power** entry has been removed. Autonomous shooting is unchanged; its preselected TeleOp is now the latest entry.
 
 ## Field coordinates and initialization
 
-Coordinates are robot-center positions in inches, with `(0, 0)` at field center and bounds `[-72, 72]` on each axis. This mode uses an absolute field frame, including positive X/Y; it does not inherit the previous autonomous mode's pose or its canonical alliance-relative frame.
+Coordinates are robot-center positions in inches, with `(0, 0)` at field center and bounds `[-72, 72]` on each axis. This mode does not inherit a previous autonomous pose.
 
-The supplied hive back target `(-12.75, -6)` is mirrored into all four quadrants. These assumed mirrored centers should be checked against physical field measurements:
-
-| Robot quadrant | Selected hive back center |
+| Robot quadrant | Closest hive back center |
 | --- | --- |
 | X < 0, Y < 0 | (-12.75, -6) |
 | X >= 0, Y < 0 | (12.75, -6) |
 | X < 0, Y >= 0 | (-12.75, 6) |
 | X >= 0, Y >= 0 | (12.75, 6) |
 
-The selected hive shares the robot center's quadrant. For these symmetric centers this is also the closest hive. Exactly on an axis, ties use the positive side. Crossing an axis recomputes the selected hive each loop; the driver must aim at the new hive. The code assumes that hive is tilted up and ready, and does not detect its tilt or aim the robot.
+The hive shares the robot center's quadrant; axis ties select the positive side. This is the nearest of the four symmetric hive centers measured from the robot center. Selection is updated each loop. The code assumes the selected hive is tilted up and ready; it does not detect tilt.
 
-1. Place the robot at one of the mirrored Team 1 start references `(±12.75, ±63.25)`, with its front facing the Y wall and its rear shooter facing into the field.
-2. Press INIT. Default start is `(-12.75, -63.25, -90 degrees)`.
-3. On gamepad 1, D-pad LEFT/RIGHT selects negative/positive X; DOWN/UP selects negative/positive Y. Both opposite buttons together leave that axis unchanged. The chosen coordinates and heading appear in telemetry. Heading is -90 degrees at negative Y, +90 degrees at positive Y.
-4. Keep the robot still while Pinpoint calibrates, then START. The shooter and feeder remain off during INIT. The selector is disabled after START.
+1. Place the robot at a mirrored Team 1 start `(±12.75, ±63.25)`, front facing the Y wall and rear shooter facing into the field.
+2. Press INIT. The default is `(-12.75, -63.25, -90 degrees)`.
+3. Gamepad 1 D-pad LEFT/RIGHT chooses the X sign; DOWN/UP chooses the Y sign. The start heading is -90 degrees at negative Y, +90 degrees at positive Y. Opposite D-pad buttons together leave that axis unchanged.
+4. Keep still while Pinpoint calibrates, then START. Shooter/feed stay OFF during INIT. Drive to other locations after START.
 
-This initialization assigns a known pose; it cannot discover an arbitrary starting location. Reinitializing requires returning the robot to the selected start reference. The mode may be driven from that reference to A, B, C or any other location.
+This assigns a known field pose; it cannot discover an arbitrary start. Reinitializing requires returning the robot to the selected reference.
 
-## Distance and RPM table
+## Distance, table and default calibration
 
-The RPM points and FTCLib `InterpLUT` interpolation follow Stealth Robotics' [ShotCalculator.java at commit 7259c01](https://github.com/Stealth-Robotics/AutonomousPrime2026/blob/7259c012a7725d9c79e0abc5648350a549c068e2/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/util/ShotCalculator.java). The original repository's FIRST copyright and redistribution notice is retained in this repository's root `LICENSE`.
-
-| Shooter-to-hive distance (in) | Target RPM |
-| ---: | ---: |
-| 24 | 2900 |
-| 30 | 3000 |
-| 40 | 3100 |
-| 47 | 3120 |
-| 50 | 3200 |
-| 60 | 3300 |
-| 70 | 3400 |
-| 80 | 3500 |
-
-FTCLib 2.1.1 performs cubic interpolation between these points. We preserve its actual curve, including a small dip from approximately 3104.5 RPM at 42 inches to 3102.4 RPM at 44 inches. As in Stealth's code, the lookup distance is clamped to **24.1–79.9 inches**, avoiding the library's excluded endpoints. Shorter or longer distances keep the corresponding endpoint command (approximately 2901.67 or 3499 RPM) and show `CLAMPED_NEAR` or `CLAMPED_FAR`. Actual distance and lookup distance appear separately in telemetry. No extrapolation is performed.
-
-These are **their calibration values**, originally paired with an adjustable hood. Our hood stays fixed at approximately 70 degrees. The table is a starting point for physical testing, not a guarantee of landing in the hive. This replaces the A/B projectile fit in this entry: the old 0.50/0.49 reference multipliers and falling-trajectory rejection are no longer used. There is no hood servo requirement or hood command.
-
-Like Stealth, we rotate the robot-to-shooter offset into field coordinates before measuring the horizontal distance. We retain our own 5.35-inch rear offset (ball center 3.4 in inside the rear edge) and centered field coordinates, rather than their turret offset and alliance coordinate frame. For robot-center `(x, y)`, front heading `h` (counterclockwise from +X), and selected hive `(hx, hy)`:
+The measured ball exit is 3.4 inches inside the rear edge of the 17.5-inch robot, giving a **5.35-inch rear offset**. For robot center `(x, y)`, front heading `h` (radians, counterclockwise from +X), and hive `(hx, hy)`:
 
 ```
 shooterX = x - 5.35 * cos(h)
 shooterY = y - 5.35 * sin(h)
 distance = hypot(hx - shooterX, hy - shooterY)
-targetRPM = table(clamp(distance, 24.1, 79.9))
-multiplier = targetRPM / 6000
 ```
 
-The offset remains correct while the robot is turning; only when the rear faces the hive does this simplify to center distance minus 5.35 inches. Heading is read in degrees from Pinpoint and converted to radians for trigonometry. Target selection remains based on the robot center's quadrant, even if the shooter offset crosses an axis. No moving-shot/flight-time compensation is applied; aim and stop before feeding.
+At the default start, the exit is `(-12.75, -57.90)` and the horizontal distance to `(-12.75, -6)` is **51.90 inches**. All mirrored starts have that distance. Pinpoint headings are converted from degrees to radians before this calculation. Distance uses the actual rear exit while turning; when aimed it simplifies to robot-center distance minus 5.35 inches.
 
-## Invalid solutions and controls
+The shared table originated in Stealth Robotics' [ShotCalculator.java at commit 7259c01](https://github.com/Stealth-Robotics/AutonomousPrime2026/blob/7259c012a7725d9c79e0abc5648350a549c068e2/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/util/ShotCalculator.java). The root `LICENSE` retains its FIRST notice. Our current table already contains team changes at 50/60/70/80 inches:
 
-Nonfinite position or heading, out-of-field robot-center coordinates, and invalid Pinpoint samples block shooter/feed output. A clamped lookup is still a valid RPM command and does not block feeding. There is no projectile-height or falling-arrival check with this empirical table.
+| Distance (in) | Shared table RPM, before latest-entry bias |
+| ---: | ---: |
+| 24 | 2900 |
+| 30 | 3000 |
+| 40 | 3100 |
+| 47 | 3120 |
+| 50 | 2910 |
+| 60 | 2935 |
+| 70 | 3300 |
+| 80 | 3400 |
 
-Gamepad 1 retains the default driving/intake controls after START. Gamepad 2 A starts the shooter; B stops it. A held through INIT/START must be released and pressed again. D-pad retains paced forward feeding and reverse control, but in this automatic mode feeding requires the shooter to be ON and the shot solution valid. The existing flower controls and D-pad release guard are preserved. Following an invalid solution, a fresh A press after recovery is required to restart. RPM adjustment through BACK + LB/LT is disabled in this entry because the target is calculated each loop. The driver still controls aiming and when to feed; this mode does not add an RPM-at-speed feeding gate.
+FTCLib 2.1.1 uses cubic interpolation, not linear interpolation. Distances clamp to **24.1–79.9 inches** to avoid excluded endpoints. The table is not monotonic, particularly the drop from 47 to 50 inches; the latest entry preserves that existing curve. Clamped distances remain usable and show `CLAMPED_NEAR/FAR`. No extrapolation or flight-time compensation is applied.
 
-Telemetry shows pose, quadrant, hive target, ball-exit distance, calculated RPM/multiplier, rear shooter position, lookup distance, actual/commanded RPM and validity/clamping status. Normal STOP or an exception during the control loop commands zero velocity and stops the other mechanisms.
+`AutoShooterTarget` applies a constant RPM bias only in the latest TeleOp:
+
+```
+baseRPM(distance) = table(distance) + [2970 - table(51.90)]
+baseMultiplier = baseRPM / 6000
+finalMultiplier = clamp(baseMultiplier + driverTrim, 0, 1)
+targetRPM = 6000 * finalMultiplier
+```
+
+This makes the default-location base multiplier **0.495**, preserving the table's RPM differences at other distances. The shared table used by the old entry and autonomous is unchanged. Our fixed hood remains approximately 70 degrees; this is a calibration starting point, not a guarantee of landing in the hive.
+
+## Controls and compensation
+
+Gamepad 2 **A** starts the shooter; **B** stops it and cancels aiming. **Y** turns the rear shooter toward the selected hive without starting the shooter. A/Y held across INIT/START must be released before a new request.
+
+Hold **Back**, then tap **LB** to add **+0.005 / +30 RPM** of trim or **LT** past halfway to add **-0.005 / -30 RPM**. For example, at the default pose: zero trim gives 0.495; one LB gives 0.500; two give 0.505. Moving preserves the trim on top of the newly calculated distance target. B/A stops/restarts and fault recovery preserve it; a new INIT resets it. Trim storage is bounded to +/-1.0; the final target is clamped to 0–6000 RPM.
+
+Shoulders act once per fresh press, including after being held through START. Back must be held when the shoulder is pressed; pressing Back after an already-held shoulder does not step. Simultaneous LB/LT cancels, and START suppresses adjustments. Trim never starts a stopped shooter.
+
+The final requested RPM enters the same feedback loop:
+
+```
+currentRPM = motor.getVelocity(DEGREES) / 6
+power = PIDF.calculate(currentRPM, targetRPM)
+power *= 12 / batteryVoltage
+motor.setPower(clamp(power, 0, 1))
+```
+
+Trim changes the RPM setpoint, not motor output after regulation. Bounded integral correction remains enabled. Battery voltage changes the power needed to reach the requested RPM, not the desired RPM itself.
+
+Invalid Pinpoint samples, nonfinite/out-of-field poses or PIDF/voltage faults stop shooter/feed. A fresh A after recovery is required. Existing drive, intake, flower, pulsed feed and D-pad release guards remain. Feed requires shooter ON at a nonzero target and a valid solution/controller, and pauses during aiming. There is no measured-RPM-at-speed feeding interlock.
+
+Telemetry shows pose, selected hive, actual/lookup distance, base RPM/multiplier, driver trim, final trimmed target, measured RPM, battery voltage and PIDF/applied power. STOP and exceptions in the control loop zero motor power and stop the other mechanisms.
 
 ## Verification
 
-`TableShooterCalibrationChecks` runs against the real FTCLib library and checks published RPM points, cubic interpolation, endpoint clamping, mirrored A/B/C distances, heading-dependent offsets, axis ties, invalid inputs, and a field/heading sweep. The legacy `DistanceShooterCalibrationChecks` still covers the retained physics helper, which no longer supplies this entry's RPM. Android compilation verifies TeleOp integration. Desktop checks do not validate physical ball flight or odometry placement.
+`AutoShooterTargetChecks` covers default calibration, mirrored starts and A/B/C, continuous table targeting, trim persistence/bounds/reset and invalid poses. `ShooterTeleOpTargetChecks` covers actual gamepad/target/output hooks, PIDF/battery wiring and menu names. `TableShooterCalibrationChecks` covers the current team table, cubic interpolation, endpoint clamps, headings, quadrants and field sweep. The Android build and PIDF, aiming, spindexer and SDK velocity checks validate the combined implementation. Physical landing accuracy and gain tuning still require robot testing.

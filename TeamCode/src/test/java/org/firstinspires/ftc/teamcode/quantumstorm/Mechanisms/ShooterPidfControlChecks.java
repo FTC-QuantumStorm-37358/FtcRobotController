@@ -65,7 +65,7 @@ public final class ShooterPidfControlChecks {
         ShooterPidfControl control = new ShooterPidfControl(probe.motor, Arrays.asList(sensor(volts)), pidf);
         near(probe.power, 0, "INIT power zero");
         near(probe.type.getTicksPerRev(), 28, "Correct encoder scale");
-        near(Constants.SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER, .48, "Test default multiplier");
+        near(Constants.SHOOTER_AUTO_START_MULTIPLIER, .495, "Latest start multiplier");
         check(control.update(.5), "Valid update");
         near(control.getCurrentRpm(), 3000, "Degrees/sec read as RPM");
         near(control.getTargetRpm(), 3000, "6000 times multiplier");

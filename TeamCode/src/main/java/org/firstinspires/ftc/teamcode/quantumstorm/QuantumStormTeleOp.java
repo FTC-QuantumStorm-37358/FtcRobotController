@@ -19,7 +19,7 @@ import org.firstinspires.ftc.teamcode.quantumstorm.Sensors.PinpointOdometry;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
-@TeleOp(name = Constants.TELEOP_NAME, group = "Quantum Storm")
+@TeleOp(name = Constants.OLD_TELEOP_NAME, group = "Quantum Storm")
 public class QuantumStormTeleOp extends LinearOpMode {
 
     // Drive chain
@@ -100,6 +100,26 @@ public class QuantumStormTeleOp extends LinearOpMode {
         return shooterTargetReady()?distanceShot.rpm/Constants.SHOOTER_BASE_RPM:0;
     }
     protected boolean manualShooterAdjustment() { return false; }
+    protected String shooterAdjustmentInstructions() {
+        return "Shooter RPM follows distance automatically; LB/LT speed adjustment disabled";
+    }
+    protected double adjustShooterSetting(double currentSetting, int direction) {
+        return clampShooterSetting(currentSetting + direction * Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
+    }
+    /** Raw edges stay tracked while locked or assigning controllers. Opposite requests cancel. */
+    protected double updateShooterAdjustment(double currentSetting) {
+        boolean bumper = gamepad2.left_bumper;
+        boolean trigger = gamepad2.left_trigger > Constants.TRIGGER_THRESHOLD;
+        int direction = bumper && !previousLeftBumper && !trigger ? 1
+                : trigger && !previousLeftTrigger && !bumper ? -1 : 0;
+        previousLeftBumper = bumper;
+        previousLeftTrigger = trigger;
+        if (manualShooterAdjustment() && !gamepad2.start && gamepad2.back && direction != 0) {
+            previousShooterSetting = currentSetting;
+            return adjustShooterSetting(currentSetting, direction);
+        }
+        return currentSetting;
+    }
     protected boolean feederRequiresShooterRunning() { return true; }
     protected boolean feedingAllowed() { return true; }
     protected boolean shooterStartAllowed() { return true; }
@@ -212,9 +232,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
 
         telemetry.addLine("GAMEPAD 2 - SHOOTER + SPINDEXER");
         telemetry.addLine("A = Shooter 1 START, B = Shooter 1 STOP");
-        telemetry.addLine(manualShooterAdjustment()
-                ? "Hold BACK + tap LB/LT = Shooter RPM +60/-60"
-                : "Shooter RPM follows distance automatically; LB/LT speed adjustment disabled");
+        telemetry.addLine(shooterAdjustmentInstructions());
         telemetry.addLine("Release START before using shooter START/STOP buttons");
         telemetry.addLine("Hold D-Pad UP = Spindexer Forward (pulsed)");
         telemetry.addLine("Hold D-Pad DOWN = Spindexer Reverse");
@@ -234,6 +252,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
         previousA = gamepad1.a;
         previousGamepad2A = gamepad2.a;
         previousFlowerX = gamepad1.x;
+        previousLeftBumper = gamepad2.left_bumper;
+        previousLeftTrigger = gamepad2.left_trigger > Constants.TRIGGER_THRESHOLD;
 
 
         // =========================================================
@@ -310,12 +330,6 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // GAMEPAD 2 - SHOOTER MOTOR
             // =====================================================
 
-            // Triggers are analog, so treat them as pressed past a threshold
-            boolean currentLeftBumper = gamepad2.left_bumper;
-            boolean currentLeftTrigger =
-                    gamepad2.left_trigger > Constants.TRIGGER_THRESHOLD;
-
-
             // Start+A/B assigns controllers in the Driver Station, not shooter commands.
             // Require a fresh A press after assignment; STOP wins if both are pressed.
             if (!gamepad2.start) {
@@ -324,24 +338,8 @@ public class QuantumStormTeleOp extends LinearOpMode {
             }
 
 
-            // Require Back already held when a shoulder button is freshly pressed.
-            // Track raw buttons below even while locked: holding LB then pressing Back
-            // must not accidentally adjust the shooter setting. Opposite requests cancel each other.
-            if (manualShooterAdjustment() && gamepad2.back && currentLeftBumper && !previousLeftBumper && !currentLeftTrigger) {
-                previousShooterSetting = shooterSetting;
-                shooterSetting = clampShooterSetting(shooterSetting + Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
-            }
-
-            // Back + LT = shooter setting down
-            if (manualShooterAdjustment() && gamepad2.back && currentLeftTrigger && !previousLeftTrigger && !currentLeftBumper) {
-                previousShooterSetting = shooterSetting;
-                shooterSetting = clampShooterSetting(shooterSetting - Constants.SHOOTER_RPM_MULTIPLIER_INCREMENT);
-            }
-
-
+            shooterSetting = updateShooterAdjustment(shooterSetting);
             previousGamepad2A = gamepad2.a;
-            previousLeftBumper = currentLeftBumper;
-            previousLeftTrigger = currentLeftTrigger;
 
 
             if (!applyShooterOutput(shooter, shooterRunning ? shooterSetting : 0)) {
@@ -420,7 +418,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
             telemetry.addData("Shooter control", shooterControlLabel());
             telemetry.addData(
                     "Shooter 1",
-                    "%s | RPM multiplier %.2f",
+                    "%s | RPM multiplier %.3f",
                     shooterRunning ? "ON" : "OFF",
                     shooterSetting);
 
@@ -436,7 +434,7 @@ public class QuantumStormTeleOp extends LinearOpMode {
             // Previous -> current setting for comparison between runs
             telemetry.addData(
                     "Shooter RPM multiplier",
-                    "%.2f -> %.2f",
+                    "%.3f -> %.3f",
                     previousShooterSetting,
                     shooterSetting);
 
