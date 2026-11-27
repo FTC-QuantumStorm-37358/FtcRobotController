@@ -66,6 +66,41 @@ public class Constants {
     public final static double SHOOTER_RPM_MULTIPLIER_MIN = -1.0;
     public final static double SHOOTER_RPM_MULTIPLIER_MAX = 1.0;
 
+    // Autonomous at-speed feed gate (Shooter.apply; TeleOp is unchanged): a NEW spindexer pulse starts once
+    // measured RPM has stayed between target-2% and target+3% (each side at least 50 RPM) for 0.10 s,
+    // or at the latest MAX_WAIT after the previous pulse ended (includes the 0.35 s OFF gap), so all
+    // four preloads still fit the timed feed window. The low side is tighter because a slow flywheel is
+    // what lands a shot low. An active pulse always finishes. "(timeout)" in the shot log marks a pulse
+    // fed before the flywheel settled.
+    public final static double SHOOTER_READY_LOW_FRACTION = 0.02;
+    public final static double SHOOTER_READY_HIGH_FRACTION = 0.03;
+    public final static double SHOOTER_READY_MIN_TOLERANCE_RPM = 50;
+    public final static double SHOOTER_READY_SETTLE_SEC = 0.10;
+    public final static double SHOOTER_READY_MAX_WAIT_SEC = 0.9;
+    // Autonomous-only correction added to the distance-table (or fallback) RPM target; TeleOp is unchanged.
+    // The start-pose table value (~2904 RPM) shot high once every ball left at full speed. Tune in 30 RPM steps.
+    public final static double AUTO_SHOOTER_RPM_OFFSET = -150;
+    // Autonomous launch detection: each feed pulse opens a 0.6 s window; a drop of 4% of target below the
+    // RPM at pulse start counts one launch when the window closes. A feed batch then ends after
+    // AUTO_BALLS_TO_SHOOT launches, or after 3 pulses in a row without one once a ball has fired.
+    // AUTO_TEAM_ONE_FEED_TIME_SEC remains the upper limit. Set false to return to time-only feeding.
+    public final static boolean AUTO_END_FEED_ON_DETECTED_SHOTS = true;
+    public final static double SHOT_DETECT_DIP_FRACTION = 0.04;
+    public final static double SHOT_DETECT_WINDOW_SEC = 0.6;
+    public final static int AUTO_FEED_EMPTY_PULSES_TO_FINISH = 3;
+    // No NEW autonomous feed pulse after this match time. The 26 s parking cutoff switches the flywheel off,
+    // and a ball pushed in while it spins down leaves very low. A pulse already running still finishes.
+    public final static double AUTO_LAST_FEED_START_SEC = 25.5;
+    // A max-wait (forced) pulse still needs this fraction of target RPM; slower shots land too low.
+    public final static double SHOOTER_FEED_MIN_RPM_FRACTION = 0.95;
+    // Team One retry branch (Hive not tipped): cruise power for the back-then-strafe trip to the Garden.
+    // The last 6 inches of each leg stay at the usual 0.70; all other Garden trips are unchanged. Range (0, 1].
+    public final static double AUTO_GARDEN_RETRY_TRANSIT_POWER = 0.85;
+    // Team One normal parking: stop the final reverse into the parking area this many inches sooner,
+    // so the robot parks further toward its front. 4 in is about 10 cm. Each inch also removes
+    // 0.02 s from the timed final reverse (0.35 s -> 0.27 s at 4 in). Range 0-12.
+    public final static double AUTO_PARK_STOP_EARLIER_IN = 4.0;
+
     // Separate New Shooter Power Control test entry: provisional FTCLib gains, output in motor-power units.
     // kF multiplies target RPM; bounded integral removes the observed persistent speed shortfall.
     public final static double SHOOTER_PIDF_TEST_DEFAULT_MULTIPLIER = 0.48;
@@ -299,8 +334,16 @@ public class Constants {
     public final static int AUTO_MAX_RETRIES = 3;                  // recoverable errors before giving up and parking
     public final static double AUTO_APRILTAG_TIMEOUT_SEC = 3.0;    // no tag / not aligned -> ERROR
     public final static double AUTO_SHOOTER_SPINUP_SEC = 1.0;      // flywheel spin-up before feeding
-    /** Team 1 keeps feeding longer so all four preloads can clear before Garden travel. */
-    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 4.5;
+    /** Team 1 keeps feeding longer so all four preloads can clear before Garden travel.
+     *  The last AUTO_FORCE_FEED_LAST_SEC of a preload batch feeds without the at-speed gate, so the
+     *  fourth preload still leaves inside this window. */
+    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 6;
+    /** Preload batch only: during this final part of the feed window (from 4.5 s of a 6 s window),
+     *  while fewer than four launches are confirmed, pulses start without waiting for flywheel speed.
+     *  1.5 s is the shortest that still launches the fourth preload when the flywheel never gets back
+     *  inside the ready band; 1.0 s launched only three in that case. With normal recovery the fourth
+     *  ball has left before this starts, so it does not change accuracy. */
+    public final static double AUTO_FORCE_FEED_LAST_SEC = 1.5;
     /** Match Team 1's longer feed window so all four preloads can clear. */
     public final static double AUTO_TEAM_TWO_FEED_TIME_SEC = AUTO_TEAM_ONE_FEED_TIME_SEC;
     public final static double AUTO_AIM_TOLERANCE_DEG = 2.0;       // AprilTag tx within this = aligned

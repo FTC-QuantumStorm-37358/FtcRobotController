@@ -7,6 +7,10 @@ public interface RobotIO {
     double nowSeconds();
     Sensors readSensors();
     void apply(Outputs outputs);
+    /** Ball launches confirmed by the flywheel since INIT; -1 when the hardware cannot detect them. */
+    default int detectedShots() { return -1; }
+    /** Consecutive feed pulses that launched nothing; -1 when unavailable. */
+    default int emptyFeedPulses() { return -1; }
 
     /** Inches, field X/Y, radians counterclockwise from +X. */
     final class Pose {
@@ -100,6 +104,8 @@ public interface RobotIO {
         /** Legacy field name: FTC adapters interpret this as a fraction of SHOOTER_BASE_RPM. */
         public double shooterPower;
         public double feederPower, intakePower;
+        /** End of a preload feed window: start pulses without waiting for flywheel speed. */
+        public boolean forceFeed;
         /** 0 = hive AprilTags / camera up, 1 = balls / camera down. */
         public int pipeline;
         /** Front-left, front-right, back-left, back-right, after mecanum normalization. */
@@ -115,7 +121,8 @@ public interface RobotIO {
         }
         public Outputs copy() {
             Outputs o=new Outputs(); o.forward=forward; o.strafeRight=strafeRight; o.turnClockwise=turnClockwise;
-            o.shooterPower=shooterPower; o.feederPower=feederPower; o.intakePower=intakePower; o.pipeline=pipeline; return o;
+            o.shooterPower=shooterPower; o.feederPower=feederPower; o.intakePower=intakePower; o.pipeline=pipeline;
+            o.forceFeed=forceFeed; return o;
         }
     }
 }

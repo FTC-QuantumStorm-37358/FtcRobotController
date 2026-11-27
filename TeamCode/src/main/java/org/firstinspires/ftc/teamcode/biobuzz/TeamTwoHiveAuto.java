@@ -11,6 +11,7 @@ public final class TeamTwoHiveAuto implements RobotController {
     private final FieldLayout field;
     private final Navigator nav;
     private final AutonomousShooter shooter=new AutonomousShooter();
+    private final FeedBatchEnd batchEnd=new FeedBatchEnd();
     private final ShootingAim.Alignment shootingAlignment=new ShootingAim.Alignment();
     private HiveVision hive,shotGate;
     private HiveShotGate centeredShotGate;
@@ -22,6 +23,8 @@ public final class TeamTwoHiveAuto implements RobotController {
     private double startAt,lastNow,stateAt,power,spinAt,feedTime,lastCommandAt,progressAt;
     private String message="",error="";
     public double spinUpSeconds=1,feedSeconds=3,parkingToleranceInches=2;
+    /** First (preload) batch: final seconds that feed without waiting for flywheel speed (0 = off). */
+    public double forceFeedLastSeconds=0;
     /** Bounded Flower collection before returning to the rear-facing wall shot. */
     public double flowerIntakeSeconds=4.0,latestReturnShotSeconds=17.0;
     /** Practice only: a fresh AprilTag admits a timed first batch without official Hive or inventory gating. */
@@ -34,6 +37,7 @@ public final class TeamTwoHiveAuto implements RobotController {
         if(alliance<0||alliance>1||!Double.isFinite(power)||power<0||power>1
                 ||!Double.isFinite(spinUpSeconds)||spinUpSeconds<0||!Double.isFinite(feedSeconds)||feedSeconds<=0
                 ||!Double.isFinite(parkingToleranceInches)||parkingToleranceInches<=0||parkingToleranceInches>3
+                ||!Double.isFinite(forceFeedLastSeconds)||forceFeedLastSeconds<0||forceFeedLastSeconds>feedSeconds
                 ||!Double.isFinite(flowerIntakeSeconds)||flowerIntakeSeconds<=0||flowerIntakeSeconds>8
                 ||!Double.isFinite(latestReturnShotSeconds)||latestReturnShotSeconds<8||latestReturnShotSeconds>=26)
             throw new IllegalArgumentException("Invalid Team Two configuration");
@@ -52,6 +56,8 @@ public final class TeamTwoHiveAuto implements RobotController {
         // Each distinct wall-shot attempt begins with one fresh AprilTag
         // authorization; after that the timed feed stays latched.
         if(next==State.VERIFY_HIVE)shootingAlignment.reset();
+        // The first wall batch holds the four preloads; the second load is unknown.
+        if(next==State.SHOOTING)batchEnd.begin(io,batches==0);
         if(next==State.RETREAT_FROM_HIVE||next==State.ALIGN_FLOWER||next==State.TO_FLOWER
                 ||next==State.LOWER_FLOWER_ARM||next==State.PRESS_FLOWER||next==State.BACK_AWAY_FROM_FLOWER
                 ||next==State.RAISE_FLOWER_ARM||next==State.CLEAR_FLOWER||next==State.TO_OUTLET_LANE
@@ -372,6 +378,8 @@ public final class TeamTwoHiveAuto implements RobotController {
                     // do not demand four remaining balls after the first ball has fired.
                     if(!practiceTagLatched&&!batchFed&&!fullPollenLoad(s)){spinAt=Double.NaN;enter(State.VERIFY_HIVE);message="Full load changed before feed; reverify four pollen";break;}
                     if(batchFed&&s.ballCount==0&&s.pollenCount==0){finishFeed();break;}
+                    // The timed window below is the upper limit; flywheel-confirmed launches end it early.
+                    if(batchFed&&batchEnd.complete(io)){finishFeed();message="Flywheel confirmed the batch launched; feed complete";break;}
                     if(!practiceTagLatched&&(s.ballCount<0||s.pollenCount<0||s.ballCount!=s.pollenCount)){spinAt=Double.NaN;lastFeeding=false;message="Unknown/mixed inventory: shooter and feeder OFF";break;}
                     // If the final batch tips the Hive, do not fire leftovers at the now-lowered face.
                     if(batches==1&&batchFed&&s.cameraConnected&&hive.state(now)==0){finishFeed();message="Opposite Hive orientation confirmed; stop final feed";break;}
@@ -387,6 +395,8 @@ public final class TeamTwoHiveAuto implements RobotController {
                     if(Double.isNaN(spinAt))spinAt=now;
                     out.shooterPower=shooter.command(current,power);
                     if(now-spinAt>=spinUpSeconds)out.feederPower=1;
+                    // Final stretch of the preload window with a preload still inside: feed it anyway.
+                    out.forceFeed=out.feederPower>0&&batchEnd.forceRemaining(io,feedTime,feedSeconds,forceFeedLastSeconds);
                     message="Fresh own far Cell UP; "+(out.feederPower>0?"timed feeding":"spinning up");
                     break;
                 case PRESS_FLOWER:

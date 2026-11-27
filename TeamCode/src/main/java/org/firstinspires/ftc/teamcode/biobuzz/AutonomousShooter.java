@@ -19,18 +19,20 @@ final class AutonomousShooter {
     double command(Pose pose,double fallbackMultiplier){
         double fallback=Double.isFinite(fallbackMultiplier)
                 ?Math.max(0,Math.min(1,fallbackMultiplier)):0;
-        if(pose==null||!pose.finite()){
-            targetRpm=fallback*Constants.SHOOTER_BASE_RPM;
-            return fallback;
-        }
+        if(pose==null||!pose.finite())return withAutonomousOffset(fallback*Constants.SHOOTER_BASE_RPM);
         TableShooterCalibration.Solution solution=calibration.atPose(
                 pose.x,pose.y,Math.toDegrees(pose.heading));
         if(!solution.ready()||!Double.isFinite(solution.rpm)||solution.rpm<=0){
-            targetRpm=fallback*Constants.SHOOTER_BASE_RPM;
-            return fallback;
+            return withAutonomousOffset(fallback*Constants.SHOOTER_BASE_RPM);
         }
-        targetRpm=solution.rpm;
-        return Math.max(0,Math.min(1,solution.rpm/Constants.SHOOTER_BASE_RPM));
+        return withAutonomousOffset(solution.rpm);
+    }
+
+    /** Applies AUTO_SHOOTER_RPM_OFFSET; an OFF command stays OFF and the result never reverses. */
+    private double withAutonomousOffset(double rpm){
+        if(!(rpm>0)){targetRpm=0;return 0;}
+        targetRpm=Math.max(0,Math.min(Constants.SHOOTER_BASE_RPM,rpm+Constants.AUTO_SHOOTER_RPM_OFFSET));
+        return targetRpm/Constants.SHOOTER_BASE_RPM;
     }
 
     double targetRpm(){return targetRpm;}

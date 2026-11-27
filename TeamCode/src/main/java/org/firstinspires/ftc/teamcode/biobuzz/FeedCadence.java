@@ -13,13 +13,16 @@ public final class FeedCadence {
             throw new IllegalArgumentException("Invalid indexer timing");
         this.pulseSeconds=pulseSeconds;this.gapSeconds=gapSeconds;
     }
-    public double apply(double demand,double now){
+    public double apply(double demand,double now){return apply(demand,now,true);}
+    /** startAllowed=false holds the START of a new forward pulse (e.g. flywheel not yet at speed).
+     * A pulse already running still finishes; reverse and the OFF gap are unchanged. */
+    public double apply(double demand,double now,boolean startAllowed){
         if(!Double.isFinite(now)||now<last||!Double.isFinite(demand)){feeding=false;readyAt=Double.POSITIVE_INFINITY;return 0;}
         last=now;
         if(feeding&&(demand<=0||now>=until)){feeding=false;readyAt=now+gapSeconds;}
         if(demand<0){readyAt=now+gapSeconds;return Math.max(-1,demand);}
         if(demand==0)return 0;
-        if(!feeding&&now>=readyAt){feeding=true;until=now+pulseSeconds;}
+        if(!feeding&&now>=readyAt&&startAllowed){feeding=true;until=now+pulseSeconds;}
         return feeding?Math.min(1,demand):0;
     }
 }
