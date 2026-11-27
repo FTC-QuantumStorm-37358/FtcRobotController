@@ -46,9 +46,14 @@ public final class AutoStateMachine implements AutoCloseable {
     private Outputs debugOutputs=new Outputs();
     private String debugReadError="";
     /** Last four real spindexer pulses: command multiplier, target RPM, actual RPM. */
-    private final double[][] lastShotLog=new double[4][3];
+    /** Last eight real spindexer pulses: multiplier, target RPM, actual RPM, timeout flag, match time. */
+    private final double[][] lastShotLog=new double[8][5];
     private int lastShotCount;
     private boolean feederPulseWasActive;
+    /** Feed batches by match time: first and last feed request, detected launches at the start. */
+    private final double[][] feedBatches=new double[4][3];
+    private int feedBatchCount;
+    private double lastFeedRequestAt=Double.NEGATIVE_INFINITY;
     private boolean closed;
     private final boolean robotRelative;
     private final boolean teamOneBackup;
@@ -91,6 +96,9 @@ public final class AutoStateMachine implements AutoCloseable {
             private boolean stopped;
             public boolean stopRequested(){return opMode.isStopRequested()||Thread.currentThread().isInterrupted();}
             public double nowSeconds(){return clock.seconds();}
+            // Flywheel launch detection lets a feed batch end once its balls are gone.
+            public int detectedShots(){return Constants.AUTO_END_FEED_ON_DETECTED_SHOTS?shooter.getDetectedShots():-1;}
+            public int emptyFeedPulses(){return Constants.AUTO_END_FEED_ON_DETECTED_SHOTS?shooter.getEmptyPulseStreak():-1;}
             public Sensors readSensors(){
                 odometry.update();double now=clock.seconds();
                 Pose pose=new Pose(odometry.getX(),odometry.getY(),odometry.getPose().getHeading(AngleUnit.RADIANS));
@@ -144,13 +152,26 @@ public final class AutoStateMachine implements AutoCloseable {
                 }
                 stopped=false;
                 drive.drive(o.forward*Constants.AUTO_FORWARD_POWER_SIGN,o.strafeRight,o.turnClockwise);
-                shooter.apply(shooterMultiplier,o.feederPower);
+                double matchTime=clock.seconds();
+                shooter.apply(shooterMultiplier,o.feederPower,matchTime<Constants.AUTO_LAST_FEED_START_SEC,o.forceFeed);
+                if(o.feederPower>0){
+                    // A feed request after a 1.5 s gap begins a new batch (spin-up alone is 1 s).
+                    if(matchTime-lastFeedRequestAt>1.5&&feedBatchCount<feedBatches.length){
+                        feedBatches[feedBatchCount][0]=matchTime;
+                        feedBatches[feedBatchCount][2]=shooter.getDetectedShots();
+                        feedBatchCount++;
+                    }
+                    lastFeedRequestAt=matchTime;
+                    if(feedBatchCount>0)feedBatches[feedBatchCount-1][1]=matchTime;
+                }
                 boolean feederPulse=shooter.isFeederPulseActive();
                 if(feederPulse&&!feederPulseWasActive){
                     int slot=lastShotCount%lastShotLog.length;
                     lastShotLog[slot][0]=shooterMultiplier;
                     lastShotLog[slot][1]=shooter.getTargetRpm();
                     lastShotLog[slot][2]=shooter.getMeasuredRpm();
+                    lastShotLog[slot][3]=shooter.wasLastPulseForced()?1:0;
+                    lastShotLog[slot][4]=matchTime;
                     lastShotCount++;
                 }
                 feederPulseWasActive=feederPulse;
@@ -175,6 +196,9 @@ public final class AutoStateMachine implements AutoCloseable {
             // Flower; higher transit power preserves time for the return shot.
             one.gardenStagingOffsetInches=12.0;
             one.gardenTransitPower=.70;
+            one.gardenRetryTransitPower=Constants.AUTO_GARDEN_RETRY_TRANSIT_POWER;
+            one.parkStopEarlierInches=Constants.AUTO_PARK_STOP_EARLIER_IN;
+            one.forceFeedLastSeconds=Constants.AUTO_FORCE_FEED_LAST_SEC;
             one.gardenRepositionPower=.60;
             one.gardenIntakeHeadingRadians=Math.toRadians(Constants.TEAM_ONE_GARDEN_INTAKE_HEADING_DEG);
             one.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
@@ -218,6 +242,7 @@ public final class AutoStateMachine implements AutoCloseable {
         }else if(selectedRoutine==Routine.TEAM_TWO){
             TeamTwoHiveAuto two=new TeamTwoHiveAuto(io,field);
             two.spinUpSeconds=Constants.AUTO_SHOOTER_SPINUP_SEC;two.feedSeconds=Constants.AUTO_TEAM_TWO_FEED_TIME_SEC;
+            two.forceFeedLastSeconds=Constants.AUTO_FORCE_FEED_LAST_SEC;
             two.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
             // Team 2 is taped at its wall-shot pose. While waiting for the
             // Hive to be tilted, it must remain completely still; the live
@@ -301,11 +326,20 @@ public final class AutoStateMachine implements AutoCloseable {
         opMode.telemetry.addData("Drive request F / right / CW","%.2f / %.2f / %.2f",debugOutputs.forward,debugOutputs.strafeRight,debugOutputs.turnClockwise);
         opMode.telemetry.addData("Shooter RPM multiplier / spindexer / intake","%.2f / %.2f / %.2f",debugOutputs.shooterPower,debugOutputs.feederPower,debugOutputs.intakePower);
         opMode.telemetry.addData("Shooter RPM actual / target","%.0f / %.0f",shooter.getMeasuredRpm(),shooter.getTargetRpm());
+        opMode.telemetry.addData("Shooter at speed (feed gate)",shooter.describeReadiness());
+        opMode.telemetry.addData("Launch detection",shooter.describeLaunches());
+        opMode.telemetry.addData("Match time (s)","%.1f",clock.seconds());
+        for(int i=0;i<feedBatchCount;i++){
+            int launchesAfter=i+1<feedBatchCount?(int)feedBatches[i+1][2]:shooter.getDetectedShots();
+            opMode.telemetry.addData("Feed batch "+(i+1),"%.1f-%.1f s, %d launches detected",
+                    feedBatches[i][0],feedBatches[i][1],launchesAfter-(int)feedBatches[i][2]);
+        }
         opMode.telemetry.addData("Auto shot command","%.2f multiplier / %.0f RPM",debugOutputs.shooterPower,debugOutputs.shooterPower*Constants.SHOOTER_BASE_RPM);
         for(int i=0;i<Math.min(lastShotCount,lastShotLog.length);i++){
             int slot=(lastShotCount-Math.min(lastShotCount,lastShotLog.length)+i)%lastShotLog.length;
             double[] shot=lastShotLog[slot];
-            opMode.telemetry.addData("Shot "+(i+1)+" command / target / actual","%.2f / %.0f / %.0f RPM",shot[0],shot[1],shot[2]);
+            opMode.telemetry.addData("Pulse "+(i+1)+" at "+String.format(java.util.Locale.US,"%.1f s",shot[4])+" target / actual",
+                    "%.0f / %.0f RPM%s",shot[1],shot[2],shot[3]>0?" (timeout)":"");
         }
         opMode.telemetry.addData("Flower intake","%s %.0f deg",flowerIntake.isDown()?"DOWN":"UP",flowerIntake.getAngle());
         opMode.telemetry.addData("Measured pieces",debugSensors==null||debugSensors.ballCount<0?"UNKNOWN":debugSensors.ballCount+" / 4");
