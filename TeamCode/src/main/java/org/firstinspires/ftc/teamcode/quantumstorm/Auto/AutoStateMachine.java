@@ -192,13 +192,15 @@ public final class AutoStateMachine implements AutoCloseable {
             one.gardenFirstPassSeconds=Constants.AUTO_GARDEN_FIRST_PASS_SEC;
             // Both normal Team 1 post-shot branches need enough reserve to
             // reach the final parking target after Garden work.
-            // Shorter initial reverse keeps the following strafe clear of the
-            // Flower; higher transit power preserves time for the return shot.
-            one.gardenStagingOffsetInches=12.0;
-            one.gardenTransitPower=.70;
+            // Keep the initial reverse short so the following strafe begins
+            // clear of the Flower; higher transit power preserves time for
+            // the return shot.
+            one.gardenStagingOffsetInches=8.0;
+            one.gardenTransitPower=.80;
             one.gardenRetryTransitPower=Constants.AUTO_GARDEN_RETRY_TRANSIT_POWER;
             one.parkStopEarlierInches=Constants.AUTO_PARK_STOP_EARLIER_IN;
             one.forceFeedLastSeconds=Constants.AUTO_FORCE_FEED_LAST_SEC;
+            one.retryForceFeedLastSeconds=Constants.AUTO_TEAM_ONE_RETRY_FORCE_FEED_LAST_SEC;
             one.gardenRepositionPower=.60;
             one.gardenIntakeHeadingRadians=Math.toRadians(Constants.TEAM_ONE_GARDEN_INTAKE_HEADING_DEG);
             one.allowAnyFreshAprilTag=Constants.PRACTICE_ALLOW_ANY_FRESH_APRILTAG;
