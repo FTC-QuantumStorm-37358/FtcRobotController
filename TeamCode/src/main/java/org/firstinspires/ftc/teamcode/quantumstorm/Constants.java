@@ -78,8 +78,9 @@ public class Constants {
     public final static double SHOOTER_READY_SETTLE_SEC = 0.10;
     public final static double SHOOTER_READY_MAX_WAIT_SEC = 0.9;
     // Autonomous-only correction added to the distance-table (or fallback) RPM target; TeleOp is unchanged.
-    // The start-pose table value (~2904 RPM) shot high once every ball left at full speed. Tune in 30 RPM steps.
-    public final static double AUTO_SHOOTER_RPM_OFFSET = -150;
+    // The Team One start-pose table value is about 2929 RPM. This offset
+    // commands about 2830 RPM there; tune in 30 RPM steps on the robot.
+    public final static double AUTO_SHOOTER_RPM_OFFSET = -50;
     // Autonomous launch detection: each feed pulse opens a 0.6 s window; a drop of 4% of target below the
     // RPM at pulse start counts one launch when the window closes. A feed batch then ends after
     // AUTO_BALLS_TO_SHOOT launches, or after 3 pulses in a row without one once a ball has fired.
@@ -94,12 +95,11 @@ public class Constants {
     // A max-wait (forced) pulse still needs this fraction of target RPM; slower shots land too low.
     public final static double SHOOTER_FEED_MIN_RPM_FRACTION = 0.95;
     // Team One retry branch (Hive not tipped): cruise power for the back-then-strafe trip to the Garden.
-    // The last 6 inches of each leg stay at the usual 0.70; all other Garden trips are unchanged. Range (0, 1].
-    public final static double AUTO_GARDEN_RETRY_TRANSIT_POWER = 0.85;
-    // Team One normal parking: stop the final reverse into the parking area this many inches sooner,
-    // so the robot parks further toward its front. 4 in is about 10 cm. Each inch also removes
-    // 0.02 s from the timed final reverse (0.35 s -> 0.27 s at 4 in). Range 0-12.
-    public final static double AUTO_PARK_STOP_EARLIER_IN = 4.0;
+    // The last 6 inches of each leg stay at the usual 0.90; all other Garden trips are unchanged. Range (0, 1].
+    public final static double AUTO_GARDEN_RETRY_TRANSIT_POWER = 0.8;
+    // Team One normal parking: signed final-reverse adjustment in inches.
+    // Positive ends earlier; negative drives farther. -8 in is about 20 cm farther.
+    public final static double AUTO_PARK_STOP_EARLIER_IN = -8.0;
 
     // Separate New Shooter Power Control test entry: provisional FTCLib gains, output in motor-power units.
     // kF multiplies target RPM; bounded integral removes the observed persistent speed shortfall.
@@ -334,16 +334,12 @@ public class Constants {
     public final static int AUTO_MAX_RETRIES = 3;                  // recoverable errors before giving up and parking
     public final static double AUTO_APRILTAG_TIMEOUT_SEC = 3.0;    // no tag / not aligned -> ERROR
     public final static double AUTO_SHOOTER_SPINUP_SEC = 1.0;      // flywheel spin-up before feeding
-    /** Team 1 keeps feeding longer so all four preloads can clear before Garden travel.
-     *  The last AUTO_FORCE_FEED_LAST_SEC of a preload batch feeds without the at-speed gate, so the
-     *  fourth preload still leaves inside this window. */
-    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 6;
-    /** Preload batch only: during this final part of the feed window (from 4.5 s of a 6 s window),
-     *  while fewer than four launches are confirmed, pulses start without waiting for flywheel speed.
-     *  1.5 s is the shortest that still launches the fourth preload when the flywheel never gets back
-     *  inside the ready band; 1.0 s launched only three in that case. With normal recovery the fourth
-     *  ball has left before this starts, so it does not change accuracy. */
+    /** Team 1 keeps feeding longer so all four preloads can clear before Garden travel. */
+    public final static double AUTO_TEAM_ONE_FEED_TIME_SEC = 8;
+    /** Final portion of the opening preload shot that may feed without waiting for readiness. */
     public final static double AUTO_FORCE_FEED_LAST_SEC = 1.5;
+    /** Longer final-feed reserve for Team 1's AprilTag-authorized retry shot. */
+    public final static double AUTO_TEAM_ONE_RETRY_FORCE_FEED_LAST_SEC = 2.5;
     /** Match Team 1's longer feed window so all four preloads can clear. */
     public final static double AUTO_TEAM_TWO_FEED_TIME_SEC = AUTO_TEAM_ONE_FEED_TIME_SEC;
     public final static double AUTO_AIM_TOLERANCE_DEG = 2.0;       // AprilTag tx within this = aligned

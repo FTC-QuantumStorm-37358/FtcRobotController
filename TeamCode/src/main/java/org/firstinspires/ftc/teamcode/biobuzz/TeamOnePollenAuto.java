@@ -54,10 +54,12 @@ public final class TeamOnePollenAuto implements RobotController {
     public double gardenPassDistanceInches=0,gardenTransitPower=.35,gardenRepositionPower=.25;
     /** Cruise power for the retry branch's trip to the Garden (Hive not tipped after the first shot). */
     public double gardenRetryTransitPower=.35;
-    /** Normal parking: end the final reverse this many inches sooner (the robot parks toward its front). */
+    /** Signed final-reverse adjustment: positive ends sooner; negative drives farther. */
     public double parkStopEarlierInches=0;
     /** Opening preload feed: final seconds that feed without waiting for flywheel speed (0 = off). */
     public double forceFeedLastSeconds=0;
+    /** AprilTag-authorized retry: final seconds that feed without waiting for flywheel speed. */
+    public double retryForceFeedLastSeconds=0;
     public double gardenFirstPassSeconds=2,gardenRepositionSeconds=.45,gardenStagingOffsetInches=18,gardenIntakeHeadingRadians=Math.PI/2;
     /** Front-mounted camera: turn after wall clearance to view the Hive behind the shooter. */
     public double observationHeadingOffsetRadians=Math.PI;
@@ -79,6 +81,8 @@ public final class TeamOnePollenAuto implements RobotController {
     private int gardenPassesCompleted;
     /** Normal Team 1 branch when the first shot did not tilt the Hive. */
     private boolean repeatStartShotAfterGarden,postShotDecisionMade,postShotMissingTagFrame,postShotTagAuthorized;
+    /** True only for the two-second AprilTag check after returning to the taped shot pose. */
+    private boolean checkingReturnShotTags;
     /** Optional old spilled-pollen test; normal mode uses the Garden. */
     public boolean recoverPollenAfterTilt=false;
     private boolean survey;
@@ -95,10 +99,11 @@ public final class TeamOnePollenAuto implements RobotController {
                 ||!Double.isFinite(gardenAdvanceSeconds)||gardenAdvanceSeconds<=0||gardenAdvanceSeconds>8
                 ||!Double.isFinite(gardenAdvancePower)||gardenAdvancePower<=0||gardenAdvancePower>.6
                 ||!Double.isFinite(gardenPassDistanceInches)||gardenPassDistanceInches<0||gardenPassDistanceInches>24
-                ||!Double.isFinite(gardenTransitPower)||gardenTransitPower<=0||gardenTransitPower>.7
+                ||!Double.isFinite(gardenTransitPower)||gardenTransitPower<=0||gardenTransitPower>.9
                 ||!Double.isFinite(gardenRetryTransitPower)||gardenRetryTransitPower<=0||gardenRetryTransitPower>1
-                ||!Double.isFinite(parkStopEarlierInches)||parkStopEarlierInches<0||parkStopEarlierInches>12
+                ||!Double.isFinite(parkStopEarlierInches)||parkStopEarlierInches<-12||parkStopEarlierInches>12
                 ||!Double.isFinite(forceFeedLastSeconds)||forceFeedLastSeconds<0||forceFeedLastSeconds>feedSeconds
+                ||!Double.isFinite(retryForceFeedLastSeconds)||retryForceFeedLastSeconds<0||retryForceFeedLastSeconds>feedSeconds
                 ||!Double.isFinite(gardenRepositionPower)||gardenRepositionPower<=0||gardenRepositionPower>.6
                 ||!Double.isFinite(gardenFirstPassSeconds)||gardenFirstPassSeconds<=0||gardenFirstPassSeconds>5
                 ||!Double.isFinite(gardenRepositionSeconds)||gardenRepositionSeconds<=0||gardenRepositionSeconds>2
@@ -109,7 +114,7 @@ public final class TeamOnePollenAuto implements RobotController {
         this.alliance=alliance;this.power=power;startAt=lastNow=io.nowSeconds();spinAt=Double.NaN;
         shootingAlignment.reset();
         running=true;tiltConfirmed=survey=false;avoidUntil=0;current=destination=gardenEntry=parkVia=parkRetreat=parkSide=parkEntry=teamTwoShotExit=teamTwoShotVia=teamTwoShotLane=gardenLegStart=returnBack=returnSide=null;gardenBackDistance=gardenRightDistance=returnSideDistance=returnForwardDistance=parkFirstStrafe=parkSecondStrafe=parkFinalStrafe=0;parkLegAt=startAt;gardenIntakeHeading=Double.NaN;message=error="";
-        collecting=lastFeeding=preloadTagLatched=false;feedElapsed=0;lastCommandAt=startAt;gardenPassesCompleted=0;repeatStartShotAfterGarden=postShotDecisionMade=postShotMissingTagFrame=postShotTagAuthorized=false;
+        collecting=lastFeeding=preloadTagLatched=false;feedElapsed=0;lastCommandAt=startAt;gardenPassesCompleted=0;repeatStartShotAfterGarden=postShotDecisionMade=postShotMissingTagFrame=postShotTagAuthorized=checkingReturnShotTags=false;
         shotGate=new HiveShotGate(field,alliance,false);
         hive=new HiveVision(field,alliance);nav.useScriptedRoute(true,alliance);enter(State.SHOOTING);io.apply(new Outputs());
     }
@@ -203,11 +208,6 @@ public final class TeamOnePollenAuto implements RobotController {
     }
     private boolean fixedGardenPasses(){return useTeamTwoFollowUpShot||repeatStartShotAfterGarden;}
     private int requiredGardenPasses(){return Math.max(1,gardenPassLimit);}
-    private boolean returningAfterFixedPasses(){
-        return fixedGardenPasses()&&gardenPassesCompleted>=requiredGardenPasses()
-                &&(state==State.TO_TEAM_TWO_SHOT||state==State.RETURN_BACK_FROM_GARDEN
-                ||state==State.RETURN_STRAFE_TO_SHOT_LANE||state==State.RETURN_FORWARD_TO_SHOT);
-    }
     /** A centered live tag, or five-plus tags, authorizes the normal Team 1 retry. */
     private boolean normalRetryTagReady(Sensors sensors,double now){
         if(!sensors.cameraConnected||sensors.vision==null||!sensors.vision.fresh(now,0))return false;
@@ -384,7 +384,7 @@ public final class TeamOnePollenAuto implements RobotController {
         parkViaDir=Math.signum(parkVia.x-parkSide.x);
         // 4) A slightly shorter pure reverse into the assigned parking half.
         double finalParkingY=location.y+(alliance==0?1:-1);
-        // Stop the reverse sooner by parkStopEarlierInches: pull the target back toward the lane.
+        // Positive values stop sooner; negative values extend the final reverse.
         finalParkingY-=Math.signum(finalParkingY-reverseLaneY)*parkStopEarlierInches;
         parkEntry=new Pose(parkingLaneX,finalParkingY,heading);
         // 5) Move only one inch inward from the field wall after entering so
@@ -395,10 +395,7 @@ public final class TeamOnePollenAuto implements RobotController {
         parkFinalStrafe=Math.signum(finalDx*s-finalDy*c);
         enter(State.PARK);message="Parking: gap, reverse clear, parking-lane strafe, short reverse, then inward clearance strafe";
     }
-    /**
-     * The final parking reverse is usually ended by this time limit, not by reaching its target,
-     * so stopping earlier also shortens it: about 0.02 s per inch at parking power.
-     */
+    /** The final parking reverse changes by about 0.02 s per signed adjustment inch. */
     private double parkFinalReverseSeconds(){return Math.max(.10,.35-.02*parkStopEarlierInches);}
     /** True once position has reached (within the lead) or passed target moving in direction dir. */
     static boolean legReached(double position,double target,double dir){
@@ -493,11 +490,9 @@ public final class TeamOnePollenAuto implements RobotController {
             lastFeeding=false;lastCommandAt=now;
             if(s.ballCount>=4)collecting=false;
             double elapsed=now-startAt;
-            // Let a completed fixed two-pass routine actually leave the Garden
-            // before the parking cutoff takes over.  Otherwise the second pass
-            // can finish exactly at the cutoff and be replaced by PARK before
-            // the return-to-shot state receives a drive command.
-            if(elapsed>=26.0&&state!=State.PARK&&!returningAfterFixedPasses())park();
+            // The parking deadline applies to both outcomes of the return-shot
+            // tag check. No follow-up action may delay a 26-second park.
+            if(elapsed>=26.0&&state!=State.PARK)park();
             // Normal Team 1 uses a three-leg Flower-clear parking route. Keep
             // collecting through 23 seconds, then reserve about five seconds
             // for the faster route to finish at the final target around 28–29.
@@ -524,10 +519,12 @@ public final class TeamOnePollenAuto implements RobotController {
                                 message="Retry shot complete; resume continuous Garden intake until parking";
                                 break;
                             }
-                            if(!useTeamTwoFollowUpShot&&!postShotDecisionMade){
-                                enter(State.POST_SHOT_TAG_WAIT);message="Opening timed shot complete; wait 4.5 seconds for the Hive to settle and check AprilTags";break;
-                            }
-                            beginGarden();message="Opening timed shot complete; go straight to alliance Garden without a departure turn";break;
+                            // The opening shot always goes straight into two
+                            // full Garden passes.  Do not scan AprilTags until
+                            // the robot has returned to the taped shot pose.
+                            repeatStartShotAfterGarden=true;gardenPassLimit=2;gardenPassesCompleted=0;
+                            postShotDecisionMade=true;beginGarden();
+                            message="Opening timed shot complete; go directly to two Garden intake passes";break;
                         }
                         Pose start=field.hive[alliance];destination=new Pose(start.x,start.y-18*Math.sin(start.heading),Pose.angle(start.heading+observationHeadingOffsetRadians));
                         enter(State.OBSERVE_TILT);message="Preload feed attempt complete; move to tag-observation clearance";
@@ -552,29 +549,37 @@ public final class TeamOnePollenAuto implements RobotController {
                         if(Double.isNaN(spinAt))spinAt=now;
                         out.shooterPower=shooter.command(current,power);if(now-spinAt>=spinUpSeconds)out.feederPower=1;
                         // Final stretch of the preload window with a preload still inside: feed it anyway.
-                        out.forceFeed=out.feederPower>0&&batchEnd.forceRemaining(io,feedElapsed,feedSeconds,forceFeedLastSeconds);
+                        double activeForceFeedSeconds=repeatStartShotAfterGarden
+                                ?retryForceFeedLastSeconds:forceFeedLastSeconds;
+                        out.forceFeed=out.feederPower>0&&batchEnd.forceRemaining(io,feedElapsed,feedSeconds,activeForceFeedSeconds);
                         message=requireAprilTagForPreload?(allowAnyFreshAprilTag?"AprilTag authorization latched; paced preload feed":"Own raised Cell authorization latched; paced preload feed"):"Fixed Team 1 start pose; paced preload feed";
                     }
                     break;
                 case POST_SHOT_TAG_WAIT:
-                    // Give the Hive four seconds to settle. Only the last
-                    // half-second is the decision window: one qualifying live
-                    // frame latches the retry route (centered within ±8
-                    // degrees, or five-plus visible tags).
-                    if(age>=4.0&&normalRetryTagReady(s,now))postShotTagAuthorized=true;
-                    if(age<4.5){
-                        message=age<4.0?"Post-shot Hive check: waiting four seconds for Hive to settle"
-                                :postShotTagAuthorized
-                                ?"Final 0.5-second tag window: retry-shot authorization latched"
-                                :"Final 0.5-second tag window: need centered tag within ±8° or five visible AprilTags";
+                    // This state is entered only after the two Garden passes
+                    // return the robot to its original taped shot pose. Latch
+                    // one qualifying frame during the full two-second window.
+                    if(checkingReturnShotTags&&normalRetryTagReady(s,now)){
+                        postShotTagAuthorized=true;
+                        checkingReturnShotTags=false;
+                        enter(State.SHOOTING);
+                        message="Qualifying AprilTag seen at taped shot pose; begin retry shot immediately";
+                        break;
+                    }
+                    if(age<2.0){
+                        message=postShotTagAuthorized
+                                ?"Return-shot AprilTag authorization latched; hold taped pose for remaining check time"
+                                :"At taped shot pose: checking AprilTags for 2 seconds (±8° tx or 5-8 visible tags)";
                         break;
                     }
                     postShotDecisionMade=true;
                     if(postShotTagAuthorized){
-                        repeatStartShotAfterGarden=true;gardenPassLimit=2;beginGarden();
-                        message="AprilTag retry authorization latched; run two Garden intake passes, return, then shoot again";
+                        checkingReturnShotTags=false;
+                        enter(State.SHOOTING);
+                        message="AprilTag authorization latched at taped shot pose; begin retry shot";
                     }else{
-                        beginGarden();message="No AprilTag retry authorization after 4.5 seconds; begin continuous Garden intake until parking";
+                        checkingReturnShotTags=false;repeatStartShotAfterGarden=false;gardenPassLimit=0;
+                        beginGarden();message="No qualifying AprilTag in 2 seconds; resume Garden intake until 26-second parking";
                     }
                     break;
                 case TO_GARDEN:
@@ -695,7 +700,9 @@ public final class TeamOnePollenAuto implements RobotController {
                     out.forward=FieldLayout.clip(forwardRemaining*.16,gardenTransitPower);
                     out.strafeRight=out.turnClockwise=0;
                     if(current.distance(destination)<=1.0||forwardRemaining<=1.0){
-                        enter(State.SHOOTING);message="Original taped shot pose reached; spin up and fire retry shot";
+                        checkingReturnShotTags=true;
+                        enter(State.POST_SHOT_TAG_WAIT);
+                        message="Original taped shot pose reached; begin two-second AprilTag check";
                     }else message="Return route: driving forward into original taped shot pose";
                     break;
                 case WAIT_FOR_TEAM_TWO_TAG:
